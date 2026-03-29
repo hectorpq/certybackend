@@ -1,0 +1,24 @@
+# Django Core
+Django==5.2.12
+djangorestframework==3.14.0
+django-environ==0.10.0
+python-decouple==3.8
+
+# Database
+psycopg2-binary==2.9.9
+
+# PDF Generation
+reportlab==4.0.7
+
+# WhatsApp Integration
+twilio==8.10.0
+
+# Development (opcional)
+django-extensions==3.2.3
+black==24.1.1
+flake8==7.0.0
+isort==5.13.2
+
+# Production (opcional)
+gunicorn==21.2.0
+whitenoise==6.6.0
