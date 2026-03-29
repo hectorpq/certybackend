@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.utils import timezone
 from users.models import User
 from certificados.models import Certificate
 
@@ -37,6 +38,41 @@ class DeliveryLog(models.Model):
             models.Index(fields=['delivery_method']),
             models.Index(fields=['certificate']),
         ]
+        verbose_name = 'Delivery Log'
+        verbose_name_plural = 'Delivery Logs'
 
     def __str__(self):
         return f"{self.certificate.student.first_name} - {self.delivery_method} [{self.status}]"
+
+    @property
+    def is_successful(self):
+        """Check if delivery was successful"""
+        return self.status == 'success'
+    
+    @property
+    def is_failed(self):
+        """Check if delivery failed"""
+        return self.status == 'error'
+    
+    @property
+    def is_pending(self):
+        """Check if delivery is pending"""
+        return self.status == 'pending'
+    
+    def get_delivery_icon(self):
+        """Get emoji icon for method"""
+        icons = {
+            'email': '✉️',
+            'whatsapp': '💬',
+            'link': '🔗',
+        }
+        return icons.get(self.delivery_method, '📤')
+    
+    def get_status_icon(self):
+        """Get emoji icon for status"""
+        icons = {
+            'success': '✅',
+            'error': '❌',
+            'pending': '⏳',
+        }
+        return icons.get(self.status, '❓')
