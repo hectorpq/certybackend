@@ -76,7 +76,7 @@ class PDFService:
             c.setFillColor(color_secondary)
             
             y_pos = PDFService.BASE_HEIGHT - 4*inch
-            c.drawString(1*inch, y_pos, f"Por haber completado exitosamente:")
+            #c.drawString(1*inch, y_pos, f"Por haber completado exitosamente:")
             
             y_pos -= 0.4*inch
             c.setFont("Helvetica-Bold", 18)

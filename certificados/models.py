@@ -1,4 +1,3 @@
-import uuid
 import hashlib
 from datetime import timedelta
 from django.db import models
@@ -10,7 +9,7 @@ from events.models import Event
 
 
 class Template(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
 
     created_by = models.ForeignKey(
         User,
@@ -51,7 +50,7 @@ class Certificate(models.Model):
         ('failed', 'Failed'),
     )
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
 
     student = models.ForeignKey(
         Student,
@@ -174,26 +173,62 @@ class Certificate(models.Model):
         
         return self
 
+    def _determine_recipient(self, method):
+        """Determine the recipient email/phone based on delivery method"""
+        if method == 'email':
+            return self.student.email
+        elif method == 'whatsapp':
+            return self.student.phone or self.student.email
+        else:  # link
+            return self.student.email
+
+    def _send_delivery(self, method, recipient):
+        """Send delivery and return result dict"""
+        if method == 'email':
+            from services.email_service import EmailService
+            return EmailService.send_certificate(self, recipient)
+        elif method == 'whatsapp':
+            from services.whatsapp_service import get_whatsapp_service
+            try:
+                whatsapp = get_whatsapp_service()
+                return whatsapp.send_certificate(self, recipient)
+            except ModuleNotFoundError:
+                return {
+                    'success': False,
+                    'message': 'WhatsApp service not configured'
+                }
+        elif method == 'link':
+            return {
+                'success': True,
+                'message': f'Certificate link: {self.pdf_url}'
+            }
+        else:
+            raise ValidationError(f"Unknown delivery method: {method}")
+
+    def _update_delivery_status(self, delivery_log, delivery_result):
+        """Update delivery log and certificate status based on result"""
+        if delivery_result['success']:
+            delivery_log.status = 'success'
+            self.status = 'sent'
+        else:
+            delivery_log.status = 'error'
+            delivery_log.error_message = delivery_result['message']
+            self.status = 'failed'
+
     def deliver(self, method='email', recipient=None, sent_by=None):
-        """Deliver certificate via email, WhatsApp, or link (REAL DELIVERY)"""
+        """Deliver certificate via email, WhatsApp, or link"""
         if self.status not in ['generated', 'sent', 'failed']:
             raise ValidationError("Certificate must be generated first")
         
-        # Determine recipient
+        # Determine recipient if not provided
         if not recipient:
-            if method == 'email':
-                recipient = self.student.email
-            elif method == 'whatsapp':
-                recipient = self.student.phone or self.student.email
-            else:  # link
-                recipient = self.student.email
+            recipient = self._determine_recipient(method)
         
         if not recipient:
             raise ValidationError(f"No {method} address found for student")
         
-        # Create delivery log entry (initially pending)
+        # Create delivery log entry
         from deliveries.models import DeliveryLog
-        
         delivery_log = DeliveryLog.objects.create(
             certificate=self,
             delivery_method=method,
@@ -202,44 +237,11 @@ class Certificate(models.Model):
             status='pending',
         )
         
-        # Execute actual delivery based on method
-        delivery_result = None
+        # Send delivery and update status
+        delivery_result = self._send_delivery(method, recipient)
+        self._update_delivery_status(delivery_log, delivery_result)
         
-        if method == 'email':
-            from services.email_service import EmailService
-            delivery_result = EmailService.send_certificate(self, recipient)
-        
-        elif method == 'whatsapp':
-            from services.whatsapp_service import get_whatsapp_service
-            try:
-                whatsapp = get_whatsapp_service()
-                delivery_result = whatsapp.send_certificate(self, recipient)
-            except ModuleNotFoundError:
-                # Twilio not needed if not using WhatsApp
-                delivery_result = {
-                    'success': False,
-                    'message': 'WhatsApp service not configured'
-                }
-        
-        elif method == 'link':
-            # Just create the link, mark as sent automatically
-            delivery_result = {
-                'success': True,
-                'message': f'Certificate link: {self.pdf_url}'
-            }
-        
-        else:
-            raise ValidationError(f"Unknown delivery method: {method}")
-        
-        # Update delivery log based on result
-        if delivery_result['success']:
-            delivery_log.status = 'success'
-            self.status = 'sent'
-        else:
-            delivery_log.status = 'error'
-            delivery_log.error_message = delivery_result['message']
-            self.status = 'failed'
-        
+        # Persist changes
         delivery_log.save()
         self.save()
         

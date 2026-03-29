@@ -1,4 +1,3 @@
-import uuid
 from django.db import models
 from django.utils import timezone
 from users.models import User
@@ -17,7 +16,7 @@ class DeliveryLog(models.Model):
         ('pending', 'Pending'),
     )
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
     certificate = models.ForeignKey(
         Certificate,
         on_delete=models.CASCADE,

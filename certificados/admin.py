@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from django.urls import reverse
-from django.db.models import Count
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from .models import Template, Certificate
+
+# Constants
+_STATUS_BADGE_STYLE = '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>'
 
 
 @admin.register(Template)
@@ -40,7 +41,7 @@ class TemplateAdmin(admin.ModelAdmin):
         color = 'green' if obj.is_active else 'red'
         status = 'Active' if obj.is_active else 'Inactive'
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            _STATUS_BADGE_STYLE,
             color,
             status
         )
@@ -60,16 +61,20 @@ class TemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
+    # Constants
+    _CERT_INFO_LABEL = 'Certificate Information'
+    _STUDENT_EVENT_LABEL = 'Student & Event'
+    
     list_display = ('student_name', 'event_name', 'verification_code_short', 'status_badge', 'delivery_badge', 'issued_at')
     list_filter = ('status', 'issued_at', 'template', 'event__category')
     search_fields = ('student__first_name', 'student__last_name', 'student__email', 'verification_code', 'event__name')
     actions = ['generate_certificates', 'deliver_certificates', 'deliver_whatsapp', 'deliver_link', 'mark_as_failed_action', 'reset_to_pending']
     
     fieldsets = (
-        ('Certificate Information', {
+        (_CERT_INFO_LABEL, {
             'fields': ('id', 'verification_code_info', 'status')
         }),
-        ('Student & Event', {
+        (_STUDENT_EVENT_LABEL, {
             'fields': ('student', 'event')
         }),
         ('Template', {
@@ -107,10 +112,10 @@ class CertificateAdmin(admin.ModelAdmin):
         if obj:
             # During edit, show all fields with verification code info
             return (
-                ('Certificate Information', {
+                (self._CERT_INFO_LABEL, {
                     'fields': ('id', 'verification_code_info', 'status')
                 }),
-                ('Student & Event', {
+                (self._STUDENT_EVENT_LABEL, {
                     'fields': ('student', 'event')
                 }),
                 ('Template', {
@@ -134,11 +139,11 @@ class CertificateAdmin(admin.ModelAdmin):
         else:
             # During creation, skip timestamps and delivery tracking
             return (
-                ('Certificate Information', {
+                (self._CERT_INFO_LABEL, {
                     'fields': ('status',),
                     'description': 'The verification code will be generated automatically.'
                 }),
-                ('Student & Event', {
+                (self._STUDENT_EVENT_LABEL, {
                     'fields': ('student', 'event'),
                     'description': 'Select the student and event for this certificate.'
                 }),
@@ -170,7 +175,7 @@ class CertificateAdmin(admin.ModelAdmin):
         }
         color = colors.get(obj.status, 'gray')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            _STATUS_BADGE_STYLE,
             color,
             obj.get_status_display()
         )
@@ -189,7 +194,7 @@ class CertificateAdmin(admin.ModelAdmin):
         }
         color = colors.get(last_delivery.status, 'gray')
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            _STATUS_BADGE_STYLE,
             color,
             last_delivery.get_delivery_method_display()
         )
@@ -272,7 +277,6 @@ class CertificateAdmin(admin.ModelAdmin):
     def generate_certificates(self, request, queryset):
         """Action: Generate pending certificates"""
         generated = 0
-        failed = 0
         
         for certificate in queryset.filter(status='pending'):
             try:
@@ -289,7 +293,6 @@ class CertificateAdmin(admin.ModelAdmin):
                             f"⚠️  {certificate.student.first_name}: No attendance record",
                             messages.WARNING
                         )
-                        failed += 1
                         continue
                 except Enrollment.DoesNotExist:
                     self.message_user(
@@ -297,7 +300,6 @@ class CertificateAdmin(admin.ModelAdmin):
                         f"⚠️  {certificate.student.first_name}: Not enrolled in event",
                         messages.WARNING
                     )
-                    failed += 1
                     continue
                 
                 # Generate certificate
@@ -308,7 +310,6 @@ class CertificateAdmin(admin.ModelAdmin):
                 generated += 1
             except ValidationError as e:
                 self.message_user(request, f"❌ Error: {e.message}", messages.ERROR)
-                failed += 1
         
         if generated > 0:
             self.message_user(
@@ -463,7 +464,6 @@ class CertificateAdmin(admin.ModelAdmin):
     def deliver_link(self, request, queryset):
         """Action: Deliver certificates via direct link"""
         delivered = 0
-        failed = 0
         
         for certificate in queryset.filter(status__in=['generated', 'sent']):
             try:
@@ -476,12 +476,9 @@ class CertificateAdmin(admin.ModelAdmin):
                 
                 if delivery_log.status == 'success':
                     delivered += 1
-                else:
-                    failed += 1
                     
             except ValidationError as e:
                 self.message_user(request, f"❌ Error: {str(e)}", messages.ERROR)
-                failed += 1
         
         if delivered > 0:
             self.message_user(

@@ -1,11 +1,10 @@
-import uuid
 from django.db import models
 from users.models import User
 from students.models import Student
 from instructors.models import Instructor
 
 class EventCategory(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
 
@@ -24,7 +23,7 @@ class Event(models.Model):
         ('cancelled', 'Cancelled'),
     )
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.BigAutoField(primary_key=True)
     category = models.ForeignKey(EventCategory, on_delete=models.SET_NULL, null=True, related_name='events')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_events')
     name = models.CharField(max_length=200)

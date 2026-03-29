@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import Event, EventCategory, Enrollment, EventInstructor
 
+# Constants
+_BOLD_FORMAT = '<b>{}</b>'
+
 
 @admin.register(EventCategory)
 class EventCategoryAdmin(admin.ModelAdmin):
@@ -11,7 +14,7 @@ class EventCategoryAdmin(admin.ModelAdmin):
 
     def event_count(self, obj):
         count = obj.events.count()
-        return format_html('<b>{}</b>', count)
+        return format_html(_BOLD_FORMAT, count)
     event_count.short_description = 'Events'
 
 
@@ -69,12 +72,12 @@ class EventAdmin(admin.ModelAdmin):
 
     def instructor_count(self, obj):
         count = obj.instructors.count()
-        return format_html('<b>{}</b>', count)
+        return format_html(_BOLD_FORMAT, count)
     instructor_count.short_description = 'Instructors'
 
     def enrollment_count(self, obj):
         count = obj.enrollments.count()
-        return format_html('<b>{}</b>', count)
+        return format_html(_BOLD_FORMAT, count)
     enrollment_count.short_description = 'Enrollments'
 
     def instructors_info(self, obj):

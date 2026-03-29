@@ -41,7 +41,6 @@ class Command(BaseCommand):
             try:
                 # Generar PDF real
                 cert = cert.generate(generated_by=admin)
-                self.stdout.write(f'    ✓ PDF real generado')
 
                 # Enviar email CON PDF ADJUNTADO
                 delivery_log = cert.deliver(
