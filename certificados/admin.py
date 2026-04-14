@@ -111,7 +111,7 @@ class CertificateAdmin(admin.ModelAdmin):
         """Show different fieldsets during creation vs editing"""
         if obj:
             # During edit, show all fields with verification code info
-            return (
+            return [
                 (self._CERT_INFO_LABEL, {
                     'fields': ('id', 'verification_code_info', 'status')
                 }),
@@ -135,10 +135,10 @@ class CertificateAdmin(admin.ModelAdmin):
                     'fields': ('issued_at', 'updated_at'),
                     'classes': ('collapse',)
                 }),
-            )
+            ]
         else:
             # During creation, skip timestamps and delivery tracking
-            return (
+            return [
                 (self._CERT_INFO_LABEL, {
                     'fields': ('status',),
                     'description': 'The verification code will be generated automatically.'
@@ -153,7 +153,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 ('Expiration', {
                     'fields': ('expires_at',)
                 }),
-            )
+            ]
 
     ordering = ['-issued_at']
     date_hierarchy = 'issued_at'
