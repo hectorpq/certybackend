@@ -16,8 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework_simplejwt.views import TokenRefreshView
+from api.views import RegisterView, LoginView, CurrentUserView, BulkCertificateGenerationView, BulkCertificatePreviewView, BulkCertificateProcessView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/login/', LoginView.as_view(), name='login'),
+    path('api/me/', CurrentUserView.as_view(), name='current_user'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/register/', RegisterView.as_view(), name='register'),
+    path('api/certificates/generate-bulk/', BulkCertificateGenerationView.as_view(), name='bulk_certificate_generation'),
+    path('api/certificates/preview/', BulkCertificatePreviewView.as_view(), name='bulk_certificate_preview'),
+    path('api/certificates/process/', BulkCertificateProcessView.as_view(), name='bulk_certificate_process'),
     path('api/', include('api.urls')),
 ]
