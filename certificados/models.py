@@ -9,6 +9,13 @@ from events.models import Event
 
 
 class Template(models.Model):
+    """
+    Modelo para plantillas de certificados
+    
+    Soporta:
+    - Imagen de fondo (PNG/JPG)
+    - Posiciones configurables para cada campo mediante layout_config
+    """
     id = models.BigAutoField(primary_key=True)
 
     created_by = models.ForeignKey(
@@ -21,12 +28,37 @@ class Template(models.Model):
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=100, blank=True)
 
-    background_url = models.TextField()
+    background_image = models.ImageField(
+        upload_to='templates/backgrounds/',
+        blank=True,
+        null=True,
+        help_text="Imagen de fondo del certificado (PNG/JPG)"
+    )
+    
+    background_url = models.TextField(
+        blank=True,
+        help_text="URL de la imagen de fondo (legacy)"
+    )
     preview_url = models.TextField(blank=True)
 
-    layout_config = models.JSONField()
+    layout_config = models.JSONField(
+        default=dict,
+        help_text="""Configuración de posiciones y estilos. Ejemplo:
+        {
+            "student_name": {"x": 100, "y": 150, "font_size": 24, "font_family": "Arial", "color": "#000000"},
+            "event_name": {"x": 100, "y": 200, "font_size": 20, "font_family": "Arial", "color": "#333333"},
+            "event_date": {"x": 100, "y": 250, "font_size": 16, "font_family": "Arial", "color": "#666666"},
+            "verification_code": {"x": 100, "y": 300, "font_size": 14, "font_family": "Arial", "color": "#999999"}
+        }"""
+    )
 
     is_active = models.BooleanField(default=True)
+
+    font_color = models.CharField(max_length=20, default='#000000')
+    font_family = models.CharField(max_length=50, default='Helvetica')
+    font_size = models.IntegerField(default=24)
+    x_coord = models.FloatField(default=100.0)
+    y_coord = models.FloatField(default=150.0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -127,19 +159,20 @@ class Certificate(models.Model):
             )
         super().save(*args, **kwargs)
 
-    def generate(self, template=None, generated_by=None):
+    def generate(self, template=None, generated_by=None, skip_attendance_check=False):
         """Generate certificate from enrollment"""
         if self.status != 'pending':
             raise ValidationError(f"Certificate already {self.status}")
         
-        # Check if student attended
-        from events.models import Enrollment
-        try:
-            enrollment = Enrollment.objects.get(student=self.student, event=self.event)
-            if not enrollment.attendance:
-                raise ValidationError("Student did not attend the event")
-        except Enrollment.DoesNotExist:
-            raise ValidationError("Student not enrolled in this event")
+        # Check if student attended (skip if requested)
+        if not skip_attendance_check:
+            from events.models import Enrollment
+            try:
+                enrollment = Enrollment.objects.get(student=self.student, event=self.event)
+                if not enrollment.attendance:
+                    raise ValidationError("Student did not attend the event")
+            except Enrollment.DoesNotExist:
+                raise ValidationError("Student not enrolled in this event")
         
         # Generate code if not set
         if not self.verification_code:

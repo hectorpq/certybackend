@@ -1,7 +1,15 @@
 """
 Custom permission classes for role-based access control
+Solo dos roles: admin y participante
 """
 from rest_framework import permissions
+
+
+def is_admin(request):
+    """Helper to check if user is admin"""
+    if not request.user or not request.user.is_authenticated:
+        return False
+    return request.user.role == 'admin'
 
 
 class IsAdmin(permissions.BasePermission):
@@ -10,53 +18,26 @@ class IsAdmin(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.role == 'admin'
+            request.user
+            and request.user.is_authenticated
+            and is_admin(request)
         )
 
 
-class IsEditor(permissions.BasePermission):
+class IsAdminOrReadOnly(permissions.BasePermission):
     """
-    Permite acceso a usuarios con rol 'admin' o 'editor'
-    """
-    def has_permission(self, request, view):
-        return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.role in ['admin', 'editor']
-        )
-
-
-class IsAdminOrEditor(permissions.BasePermission):
-    """
-    Alias para IsEditor - permite admin y editor
-    """
-    def has_permission(self, request, view):
-        return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.role in ['admin', 'editor']
-        )
-
-
-class IsAdminUser(permissions.BasePermission):
-    """
-    Permite cualquier acción si es admin
-    Solo lectura para otros usuarios autenticados
+    Admin tiene acceso completo, participante solo lectura (GET, HEAD, OPTIONS)
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        # Admin puede hacer cualquier cosa
-        if request.user.role == 'admin':
+
+        if is_admin(request):
             return True
-        
-        # Otros solo pueden hacer operaciones seguras (GET, HEAD, OPTIONS)
+
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         return False
 
 
@@ -67,71 +48,101 @@ class CanManageUsers(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        # Admin puede hacer cualquier cosa
-        if request.user.role == 'admin':
+
+        if is_admin(request):
             return True
-        
-        # Otros solo pueden ver su propia información (GET)
+
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         return False
 
 
 class CanManageCertificates(permissions.BasePermission):
     """
-    Admin y Editor pueden generar certificados
-    Solo lectura para otros
+    Admin puede generar certificados
+    Participante solo lectura
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        # Admin y Editor pueden hacer cualquier cosa
-        if request.user.role in ['admin', 'editor']:
+
+        if is_admin(request):
             return True
-        
-        # Otros solo pueden ver (GET, HEAD, OPTIONS)
+
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         return False
 
 
 class CanManageEvents(permissions.BasePermission):
     """
-    Admin y Editor pueden crear/editar eventos
+    Admin puede crear/editar eventos
+    Participante solo lectura
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        # Admin y Editor pueden hacer POST, PUT, PATCH, DELETE
-        if request.user.role in ['admin', 'editor']:
+
+        if is_admin(request):
             return True
-        
-        # Otros solo GET
+
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         return False
 
 
 class CanManageStudents(permissions.BasePermission):
     """
-    Admin y Editor pueden gestionar estudiantes
+    Admin puede gestionar estudiantes
+    Participante solo lectura
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        # Admin y Editor pueden hacer cualquier cosa
-        if request.user.role in ['admin', 'editor']:
+
+        if is_admin(request):
             return True
-        
-        # Otros solo GET
+
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
+        return False
+
+
+class CanManageInstructors(permissions.BasePermission):
+    """
+    Admin puede gestionar instructores
+    Participante solo lectura
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if is_admin(request):
+            return True
+
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        return False
+
+
+class CanManageTemplates(permissions.BasePermission):
+    """
+    Admin puede gestionar plantillas
+    Participante solo lectura
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if is_admin(request):
+            return True
+
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
         return False

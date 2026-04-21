@@ -5,6 +5,7 @@ from reportlab.lib.pagesizes import landscape, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib.colors import HexColor
+from reportlab.lib.utils import ImageReader
 from django.conf import settings
 from django.utils import timezone
 import logging
@@ -22,7 +23,7 @@ class PDFService:
     @staticmethod
     def generate_certificate_pdf(certificate, template=None):
         """
-        Generate PDF certificate
+        Generate PDF certificate using template background and layout config
         
         Args:
             certificate: Certificate object
@@ -32,98 +33,47 @@ class PDFService:
             dict: {'success': bool, 'path': str, 'message': str}
         """
         try:
-            # Create directory if not exists
             PDFService.PDF_PATH.mkdir(parents=True, exist_ok=True)
             
-            # Generate filename
             filename = f"{certificate.student.id}_{certificate.event.id}_{certificate.verification_code}.pdf"
             filepath = PDFService.PDF_PATH / filename
             
-            # Create canvas
             c = canvas.Canvas(str(filepath), pagesize=landscape(A4))
             
-            # Set colors
-            color_primary = HexColor('#1e3a8a')  # Blue
-            color_secondary = HexColor('#94a3b8')  # Gray
+            if template and template.background_image:
+                try:
+                    img_path = template.background_image.path
+                    c.drawImage(ImageReader(img_path), 0, 0, width=PDFService.BASE_WIDTH, height=PDFService.BASE_HEIGHT)
+                except Exception as e:
+                    logger.warning("Could not load template background: %s", e)
+                    PDFService._draw_default_background(c)
+            else:
+                PDFService._draw_default_background(c)
             
-            # Background color
-            c.setFillColor(HexColor('#f8fafc'))
-            c.rect(0, 0, PDFService.BASE_WIDTH, PDFService.BASE_HEIGHT, fill=True, stroke=False)
+            layout = template.layout_config if template else {}
             
-            # Add border
-            c.setLineWidth(3)
-            c.setStrokeColor(color_primary)
-            c.rect(0.3*inch, 0.3*inch, PDFService.BASE_WIDTH - 0.6*inch, PDFService.BASE_HEIGHT - 0.6*inch)
-            
-            # Title
-            c.setFont("Helvetica-Bold", 48)
-            c.setFillColor(color_primary)
-            c.drawCentredString(PDFService.BASE_WIDTH/2, PDFService.BASE_HEIGHT - 1.5*inch, "CERTIFICADO")
-            
-            # Subtitle
-            c.setFont("Helvetica", 24)
-            c.setFillColor(color_secondary)
-            c.drawCentredString(PDFService.BASE_WIDTH/2, PDFService.BASE_HEIGHT - 2.2*inch, "DE ASISTENCIA Y PARTICIPACIÓN")
-            
-            # Student name
-            c.setFont("Helvetica-Bold", 28)
-            c.setFillColor(color_primary)
             student_name = f"{certificate.student.first_name} {certificate.student.last_name}".upper()
-            c.drawCentredString(PDFService.BASE_WIDTH/2, PDFService.BASE_HEIGHT - 3.2*inch, student_name)
+            event_name = certificate.event.name.upper()
+            event_date = certificate.event.event_date.strftime('%d de %B de %Y')
+            verification_code = certificate.verification_code
+            expires_at = certificate.expires_at.strftime('%d/%m/%Y') if certificate.expires_at else 'N/A'
             
-            # Event info
-            c.setFont("Helvetica", 16)
-            c.setFillColor(color_secondary)
+            student_config = layout.get('student_name', {})
+            PDFService._draw_text(c, student_name, student_config, PDFService.BASE_WIDTH / 2, PDFService.BASE_HEIGHT - 3.2*inch, 28, color_primary=HexColor('#1e3a8a'))
             
-            y_pos = PDFService.BASE_HEIGHT - 4*inch
-            #c.drawString(1*inch, y_pos, f"Por haber completado exitosamente:")
+            event_config = layout.get('event_name', {})
+            PDFService._draw_text(c, event_name, event_config, 1.5*inch, PDFService.BASE_HEIGHT - 4*inch, 18, color_primary=HexColor('#1e3a8a'))
             
-            y_pos -= 0.4*inch
-            c.setFont("Helvetica-Bold", 18)
-            c.setFillColor(color_primary)
-            event_text = certificate.event.name.upper()
-            c.drawString(1.5*inch, y_pos, event_text)
+            date_config = layout.get('event_date', {})
+            PDFService._draw_text(c, f"Realizado el: {event_date}", date_config, 1.5*inch, PDFService.BASE_HEIGHT - 4.5*inch, 14, color_primary=HexColor('#94a3b8'))
             
-            y_pos -= 0.5*inch
-            c.setFont("Helvetica", 14)
-            c.setFillColor(color_secondary)
-            c.drawString(1.5*inch, y_pos, f"Realizado el: {certificate.event.event_date.strftime('%d de %B de %Y')}")
+            code_config = layout.get('verification_code', {})
+            PDFService._draw_text(c, f"Código: {verification_code}", code_config, 1*inch, 2*inch, 10, color_primary=HexColor('#64748b'))
+            PDFService._draw_text(c, f"Válido hasta: {expires_at}", {}, 1*inch, 1.7*inch, 10, color_primary=HexColor('#64748b'))
             
-            # Details section
-            y_pos -= 0.8*inch
-            c.setFont("Helvetica", 10)
-            c.setFillColor(color_secondary)
-            
-            c.drawString(1*inch, y_pos, f"Código de Verificación: {certificate.verification_code}")
-            y_pos -= 0.25*inch
-            c.drawString(1*inch, y_pos, f"Válido hasta: {certificate.expires_at.strftime('%d/%m/%Y')}")
-            y_pos -= 0.25*inch
-            c.drawString(1*inch, y_pos, f"Emitido el: {timezone.now().strftime('%d/%m/%Y a las %H:%M')}")
-            
-            # Signature area
-            y_pos -= 0.8*inch
-            c.setFont("Helvetica-Bold", 12)
-            c.setFillColor(color_primary)
-            c.drawString(1*inch, y_pos, "Autorizado por:")
-            c.drawString(7*inch, y_pos, "Código QR:")
-            
-            y_pos -= 0.3*inch
-            c.setFont("Helvetica", 10)
-            c.setFillColor(color_secondary)
-            c.drawString(1*inch, y_pos, "Sistema de Certificación")
-            c.drawString(7*inch, y_pos, "[QR Aquí]")
-            
-            # Footer
-            c.setFont("Helvetica", 8)
-            c.setFillColor(HexColor('#cbd5e1'))
-            c.drawString(0.5*inch, 0.3*inch, f"ID: {certificate.id}")
-            c.drawCentredString(PDFService.BASE_WIDTH/2, 0.3*inch, "www.certificados.example.com")
-            c.drawRightString(PDFService.BASE_WIDTH - 0.5*inch, 0.3*inch, "© 2026")
-            
-            # Save canvas
             c.save()
             
-            logger.info(f"PDF generated: {filepath}")
+            logger.info("PDF generated: %s", filepath)
             
             return {
                 'success': True,
@@ -134,12 +84,48 @@ class PDFService:
             
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error generating PDF: {error_msg}")
+            logger.error("Error generating PDF: %s", error_msg)
             return {
                 'success': False,
                 'path': None,
                 'message': f'PDF generation error: {error_msg}'
             }
+    
+    @staticmethod
+    def _draw_default_background(c):
+        color_primary = HexColor('#1e3a8a')
+        color_secondary = HexColor('#94a3b8')
+        
+        c.setFillColor(HexColor('#f8fafc'))
+        c.rect(0, 0, PDFService.BASE_WIDTH, PDFService.BASE_HEIGHT, fill=True, stroke=False)
+        
+        c.setLineWidth(3)
+        c.setStrokeColor(color_primary)
+        c.rect(0.3*inch, 0.3*inch, PDFService.BASE_WIDTH - 0.6*inch, PDFService.BASE_HEIGHT - 0.6*inch)
+        
+        c.setFont("Helvetica-Bold", 48)
+        c.setFillColor(color_primary)
+        c.drawCentredString(PDFService.BASE_WIDTH/2, PDFService.BASE_HEIGHT - 1.5*inch, "CERTIFICADO")
+        
+        c.setFont("Helvetica", 24)
+        c.setFillColor(color_secondary)
+        c.drawCentredString(PDFService.BASE_WIDTH/2, PDFService.BASE_HEIGHT - 2.2*inch, "DE ASISTENCIA Y PARTICIPACIÓN")
+    
+    @staticmethod
+    def _draw_text(c, text, config, default_x, default_y, default_size, color_primary=None):
+        x = config.get('x', default_x / inch) * inch if isinstance(config.get('x'), (int, float)) else default_x
+        y = config.get('y', default_y / inch) * inch if isinstance(config.get('y'), (int, float)) else default_y
+        font_size = config.get('font_size', default_size)
+        font_family = config.get('font_family', 'Helvetica')
+        color = config.get('color', '#000000')
+        
+        c.setFont(f"{font_family}-Bold" if 'Bold' not in font_family else font_family, font_size)
+        c.setFillColor(HexColor(color) if color_primary is None else color_primary)
+        
+        if isinstance(x, (int, float)) and x > PDFService.BASE_WIDTH / 2:
+            c.drawCentredString(x, y, text)
+        else:
+            c.drawString(x, y, text)
     
     @staticmethod
     def generate_bulk_pdfs(certificates):
@@ -159,7 +145,8 @@ class PDFService:
         }
         
         for cert in certificates:
-            result = PDFService.generate_certificate_pdf(cert)
+            template = cert.template if cert.template_id else None
+            result = PDFService.generate_certificate_pdf(cert, template)
             
             if result['success']:
                 cert.pdf_url = result['path']

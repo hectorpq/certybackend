@@ -23,16 +23,18 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ('admin', 'Admin'),
-        ('editor', 'Editor'),
+        ('participante', 'Participante'),
     )
 
     id = models.BigAutoField(primary_key=True)
     full_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='editor')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='participante')
+    email_app_password = models.CharField(max_length=255, null=True, blank=True)
+    admin_mode_enabled = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)  # necesario para admin
+    is_staff = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -77,7 +77,7 @@ Sistema de Certificados
                 to=f"whatsapp:{phone_number}"
             )
             
-            logger.info(f"WhatsApp message sent to {phone_number}, SID: {message.sid}")
+            logger.info("WhatsApp message sent to %s, SID: %s", phone_number, message.sid)
             
             return {
                 'success': True,
@@ -88,7 +88,7 @@ Sistema de Certificados
             
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error sending WhatsApp: {error_msg}")
+            logger.error("Error sending WhatsApp: %s", error_msg)
             return {
                 'success': False,
                 'message': f'WhatsApp error: {error_msg}',

@@ -1,4 +1,6 @@
 from django.db import models
+from users.models import User
+
 
 class Instructor(models.Model):
     id = models.BigAutoField(primary_key=True)
@@ -9,6 +11,7 @@ class Instructor(models.Model):
     bio = models.TextField(blank=True)
     signature_url = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_instructors')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

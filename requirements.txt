@@ -6,6 +6,11 @@ python-decouple==3.8
 django-cors-headers==4.3.1
 djangorestframework-simplejwt==5.3.1
 
+# Google OAuth
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
 # Database
 psycopg2-binary==2.9.9
 

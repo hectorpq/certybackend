@@ -38,11 +38,11 @@ Felicidades! Tu certificado del evento "{certificate.event.name}" está listo.
 
 📜 Detalles:
 - Evento: {certificate.event.name}
-- Fecha: {certificate.event.event_date.strftime('%d/%m/%Y')}
+- Fecha: {certificate.event.event_date.strftime('%d/%m/%Y') if certificate.event.event_date else 'No disponible'}
 - Código: {certificate.verification_code}
-- PDF: {certificate.pdf_url}
+- PDF: {certificate.pdf_url if certificate.pdf_url else 'Pendiente de generar'}
 
-Este certificado expira el: {certificate.expires_at.strftime('%d/%m/%Y')}
+Este certificado expira el: {certificate.expires_at.strftime('%d/%m/%Y') if certificate.expires_at else 'Nunca'}
 
 ¡Descárgalo desde el enlace anterior!
 
@@ -65,7 +65,7 @@ Sistema de Certificados
                     filename = certificate.pdf_url.split('/')[-1]
                     pdf_path = settings.CERTIFICATES_PDF_PATH / filename
                     
-                    logger.info(f"Attempting to attach PDF: {pdf_path}")
+                    logger.info("Attempting to attach PDF: %s", pdf_path)
                     
                     if pdf_path.exists():
                         with open(str(pdf_path), 'rb') as pdf_file:
@@ -74,18 +74,18 @@ Sistema de Certificados
                                 content=pdf_file.read(),
                                 mimetype='application/pdf'
                             )
-                        logger.info(f"PDF attached successfully: {filename}")
+                        logger.info("PDF attached successfully: %s", filename)
                     else:
-                        logger.warning(f"PDF file not found at: {pdf_path}")
+                        logger.warning("PDF file not found at: %s", pdf_path)
                         
                 except Exception as attach_err:
-                    logger.error(f"Error attaching PDF: {attach_err}", exc_info=True)
+                    logger.error("Error attaching PDF: %s", attach_err, exc_info=True)
             
             # Send email
             result = email.send(fail_silently=False)
             
             if result == 1:
-                logger.info(f"Email sent to {recipient_email} for certificate {certificate.id}")
+                logger.info("Email sent to %s for certificate %s", recipient_email, certificate.id)
                 return {
                     'success': True,
                     'message': f'Email sent to {recipient_email}',
@@ -99,7 +99,7 @@ Sistema de Certificados
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error sending email: {error_msg}")
+            logger.error("Error sending email: %s", error_msg)
             return {
                 'success': False,
                 'message': f'Email error: {error_msg}'

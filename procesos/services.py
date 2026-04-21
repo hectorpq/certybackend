@@ -166,7 +166,7 @@ class ExcelProcessingService:
         try:
             # Paso 1: Leer archivo
             self._read_excel_file()
-            logger.info(f"Excel cargado: {len(self.dataframe)} filas")
+            logger.info("Excel cargado: %s filas", len(self.dataframe))
             
             # Paso 2: Validar estructura
             self._validate_columns()
@@ -174,15 +174,15 @@ class ExcelProcessingService:
             
             # Retornar datos extraídos como lista de dicts
             data = self.dataframe.to_dict('records')
-            logger.info(f"Preview: {len(data)} registros extraídos para edición")
+            logger.info("Preview: %s registros extraídos para edición", len(data))
             
             return data
             
         except ExcelImportError as e:
-            logger.error(f"Error en validación: {str(e)}")
+            logger.error("Error en validación: %s", str(e))
             raise
         except Exception as e:
-            logger.error(f"Error inesperado: {str(e)}")
+            logger.error("Error inesperado: %s", str(e))
             raise ExcelImportError(f"Error al leer Excel: {str(e)}")
     
     def process_records(self, records: List[Dict]) -> ExcelProcessingResult:
@@ -200,7 +200,7 @@ class ExcelProcessingService:
         try:
             self.result.total_rows = len(records)
             
-            logger.info(f"Iniciando procesamiento de {self.result.total_rows} registros")
+            logger.info("Iniciando procesamiento de %s registros", self.result.total_rows)
             
             # Procesar cada registro
             for index, record in enumerate(records):
@@ -211,7 +211,7 @@ class ExcelProcessingService:
                     row = pd.Series(record)
                     self._process_row(row, row_number)
                 except Exception as e:
-                    logger.error(f"Error en fila {row_number}: {str(e)}")
+                    logger.error("Error en fila %s: %s", row_number, str(e))
                     self.result.add_error(
                         row_number=row_number,
                         field='general',
@@ -220,10 +220,10 @@ class ExcelProcessingService:
                     )
             
             # Log final
-            logger.info(f"Procesamiento completado: {self.result.successful}/{self.result.total_rows} exitosos")
+            logger.info("Procesamiento completado: %s/%s exitosos", self.result.successful, self.result.total_rows)
             
         except Exception as e:
-            logger.error(f"Error en procesamiento masivo: {str(e)}")
+            logger.error("Error en procesamiento masivo: %s", str(e))
             raise ExcelImportError(f"Error al procesar registros: {str(e)}")
         
         return self.result
@@ -248,10 +248,10 @@ class ExcelProcessingService:
             return self.process_records(records)
             
         except ExcelImportError as e:
-            logger.error(f"Error en importación: {str(e)}")
+            logger.error("Error en importación: %s", str(e))
             raise
         except Exception as e:
-            logger.error(f"Error inesperado: {str(e)}")
+            logger.error("Error inesperado: %s", str(e))
             raise ExcelImportError(f"Error al procesar Excel: {str(e)}")
     
     def _read_excel_file(self):
@@ -285,7 +285,7 @@ class ExcelProcessingService:
                 f"Requeridas: {', '.join(self.REQUIRED_COLUMNS.keys())}"
             )
         
-        logger.info(f"Columnas validadas: {list(self.dataframe.columns)}")
+        logger.info("Columnas validadas: %s", list(self.dataframe.columns))
     
     def _process_rows(self):
         """Procesa cada fila del DataFrame"""
@@ -295,7 +295,7 @@ class ExcelProcessingService:
             try:
                 self._process_row(row, row_number)
             except Exception as e:
-                logger.error(f"Error en fila {row_number}: {str(e)}")
+                logger.error("Error en fila %s: %s", row_number, str(e))
                 self.result.add_error(
                     row_number=row_number,
                     field='general',
@@ -350,7 +350,7 @@ class ExcelProcessingService:
             
             # Registrar éxito
             self.result.add_success(certificate.id)
-            logger.info(f"Fila {row_number}: Certificado creado - {student.email} en {event.name}")
+            logger.info("Fila %s: Certificado creado - %s en %s", row_number, student.email, event.name)
     
     def _validate_email(self, email: str) -> bool:
         """Valida formato de email"""
@@ -374,7 +374,7 @@ class ExcelProcessingService:
             if student.email != email:
                 student.email = email
                 student.save()
-                logger.info(f"Student actualizado: {document_id}")
+                logger.info("Student actualizado: %s", document_id)
             
             return student
             
@@ -392,7 +392,7 @@ class ExcelProcessingService:
                 phone=phone,
                 is_active=True
             )
-            logger.info(f"Student creado: {email}")
+            logger.info("Student creado: %s", email)
             return student
     
     def _get_event(self, event_name: str) -> Event:
@@ -437,9 +437,9 @@ class ExcelProcessingService:
         )
         
         if created:
-            logger.info(f"Certificado creado: {student.email} - {event.name}")
+            logger.info("Certificado creado: %s - %s", student.email, event.name)
         else:
-            logger.info(f"Certificado ya existe: {student.email} - {event.name}")
+            logger.info("Certificado ya existe: %s - %s", student.email, event.name)
         
         return certificate
     
