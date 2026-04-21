@@ -30,7 +30,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='participante')
-    email_app_password = models.CharField(max_length=255, null=True, blank=True)
+    email_app_password = models.CharField(max_length=255, blank=True, default='')
     admin_mode_enabled = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)

@@ -210,8 +210,7 @@ class GoogleAuthView(APIView):
             
             email = id_info.get('email')
             full_name = id_info.get('name', '')
-            google_id = id_info.get('sub')
-            
+
             if not email:
                 return Response(
                     {'error': 'Email not provided by Google'},
@@ -351,14 +350,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
         if self.action == 'verify':
             # Public endpoint
             self.permission_classes = [permissions.AllowAny]
-        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Writing requires admin
-            if is_admin(self.request):
-                self.permission_classes = [permissions.IsAuthenticated]
-            else:
-                self.permission_classes = [permissions.IsAdminUser]
-        elif self.action in ['generate', 'deliver']:
-            # Custom actions require admin
+        elif self.action in ['create', 'update', 'partial_update', 'destroy', 'generate', 'deliver']:
             if is_admin(self.request):
                 self.permission_classes = [permissions.IsAuthenticated]
             else:
@@ -603,12 +595,7 @@ class EventsViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Events can be viewed by anyone authenticated; only admins can modify"""
-        from api.permissions import is_admin
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.IsAuthenticated]
-        else:
-            permission_classes = [permissions.IsAuthenticated]
-        return [permission() for permission in permission_classes]
+        return [permissions.IsAuthenticated()]
     
     def perform_create(self, serializer):
         """Auto-assign created_by to current user"""
@@ -734,7 +721,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         event = self.get_object()
         student_ids = request.data.get('student_ids', [])
         
-        enrollments = Enrollment.objects.filter(event=event)
+        enrollments = Enrollment.objects.filter(event=event).select_related('student')
         if student_ids:
             enrollments = enrollments.filter(student_id__in=student_ids)
         
@@ -821,7 +808,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         method = request.data.get('method', 'email')
         student_ids = request.data.get('student_ids', [])
         
-        certificates = Certificate.objects.filter(event=event, status__in=['generated', 'sent', 'pending'])
+        certificates = Certificate.objects.filter(event=event, status__in=['generated', 'sent', 'pending']).select_related('student')
         if student_ids:
             certificates = certificates.filter(student_id__in=student_ids)
         
@@ -925,115 +912,38 @@ class EventsViewSet(viewsets.ModelViewSet):
         serializer = EventInvitationSerializer(invitations, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], url_path='invitations/send')
-    def send_invitations(self, request, pk=None):
-        """
-        Send invitations from Excel/CSV file or email list
-        POST /events/{id}/invitations/send/
-        Body (form-data):
-        - file: Excel/CSV file (optional)
-        - emails: JSON array of emails (optional, e.g., ["email1@test.com", "email2@test.com"])
-        """
-        from events.models import EventInvitation
-        from django.utils import timezone
-        from django.conf import settings
+    @staticmethod
+    def _parse_emails_from_file(file):
+        """Extract emails from an uploaded CSV or Excel file. Returns (emails, error_msg)."""
         import pandas as pd
-        import uuid
-        import os
+        try:
+            df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
+            email_col = next((col for col in df.columns if 'email' in col.lower()), None)
+            if not email_col:
+                return [], 'No se encontró columna de email en el archivo'
+            return df[email_col].dropna().tolist(), None
+        except Exception as e:
+            return [], f'Error leyendo archivo: {str(e)}'
+
+    @staticmethod
+    def _parse_emails_from_json(emails_json):
+        """Extract emails from a JSON value. Returns list (empty on error)."""
+        try:
+            if isinstance(emails_json, str):
+                emails_json = json.loads(emails_json)
+            return list(emails_json) if isinstance(emails_json, list) else []
+        except ValueError:
+            logger.warning('Invalid JSON format in emails field')
+            return []
+
+    @staticmethod
+    def _send_invitation_email(invitation, event, frontend_url, expires_days, settings):
+        """Send an invitation email. Returns error string, or None on success."""
         from django.core.mail import send_mail
-        
-        event = self.get_object()
-        
-        # Get emails from file or request
-        emails = []
-        
-        # From file
-        if 'file' in request.FILES:
-            file = request.FILES['file']
-            try:
-                if file.name.endswith('.csv'):
-                    df = pd.read_csv(file)
-                else:
-                    df = pd.read_excel(file)
-                
-                # Look for email column
-                email_col = None
-                for col in df.columns:
-                    if 'email' in col.lower():
-                        email_col = col
-                        break
-                
-                if email_col:
-                    emails = df[email_col].dropna().tolist()
-                else:
-                    return Response(
-                        {'error': 'No se encontró columna de email en el archivo'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except Exception as e:
-                return Response(
-                    {'error': f'Error leyendo archivo: {str(e)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # From JSON emails in request
-        if 'emails' in request.data:
-            try:
-                emails_json = request.data.get('emails')
-                if isinstance(emails_json, str):
-                    emails_json = json.loads(emails_json)
-                if isinstance(emails_json, list):
-                    emails.extend(emails_json)
-            except (json.JSONDecodeError, ValueError):
-                logger.warning('Invalid JSON format in emails field')
-        
-        if not emails:
-            return Response(
-                {'error': 'No se encontraron emails para enviar invitaciones'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Create invitations and send emails
-        from datetime import timedelta
-        expires_days = 7
-        expires_at = timezone.now() + timedelta(days=expires_days)
-        
-        created = 0
-        errors = []
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-        
-        for email in emails:
-            email = str(email).strip().lower()
-            if not email or '@' not in email:
-                errors.append(f'Email inválido: {email}')
-                continue
-            
-            # Check if already invited
-            existing = EventInvitation.objects.filter(event=event, email=email).first()
-            if existing:
-                errors.append(f'Ya existe invitación para: {email}')
-                continue
-            
-            # Find student if exists
-            student = Student.objects.filter(email__iexact=email).first()
-            
-            # Create invitation
-            token = uuid.uuid4()
-            invitation = EventInvitation.objects.create(
-                event=event,
-                student=student,
-                email=email,
-                token=token,
-                status='pending',
-                expires_at=expires_at,
-                created_by=request.user
-            )
-            
-            # Send email
-            try:
-                invitation_link = f"{frontend_url}/invitation/{token}"
-                subject = f"Invitación al evento: {event.name}"
-                message = f"""
+        try:
+            invitation_link = f"{frontend_url}/invitation/{invitation.token}"
+            subject = f"Invitación al evento: {event.name}"
+            message = f"""
 Hola,
 
 Has sido invitado al evento "{event.name}".
@@ -1049,21 +959,81 @@ Esta invitación expira en {expires_days} días.
 Saludos,
 Equipo CertyPro
 """
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                    fail_silently=False
-                )
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [invitation.email], fail_silently=False)
+            return None
+        except Exception as e:
+            return f'Error enviando a {invitation.email}: {str(e)}'
+
+    @action(detail=True, methods=['post'], url_path='invitations/send')
+    def send_invitations(self, request, pk=None):
+        """
+        Send invitations from Excel/CSV file or email list
+        POST /events/{id}/invitations/send/
+        Body (form-data):
+        - file: Excel/CSV file (optional)
+        - emails: JSON array of emails (optional, e.g., ["email1@test.com", "email2@test.com"])
+        """
+        from events.models import EventInvitation
+        from django.utils import timezone
+        from django.conf import settings
+        import uuid
+        from datetime import timedelta
+
+        event = self.get_object()
+        emails = []
+
+        if 'file' in request.FILES:
+            file_emails, file_error = self._parse_emails_from_file(request.FILES['file'])
+            if file_error:
+                return Response({'error': file_error}, status=status.HTTP_400_BAD_REQUEST)
+            emails = file_emails
+
+        if 'emails' in request.data:
+            emails.extend(self._parse_emails_from_json(request.data.get('emails')))
+
+        if not emails:
+            return Response(
+                {'error': 'No se encontraron emails para enviar invitaciones'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        expires_days = 7
+        expires_at = timezone.now() + timedelta(days=expires_days)
+        created = 0
+        errors = []
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+
+        for email in emails:
+            email = str(email).strip().lower()
+            if not email or '@' not in email:
+                errors.append(f'Email inválido: {email}')
+                continue
+
+            if EventInvitation.objects.filter(event=event, email=email).exists():
+                errors.append(f'Ya existe invitación para: {email}')
+                continue
+
+            student = Student.objects.filter(email__iexact=email).first()
+            invitation = EventInvitation.objects.create(
+                event=event,
+                student=student,
+                email=email,
+                token=uuid.uuid4(),
+                status='pending',
+                expires_at=expires_at,
+                created_by=request.user
+            )
+
+            send_error = self._send_invitation_email(invitation, event, frontend_url, expires_days, settings)
+            if send_error:
+                errors.append(send_error)
+            else:
                 invitation.status = 'sent'
                 invitation.sent_at = timezone.now()
                 invitation.save()
-            except Exception as e:
-                errors.append(f'Error enviando a {email}: {str(e)}')
-            
+
             created += 1
-        
+
         return Response({
             'total': len(emails),
             'created': created,
@@ -1947,6 +1917,10 @@ class EnrollmentViewSet(viewsets.ViewSet):
         return Response(EnrollmentSerializer(enrollment).data)
 
 
+_ERR_INVITATION_NOT_FOUND = 'Invitación no encontrada'
+_ERR_INVITATION_EXPIRED = 'La invitación ha expirado'
+
+
 class InvitationPublicView(APIView):
     """
     Public endpoints for invitation response (no auth required)
@@ -1965,7 +1939,7 @@ class InvitationPublicView(APIView):
             invitation = EventInvitation.objects.select_related('event').get(token=token)
         except EventInvitation.DoesNotExist:
             return Response(
-                {'error': 'Invitación no encontrada'},
+                {'error': _ERR_INVITATION_NOT_FOUND},
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -1980,7 +1954,7 @@ class InvitationPublicView(APIView):
             invitation.status = 'expired'
             invitation.save()
             return Response(
-                {'error': 'La invitación ha expirado'},
+                {'error': _ERR_INVITATION_EXPIRED},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1999,7 +1973,7 @@ class InvitationPublicView(APIView):
             invitation = EventInvitation.objects.select_related('event').get(token=token)
         except EventInvitation.DoesNotExist:
             return Response(
-                {'error': 'Invitación no encontrada'},
+                {'error': _ERR_INVITATION_NOT_FOUND},
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -2015,7 +1989,7 @@ class InvitationPublicView(APIView):
             invitation.status = 'expired'
             invitation.save()
             return Response(
-                {'error': 'La invitación ha expirado'},
+                {'error': _ERR_INVITATION_EXPIRED},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2032,7 +2006,7 @@ class InvitationPublicView(APIView):
             invitation.save()
         
         # Create enrollment (without invitation FK to avoid DB error)
-        enrollment, created = Enrollment.objects.get_or_create(
+        Enrollment.objects.get_or_create(
             student=invitation.student,
             event=invitation.event,
             defaults={
@@ -2040,7 +2014,7 @@ class InvitationPublicView(APIView):
                 'invitation_sent': True
             }
         )
-        
+
         invitation.status = 'accepted'
         invitation.responded_at = timezone.now()
         invitation.save()
@@ -2077,7 +2051,7 @@ class InvitationRegisterView(APIView):
             invitation = EventInvitation.objects.select_related('event').get(token=token)
         except EventInvitation.DoesNotExist:
             return Response(
-                {'error': 'Invitación no encontrada'},
+                {'error': _ERR_INVITATION_NOT_FOUND},
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -2093,7 +2067,7 @@ class InvitationRegisterView(APIView):
             invitation.status = 'expired'
             invitation.save()
             return Response(
-                {'error': 'La invitación ha expirado'},
+                {'error': _ERR_INVITATION_EXPIRED},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2106,9 +2080,9 @@ class InvitationRegisterView(APIView):
         email = invitation.email.lower()
         
         # Check if user already exists with this email
-        User = get_user_model()
-        existing_user = User.objects.filter(email__iexact=email).first()
-        
+        user_model = get_user_model()
+        existing_user = user_model.objects.filter(email__iexact=email).first()
+
         if existing_user:
             # Link to existing user as student
             student, _ = Student.objects.get_or_create(
@@ -2124,7 +2098,7 @@ class InvitationRegisterView(APIView):
             # Create new user and student
             with transaction.atomic():
                 # Create user account
-                user = User.objects.create_user(
+                user = user_model.objects.create_user(
                     email=email,
                     full_name=f"{data['first_name']} {data['last_name']}",
                     password=data['password'],
@@ -2148,7 +2122,7 @@ class InvitationRegisterView(APIView):
         invitation.save()
         
         # Create enrollment (without invitation reference to avoid FK issues)
-        enrollment, _ = Enrollment.objects.get_or_create(
+        Enrollment.objects.get_or_create(
             student=student,
             event=invitation.event,
             defaults={

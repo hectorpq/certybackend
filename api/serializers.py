@@ -261,12 +261,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 # Legacy aliases
 CertificateSerializer = CertificateListSerializer
-CertificateGenerateSerializer = CertificateGenerateSerializer
-CertificateDeliverSerializer = CertificateDeliverSerializer
 EventCertificateSerializer = EventSimpleSerializer
 EventParticipantWithCertificateSerializer = EventSimpleSerializer
 EnrollmentCreateSerializer = EventSimpleSerializer
 BulkImportResultSerializer = EventSimpleSerializer
 ExcelBulkImportSerializer = EventSimpleSerializer
-UserLoginSerializer = UserLoginSerializer
-UserAuthSerializer = UserAuthSerializer
