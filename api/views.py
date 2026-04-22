@@ -1880,32 +1880,30 @@ class EnrollmentViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED
         )
     
-    def destroy(self, request, event_pk=None, pk=None):
-        """Remove a student from an event"""
+    def _get_enrollment(self, pk):
         from events.models import Enrollment
-
         try:
-            enrollment = Enrollment.objects.get(id=pk)
-            enrollment.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Enrollment.objects.get(id=pk), None
         except Enrollment.DoesNotExist:
-            return Response(
+            return None, Response(
                 {'error': 'Inscripción no encontrada'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    def destroy(self, request, event_pk=None, pk=None):
+        """Remove a student from an event"""
+        enrollment, error = self._get_enrollment(pk)
+        if error:
+            return error
+        enrollment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['patch'])
     def attendance(self, request, event_pk=None, pk=None):
         """Mark attendance for an enrollment"""
-        from events.models import Enrollment
-
-        try:
-            enrollment = Enrollment.objects.get(id=pk)
-        except Enrollment.DoesNotExist:
-            return Response(
-                {'error': 'Inscripción no encontrada'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        enrollment, error = self._get_enrollment(pk)
+        if error:
+            return error
         
         attendance = request.data.get('attendance')
         if attendance is None:
