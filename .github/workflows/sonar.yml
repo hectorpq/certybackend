@@ -55,6 +55,7 @@ jobs:
       - name: Verify coverage file
         run: |
           ls -la coverage.xml || echo "WARNING: coverage.xml not found"
+          head -10 coverage.xml || echo "coverage.xml is empty or missing"
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarcloud-github-action@master

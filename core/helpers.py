@@ -36,7 +36,7 @@ DELIVERY_STATUS_CHOICES = [
 # VALIDATORS
 # ============================================================================
 
-def validate_verification_code(code: str) -> bool:
+def validate_verification_code(code) -> bool:
     """
     Validate verification code format (XXXX-XXXX-XXXX-XXXX)
     
