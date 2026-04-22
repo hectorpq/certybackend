@@ -104,6 +104,29 @@ class EmailServiceTest(TestCase):
                 result = EmailService.send_certificate(self.cert, 'test@test.com')
         self.assertTrue(result['success'])
 
+    @patch('services.email_service.EmailMessage')
+    def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_email):
+        mock_msg = MagicMock()
+        mock_msg.send.return_value = 1
+        mock_email.return_value = mock_msg
+        self.cert.pdf_url = '/media/certificates/missing.pdf'
+        self.cert.save()
+        with patch('pathlib.Path.exists', return_value=False):
+            result = EmailService.send_certificate(self.cert, 'test@test.com')
+        self.assertTrue(result['success'])
+
+    @patch('services.email_service.EmailMessage')
+    def test_send_certificate_pdf_attach_exception_continues(self, mock_email):
+        mock_msg = MagicMock()
+        mock_msg.send.return_value = 1
+        mock_email.return_value = mock_msg
+        self.cert.pdf_url = '/media/certificates/cert.pdf'
+        self.cert.save()
+        with patch('pathlib.Path.exists', return_value=True):
+            with patch('builtins.open', side_effect=IOError('disk error')):
+                result = EmailService.send_certificate(self.cert, 'test@test.com')
+        self.assertTrue(result['success'])
+
 
 # ─────────────────────────────────────────────
 # PDFService

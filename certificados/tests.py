@@ -207,3 +207,36 @@ class CertificateModelTest(TestCase):
         cert.pdf_url = '/media/cert.pdf'
         result = cert._send_delivery('link', 'luis@test.com')
         self.assertTrue(result['success'])
+
+    def test_send_delivery_unknown_method_raises(self):
+        cert = self._make_cert()
+        with self.assertRaises(Exception):
+            cert._send_delivery('fax', 'luis@test.com')
+
+    @patch('services.whatsapp_service.get_whatsapp_service')
+    def test_send_delivery_whatsapp_calls_service(self, mock_get):
+        mock_ws = MagicMock()
+        mock_ws.send_certificate.return_value = {'success': True, 'message': 'sent'}
+        mock_get.return_value = mock_ws
+        cert = self._make_cert()
+        result = cert._send_delivery('whatsapp', '999000111')
+        self.assertTrue(result['success'])
+
+    @patch('services.pdf_service.PDFService.generate_certificate_pdf')
+    def test_generate_sets_verification_code_when_empty(self, mock_pdf):
+        mock_pdf.return_value = {'success': True, 'path': '/media/cert.pdf'}
+        Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.user)
+        cert = self._make_cert()
+        Certificate.objects.filter(pk=cert.pk).update(verification_code='')
+        cert.refresh_from_db()
+        self.assertEqual(cert.verification_code, '')
+        result = cert.generate(generated_by=self.user, skip_attendance_check=True)
+        self.assertNotEqual(result.verification_code, '')
+
+    def test_deliver_raises_when_no_recipient(self):
+        cert = self._make_cert()
+        Certificate.objects.filter(pk=cert.pk).update(status='generated')
+        cert.refresh_from_db()
+        with patch.object(cert, '_determine_recipient', return_value=''):
+            with self.assertRaises(Exception):
+                cert.deliver(method='email')

@@ -268,3 +268,66 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         from students.models import Student
         student = Student.objects.get(document_id='UPDATE01')
         self.assertEqual(student.email, 'new@test.com')
+
+    def test_read_excel_empty_data_error_raises_import_error(self):
+        from procesos.services import ExcelImportError
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        with patch('procesos.services.pd.read_excel', side_effect=pd.errors.EmptyDataError()):
+            with self.assertRaises(ExcelImportError):
+                svc._read_excel_file()
+
+    def test_process_row_empty_email_via_series(self):
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        row = pd.Series({'full_name': 'Test', 'email': '', 'document_id': 'D1', 'event_name': 'Taller Excel'})
+        with self.assertRaises(ValueError):
+            svc._process_row(row, 0)
+
+    def test_process_row_empty_document_id_via_series(self):
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        row = pd.Series({'full_name': 'Test', 'email': 'x@test.com', 'document_id': '', 'event_name': 'Taller Excel'})
+        with self.assertRaises(ValueError):
+            svc._process_row(row, 0)
+
+    def test_process_row_empty_event_name_via_series(self):
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        row = pd.Series({'full_name': 'Test', 'email': 'y@test.com', 'document_id': 'D2', 'event_name': ''})
+        with self.assertRaises(ValueError):
+            svc._process_row(row, 0)
+
+    def test_get_event_nonexistent_raises_value_error(self):
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        with self.assertRaises(ValueError):
+            svc._get_event('Evento Que No Existe Nunca')
+
+    def test_create_certificate_already_exists_logs_info(self):
+        cert = Certificate.objects.create(
+            student=Student.objects.create(
+                document_id='CERTDUP', first_name='A', last_name='B',
+                email='dup@certtest.com', created_by=self.user
+            ),
+            event=self.event,
+            generated_by=self.user,
+        )
+        buf = self._make_valid_excel()
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        result = svc._create_certificate(cert.student, self.event)
+        self.assertEqual(result.id, cert.id)
+
+    def test_validate_file_empty_excel_returns_false(self):
+        buf = BytesIO()
+        pd.DataFrame(columns=['full_name', 'email', 'document_id', 'event_name']).to_excel(buf, index=False)
+        buf.seek(0)
+        valid, msg = ExcelProcessingService.validate_file(buf)
+        self.assertFalse(valid)
+        self.assertIn('vacío', msg)
+
+    def test_validate_file_missing_columns_returns_false(self):
+        buf = make_excel([{'wrong_col': 'data', 'other': 'value'}])
+        valid, msg = ExcelProcessingService.validate_file(buf)
+        self.assertFalse(valid)
+        self.assertIn('faltantes', msg.lower())
