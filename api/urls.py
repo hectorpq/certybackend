@@ -24,6 +24,8 @@ urlpatterns = [
     path('auth/google/', GoogleAuthView.as_view(), name='google-auth'),
     path('me/', CurrentUserView.as_view(), name='current-user'),
     path('enrollments/', EnrollmentViewSet.as_view({'get': 'list', 'post': 'create'}), name='enrollment-list'),
+    path('enrollments/<int:pk>/', EnrollmentViewSet.as_view({'delete': 'destroy'}), name='enrollment-detail'),
+    path('enrollments/<int:pk>/attendance/', EnrollmentViewSet.as_view({'patch': 'attendance'}), name='enrollment-attendance'),
     
     # Public invitation routes
     path('invitations/<str:token>/', InvitationPublicView.as_view(), name='invitation-detail'),

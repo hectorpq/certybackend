@@ -148,6 +148,7 @@ class CertificateCreateSerializer(serializers.ModelSerializer):
 class CertificateGenerateSerializer(serializers.Serializer):
     student_id = serializers.IntegerField()
     event_id = serializers.IntegerField()
+    template_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class CertificateDeliverSerializer(serializers.Serializer):
@@ -259,10 +260,19 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class ExcelBulkImportSerializer(serializers.Serializer):
+    excel_file = serializers.FileField()
+
+
+class EnrollmentCreateSerializer(serializers.Serializer):
+    student_id = serializers.IntegerField()
+    attendance = serializers.BooleanField(required=False, default=False)
+    grade = serializers.FloatField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, default='', allow_blank=True)
+
+
 # Legacy aliases
 CertificateSerializer = CertificateListSerializer
 EventCertificateSerializer = EventSimpleSerializer
 EventParticipantWithCertificateSerializer = EventSimpleSerializer
-EnrollmentCreateSerializer = EventSimpleSerializer
 BulkImportResultSerializer = EventSimpleSerializer
-ExcelBulkImportSerializer = EventSimpleSerializer

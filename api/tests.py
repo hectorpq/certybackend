@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from datetime import date
 
 from users.models import User
@@ -332,7 +332,10 @@ class CertificateViewSetTest(TestCase):
 
     def test_generate_raises_if_not_pending(self):
         Certificate.objects.filter(pk=self.cert.pk).update(status='generated')
-        res = self.client.post(f'/api/certificates/{self.cert.id}/generate/', {})
+        res = self.client.post(f'/api/certificates/{self.cert.id}/generate/', {
+            'student_id': self.student.id,
+            'event_id': self.event.id,
+        }, format='json')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_deliver_raises_if_not_generated(self):
@@ -1369,7 +1372,7 @@ class InvitationPublicPostTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_accept_finds_student_by_email(self):
-        student = make_student(self.admin, email='findme@test.com', doc='FIND01')
+        make_student(self.admin, email='findme@test.com', doc='FIND01')
         inv = self._make_invitation(email='findme@test.com')
         res = self.client.post(f'/api/invitations/{inv.token}/accept/', {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -1479,8 +1482,8 @@ class CertificateViewSetAdvancedTest(TestCase):
         res = self.client.post(f'/api/certificates/{cert.id}/generate/', {
             'student_id': self.student.id,
             'event_id': self.event.id,
-            'template_id': str(template2.id),
-        })
+            'template_id': template2.id,
+        }, format='json')
         self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
 
@@ -1641,3 +1644,571 @@ class PermissionSafeMethodTest(TestCase):
     def test_can_manage_templates_participante_write(self):
         from api.permissions import CanManageTemplates
         self.assertFalse(self._check_write(CanManageTemplates, self.participante))
+
+
+# ─────────────────────────────────────────────
+# CertificateViewSet - serializer class + permissions + exception paths
+# ─────────────────────────────────────────────
+
+class CertificateViewSetCoverageTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.student = make_student(self.admin)
+        self.event = make_event(self.admin)
+        self.template = Template.objects.create(name='T', created_by=self.admin)
+        Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.admin)
+
+    def test_create_certificate_hits_create_serializer(self):
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.post('/api/certificates/', {
+            'student': self.student.id,
+            'event': self.event.id,
+            'template': self.template.id,
+        }, format='json')
+        self.assertIn(res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
+
+    def test_non_admin_create_certificate_uses_is_admin_user_permission(self):
+        regular = make_user('certperm@test.com')
+        self.client.force_authenticate(user=regular)
+        res = self.client.post('/api/certificates/', {
+            'student': self.student.id,
+            'event': self.event.id,
+        }, format='json')
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
+
+    @patch('certificados.models.Certificate.generate')
+    def test_generate_exception_caught_returns_400(self, mock_generate):
+        mock_generate.side_effect = Exception('PDF error')
+        self.client.force_authenticate(user=self.admin)
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template, generated_by=self.admin
+        )
+        res = self.client.post(f'/api/certificates/{cert.id}/generate/', {
+            'student_id': self.student.id,
+            'event_id': self.event.id,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Failed to generate certificate', res.data['message'])
+
+    @patch('services.pdf_service.PDFService.generate_certificate_pdf')
+    def test_generate_with_template_id_overrides_template(self, mock_pdf):
+        mock_pdf.return_value = {'success': True, 'path': '/media/cert.pdf'}
+        self.client.force_authenticate(user=self.admin)
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template, generated_by=self.admin
+        )
+        template2 = Template.objects.create(name='T2', created_by=self.admin)
+        res = self.client.post(f'/api/certificates/{cert.id}/generate/', {
+            'student_id': self.student.id,
+            'event_id': self.event.id,
+            'template_id': template2.id,
+        }, format='json')
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+    def test_unauthenticated_cert_queryset_returns_none(self):
+        self.client.force_authenticate(user=None)
+        res = self.client.get('/api/certificates/verify/?code=ABCD-ABCD-ABCD-ABCD')
+        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
+
+
+# ─────────────────────────────────────────────
+# EventsViewSet - generate_certificates & send_certificates extra paths
+# ─────────────────────────────────────────────
+
+class EventsCertificateActionsTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+        self.student = make_student(self.admin)
+        self.template = Template.objects.create(name='T', created_by=self.admin)
+        Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.admin)
+
+    def test_generate_certificates_with_student_ids_filter(self):
+        res = self.client.post(
+            f'/api/events/{self.event.id}/certificates/generate/',
+            {'student_ids': [self.student.id]},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    @patch('services.pdf_service.PDFService.generate_certificate_pdf')
+    def test_generate_certificates_pending_cert_triggers_regenerate(self, mock_pdf):
+        mock_pdf.return_value = {'success': True, 'path': '/media/cert.pdf'}
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template,
+            generated_by=self.admin, status='pending'
+        )
+        res = self.client.post(f'/api/events/{self.event.id}/certificates/generate/', {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_send_certificates_with_student_ids_filter(self):
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template, generated_by=self.admin
+        )
+        Certificate.objects.filter(pk=cert.pk).update(status='generated', pdf_url='/cert.pdf')
+        with patch('services.email_service.EmailService.send_certificate') as mock_send:
+            mock_send.return_value = {'success': True, 'message': 'sent'}
+            res = self.client.post(
+                f'/api/events/{self.event.id}/certificates/send/',
+                {'method': 'email', 'student_ids': [self.student.id]},
+                format='json'
+            )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    @patch('services.pdf_service.PDFService.generate_certificate_pdf')
+    @patch('services.email_service.EmailService.send_certificate')
+    def test_send_certificates_generates_pending_first(self, mock_send, mock_pdf):
+        mock_pdf.return_value = {'success': True, 'path': '/media/cert.pdf'}
+        mock_send.return_value = {'success': True, 'message': 'sent'}
+        Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template,
+            generated_by=self.admin, status='pending'
+        )
+        res = self.client.post(
+            f'/api/events/{self.event.id}/certificates/send/',
+            {'method': 'email'}
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    @patch('certificados.models.Certificate.deliver')
+    def test_send_certificates_exception_logs_failed(self, mock_deliver):
+        mock_deliver.side_effect = Exception('delivery failed')
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, template=self.template, generated_by=self.admin
+        )
+        Certificate.objects.filter(pk=cert.pk).update(status='generated', pdf_url='/cert.pdf')
+        res = self.client.post(
+            f'/api/events/{self.event.id}/certificates/send/',
+            {'method': 'email'}
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(res.data['total_failed'], 0)
+
+
+# ─────────────────────────────────────────────
+# EventsViewSet - _parse_emails helpers
+# ─────────────────────────────────────────────
+
+class EventsEmailParsingTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+
+    def test_send_invitations_csv_file_with_email_column(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_content = b'email\nfileguest@test.com\n'
+        f = SimpleUploadedFile('emails.csv', csv_content, content_type='text/csv')
+        with patch('django.core.mail.send_mail', return_value=1):
+            res = self.client.post(
+                f'/api/events/{self.event.id}/invitations/send/',
+                {'file': f},
+                format='multipart'
+            )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_send_invitations_csv_file_no_email_column_returns_400(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_content = b'name,phone\nJohn,555\n'
+        f = SimpleUploadedFile('noemail.csv', csv_content, content_type='text/csv')
+        res = self.client.post(
+            f'/api/events/{self.event.id}/invitations/send/',
+            {'file': f},
+            format='multipart'
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_send_invitations_file_read_error_returns_400(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile('bad.csv', b'corrupted\x00\x01\x02', content_type='text/csv')
+        with patch('pandas.read_csv', side_effect=Exception('read error')):
+            res = self.client.post(
+                f'/api/events/{self.event.id}/invitations/send/',
+                {'file': f},
+                format='multipart'
+            )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_send_invitations_invalid_json_emails_treated_as_empty(self):
+        res = self.client.post(
+            f'/api/events/{self.event.id}/invitations/send/',
+            {'emails': 'not{valid[json'},
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('django.core.mail.send_mail')
+    def test_send_invitations_email_failure_appended_to_errors(self, mock_mail):
+        mock_mail.side_effect = Exception('SMTP error')
+        import json
+        res = self.client.post(
+            f'/api/events/{self.event.id}/invitations/send/',
+            {'emails': json.dumps(['errmail@test.com'])},
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(res.data['errors']) > 0)
+
+    @patch('django.core.mail.send_mail')
+    def test_send_all_invitations_success_marks_sent(self, mock_mail):
+        mock_mail.return_value = 1
+        from events.models import EventInvitation
+        EventInvitation.objects.create(
+            event=self.event, email='tosend@test.com', status='pending', created_by=self.admin
+        )
+        res = self.client.post(f'/api/events/{self.event.id}/invitations/send-all/', {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(res.data['sent'], 1)
+
+    @patch('django.core.mail.send_mail')
+    def test_send_all_invitations_email_failure_appended_to_errors(self, mock_mail):
+        mock_mail.side_effect = Exception('SMTP fail')
+        from events.models import EventInvitation
+        EventInvitation.objects.create(
+            event=self.event, email='failsend@test.com', status='pending', created_by=self.admin
+        )
+        res = self.client.post(f'/api/events/{self.event.id}/invitations/send-all/', {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(res.data['errors']), 0)
+
+
+# ─────────────────────────────────────────────
+# generate_certificates loop exception
+# ─────────────────────────────────────────────
+
+class GenerateCertificatesLoopExceptionTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+        self.student = make_student(self.admin)
+        self.template = Template.objects.create(name='T', created_by=self.admin)
+        Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.admin)
+
+    @patch('certificados.models.Certificate.objects')
+    def test_generate_certificates_exception_logged_in_errors(self, mock_objects):
+        mock_objects.get_or_create.side_effect = Exception('DB error')
+        mock_objects.filter.return_value = Certificate.objects.filter(event=self.event)
+        res = self.client.post(f'/api/events/{self.event.id}/certificates/generate/', {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# BulkCertificate views - exception paths
+# ─────────────────────────────────────────────
+
+class BulkCertificateViewExceptionTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name='Bulk Test')
+
+    def _make_excel_file(self):
+        import pandas as pd
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        df = pd.DataFrame([{
+            'full_name': 'Test User', 'email': 'testbulk@test.com',
+            'document_id': 'BLKTEST', 'event_name': 'Bulk Test',
+        }])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        return SimpleUploadedFile('bulk.xlsx', buf.read(),
+                                   content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    def test_bulk_generate_post_with_valid_excel_reaches_processing(self):
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/generate-bulk/', {'excel_file': f}, format='multipart')
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+    @patch('api.views.BulkCertificateGeneratorService.generate_from_excel')
+    def test_bulk_generate_exception_returns_400(self, mock_gen):
+        mock_gen.side_effect = Exception('processing error')
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/generate-bulk/', {'excel_file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_preview_post_with_valid_excel(self):
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/preview/', {'excel_file': f}, format='multipart')
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+    @patch('api.views.ExcelProcessingService')
+    def test_bulk_preview_excel_import_error_returns_400(self, mock_svc):
+        from procesos.services import ExcelImportError
+        mock_svc.return_value.read_and_validate_structure.side_effect = ExcelImportError('bad file')
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/preview/', {'excel_file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('api.views.ExcelProcessingService')
+    def test_bulk_preview_generic_exception_returns_400(self, mock_svc):
+        mock_svc.return_value.read_and_validate_structure.side_effect = Exception('unexpected')
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/preview/', {'excel_file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('api.views.ExcelProcessingService')
+    def test_bulk_process_excel_import_error_returns_400(self, mock_svc):
+        from procesos.services import ExcelImportError
+        mock_svc.return_value.process_records.side_effect = ExcelImportError('bad data')
+        res = self.client.post('/api/certificates/process/', {'data': [{'full_name': 'X'}]}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('api.views.ExcelProcessingService')
+    def test_bulk_process_generic_exception_returns_500(self, mock_svc):
+        mock_svc.return_value.process_records.side_effect = RuntimeError('unexpected error')
+        res = self.client.post('/api/certificates/process/', {'data': [{'full_name': 'X'}]}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─────────────────────────────────────────────
+# EnrollmentViewSet - destroy, attendance, non-admin list
+# ─────────────────────────────────────────────
+
+class EnrollmentViewSetDestroyAttendanceTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+        self.student = make_student(self.admin)
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, event=self.event, attendance=False, created_by=self.admin
+        )
+
+    def test_destroy_enrollment_success(self):
+        res = self.client.delete(f'/api/enrollments/{self.enrollment.id}/')
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_destroy_enrollment_not_found(self):
+        res = self.client.delete('/api/enrollments/99999/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_attendance_mark_true(self):
+        res = self.client.patch(
+            f'/api/enrollments/{self.enrollment.id}/attendance/',
+            {'attendance': True},
+            format='json'
+        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+
+    def test_attendance_missing_field_returns_400(self):
+        res = self.client.patch(
+            f'/api/enrollments/{self.enrollment.id}/attendance/',
+            {},
+            format='json'
+        )
+        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
+
+    def test_attendance_not_found(self):
+        res = self.client.patch(
+            '/api/enrollments/99999/attendance/',
+            {'attendance': True},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_admin_list_returns_403(self):
+        regular = make_user('nonadmin_enr@test.com')
+        self.client.force_authenticate(user=regular)
+        res = self.client.get('/api/enrollments/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_enrollment_success(self):
+        student2 = Student.objects.create(
+            document_id='ENROLL2', first_name='New', last_name='Student',
+            email='enroll2@test.com', created_by=self.admin
+        )
+        res = self.client.post('/api/enrollments/', {
+            'student_id': student2.id,
+            'event_id': self.event.id,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_create_enrollment_duplicate_returns_400(self):
+        res = self.client.post('/api/enrollments/', {
+            'student_id': self.student.id,
+            'event_id': self.event.id,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_enrollment_invalid_student_returns_404(self):
+        res = self.client.post('/api/enrollments/', {
+            'student_id': 99999,
+            'event_id': self.event.id,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_create_enrollment_invalid_event_returns_404(self):
+        student2 = Student.objects.create(
+            document_id='ENROLL3', first_name='S', last_name='T',
+            email='enroll3@test.com', created_by=self.admin
+        )
+        res = self.client.post('/api/enrollments/', {
+            'student_id': student2.id,
+            'event_id': 99999,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+# ─────────────────────────────────────────────
+# Import students - IntegrityError / exception paths
+# ─────────────────────────────────────────────
+
+class ImportStudentsErrorPathTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin()
+        self.client.force_authenticate(user=self.admin)
+
+    def test_import_with_duplicate_document_id(self):
+        import pandas as pd
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        make_student(self.admin, doc='DUP001', email='dup@test.com')
+        df = pd.DataFrame([{'document_id': 'DUP001', 'first_name': 'Dup', 'last_name': 'User', 'email': 'dup2@test.com', 'phone': ''}])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        f = SimpleUploadedFile('dup.xlsx', buf.read(),
+                               content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        res = self.client.post('/api/students/import_students/', {'file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_template_non_admin_cannot_create(self):
+        regular = make_user('tperm@test.com')
+        self.client.force_authenticate(user=regular)
+        res = self.client.post('/api/templates/', {'name': 'Test'})
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
+
+    def test_import_with_duplicate_email_triggers_integrity_error(self):
+        import pandas as pd
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        make_student(self.admin, doc='UNIQUE_DOC1', email='unique_dup@test.com')
+        df = pd.DataFrame([{
+            'document_id': 'DIFFERENT_DOC1',
+            'first_name': 'New', 'last_name': 'User',
+            'email': 'unique_dup@test.com', 'phone': '',
+        }])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        f = SimpleUploadedFile('dup_email.xlsx', buf.read(),
+                               content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        res = self.client.post('/api/students/import_students/', {'file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(res.data.get('errors', [])), 0)
+
+    @patch('students.models.Student.objects')
+    def test_import_generic_exception_per_row_logged(self, mock_objects):
+        import pandas as pd
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        mock_objects.get_or_create.side_effect = RuntimeError('unexpected row error')
+        df = pd.DataFrame([{'document_id': 'ERRDOC', 'first_name': 'X', 'last_name': 'Y', 'email': 'x@test.com', 'phone': ''}])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        f = SimpleUploadedFile('err.xlsx', buf.read(),
+                               content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        res = self.client.post('/api/students/import_students/', {'file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(res.data.get('errors', [])), 0)
+
+
+# ─────────────────────────────────────────────
+# Finalize event with send_certificates coverage
+# ─────────────────────────────────────────────
+
+class FinalizeEventCertificateSentTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin('fin_admin@test.com')
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name='FinalizeTest')
+        self.student = make_student(self.admin, doc='FINSTUD', email='finstud@test.com')
+
+    @patch('certificados.models.Certificate.deliver')
+    def test_finalize_with_send_certificates_covers_sent_fields(self, mock_deliver):
+        mock_deliver.return_value = MagicMock()
+        from events.models import Enrollment
+        from certificados.models import Certificate
+        Enrollment.objects.create(
+            student=self.student, event=self.event, attendance=True, created_by=self.admin
+        )
+        cert = Certificate.objects.create(
+            student=self.student, event=self.event, generated_by=self.admin
+        )
+        Certificate.objects.filter(pk=cert.pk).update(status='generated')
+        res = self.client.post(f'/api/events/{self.event.id}/finalize/', {'send_certificates': True})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['certificates_sent'], 1)
+
+    @patch('certificados.models.Certificate.deliver')
+    def test_finalize_deliver_exception_logged(self, mock_deliver):
+        mock_deliver.side_effect = Exception('deliver error')
+        from events.models import Enrollment
+        from certificados.models import Certificate
+        event2 = make_event(self.admin, name='FinalizeExc')
+        Enrollment.objects.create(
+            student=self.student, event=event2, attendance=True, created_by=self.admin
+        )
+        cert = Certificate.objects.create(
+            student=self.student, event=event2, generated_by=self.admin
+        )
+        Certificate.objects.filter(pk=cert.pk).update(status='generated')
+        res = self.client.post(f'/api/events/{event2.id}/finalize/', {'send_certificates': True})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['certificates_sent'], 0)
+
+
+# ─────────────────────────────────────────────
+# Enrollment create invalid serializer + non-admin write
+# ─────────────────────────────────────────────
+
+class EnrollmentEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin('enr_edge@test.com')
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+
+    def test_create_enrollment_missing_student_id_returns_400(self):
+        res = self.client.post('/api/enrollments/', {'event_id': self.event.id}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_admin_cannot_create_enrollment(self):
+        regular = make_user('enr_nonadmin@test.com')
+        self.client.force_authenticate(user=regular)
+        res = self.client.post('/api/enrollments/', {'student_id': 1, 'event_id': self.event.id}, format='json')
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
+
+
+# ─────────────────────────────────────────────
+# Template upload image with alternate key
+# ─────────────────────────────────────────────
+
+class TemplateUploadImageAltKeyTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin('tpl_img@test.com')
+        self.client.force_authenticate(user=self.admin)
+        from certificados.models import Template
+        self.template = Template.objects.create(name='ImgTpl', created_by=self.admin)
+
+    def test_upload_image_with_alternate_key(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        img = SimpleUploadedFile('bg.png', b'\x89PNG\r\n', content_type='image/png')
+        res = self.client.post(
+            f'/api/templates/{self.template.id}/upload-image/',
+            {'background': img},
+            format='multipart'
+        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])

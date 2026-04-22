@@ -1049,6 +1049,7 @@ Equipo CertyPro
         from events.models import EventInvitation
         from django.utils import timezone
         from django.conf import settings
+        from django.core.mail import send_mail
         import uuid
         from datetime import timedelta
         
@@ -1127,9 +1128,10 @@ Equipo CertyPro
         Body: {"send_certificates": true/false}
         """
         from events.models import Enrollment
-        
+        from django.utils import timezone
+
         event = self.get_object()
-        
+
         if event.status == 'finished':
             return Response(
                 {'error': 'El evento ya está finalizado'},
@@ -1847,9 +1849,10 @@ class EnrollmentViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        resolved_event_pk = event_pk or request.data.get('event_id')
         try:
-            event = Event.objects.get(id=event_pk)
-        except Event.DoesNotExist:
+            event = Event.objects.get(id=resolved_event_pk)
+        except (Event.DoesNotExist, ValueError, TypeError):
             return Response(
                 {'error': 'Evento no encontrado'},
                 status=status.HTTP_404_NOT_FOUND
@@ -1880,9 +1883,9 @@ class EnrollmentViewSet(viewsets.ViewSet):
     def destroy(self, request, event_pk=None, pk=None):
         """Remove a student from an event"""
         from events.models import Enrollment
-        
+
         try:
-            enrollment = Enrollment.objects.get(id=pk, event_id=event_pk)
+            enrollment = Enrollment.objects.get(id=pk)
             enrollment.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Enrollment.DoesNotExist:
@@ -1890,14 +1893,14 @@ class EnrollmentViewSet(viewsets.ViewSet):
                 {'error': 'Inscripción no encontrada'},
                 status=status.HTTP_404_NOT_FOUND
             )
-    
+
     @action(detail=True, methods=['patch'])
     def attendance(self, request, event_pk=None, pk=None):
         """Mark attendance for an enrollment"""
         from events.models import Enrollment
-        
+
         try:
-            enrollment = Enrollment.objects.get(id=pk, event_id=event_pk)
+            enrollment = Enrollment.objects.get(id=pk)
         except Enrollment.DoesNotExist:
             return Response(
                 {'error': 'Inscripción no encontrada'},
