@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-django
+          pip install pytest pytest-cov pytest-django Pillow
 
       - name: Run tests with coverage
         env:
