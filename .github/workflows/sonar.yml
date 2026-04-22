@@ -42,6 +42,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
+          SECRET_KEY: django-insecure-ci-key-only-for-testing-not-production
           DB_NAME: certydb
           DB_USER: certyuser
           DB_PASSWORD: certypass
