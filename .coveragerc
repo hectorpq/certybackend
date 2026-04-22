@@ -1,0 +1,30 @@
+[run]
+source = .
+omit =
+    */migrations/*
+    */admin.py
+    */apps.py
+    config/wsgi.py
+    config/asgi.py
+    manage.py
+    */management/commands/*
+    */tests.py
+    services/whatsapp_service.py
+    test_student_api.py
+    certificados/views.py
+    core/views.py
+    deliveries/views.py
+    emails/views.py
+    events/views.py
+    instructors/views.py
+    procesos/views.py
+    students/views.py
+    users/views.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    pass
