@@ -9,6 +9,22 @@ on:
 jobs:
   sonar:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: certydb
+          POSTGRES_USER: certyuser
+          POSTGRES_PASSWORD: certypass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,9 +38,15 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov pytest-django
 
       - name: Run tests with coverage
+        env:
+          DB_NAME: certydb
+          DB_USER: certyuser
+          DB_PASSWORD: certypass
+          DB_HOST: localhost
+          DB_PORT: 5432
         run: |
           pytest --cov=. --cov-report=xml
 
