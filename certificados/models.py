@@ -7,7 +7,6 @@ from users.models import User
 from students.models import Student
 from events.models import Event
 
-
 class Template(models.Model):
     """
     Modelo para plantillas de certificados
