@@ -1,3 +1,4 @@
+import pytest
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -87,7 +88,7 @@ class CertificateModelTest(TestCase):
     def test_generate_verification_code_returns_string(self):
         code = Certificate.generate_verification_code(1, 2)
         self.assertIsInstance(code, str)
-        self.assertTrue(len(code) > 0)
+        self.assertTrue(len(code) > 2)
 
     def test_get_delivery_history_empty(self):
         cert = self._make_cert()
