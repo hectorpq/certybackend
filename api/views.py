@@ -1049,76 +1049,40 @@ Equipo CertyPro
         from events.models import EventInvitation
         from django.utils import timezone
         from django.conf import settings
-        from django.core.mail import send_mail
         import uuid
         from datetime import timedelta
-        
+
         event = self.get_object()
-        
-        # Get pending invitations
         pending = EventInvitation.objects.filter(event=event, status='pending')
-        
+
         if not pending.exists():
             return Response(
                 {'message': 'No hay invitaciones pendientes'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
         expires_at = timezone.now() + timedelta(days=7)
-        
         sent = 0
         errors = []
-        
+
         for invitation in pending:
-            # Update expiration
             invitation.expires_at = expires_at
-            
-            # Find student if exists
             if not invitation.student:
                 invitation.student = Student.objects.filter(email__iexact=invitation.email).first()
-            
-            # Generate new token if needed
             if not invitation.token:
                 invitation.token = uuid.uuid4()
-            
-            try:
-                invitation_link = f"{frontend_url}/invitation/{invitation.token}"
-                subject = f"Invitación al evento: {event.name}"
-                message = f"""
-Hola,
 
-Has sido invitado al evento "{event.name}".
-
-Fecha: {event.event_date}
-Ubicación: {event.location or 'Por definir'}
-
-Para aceptar esta invitación, haz clic en el siguiente enlace:
-{invitation_link}
-
-Esta invitación expira en 7 días.
-
-Saludos,
-Equipo CertyPro
-"""
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [invitation.email],
-                    fail_silently=False
-                )
+            send_error = self._send_invitation_email(invitation, event, frontend_url, 7, settings)
+            if send_error:
+                errors.append(send_error)
+            else:
                 invitation.status = 'sent'
                 invitation.sent_at = timezone.now()
                 invitation.save()
                 sent += 1
-            except Exception as e:
-                errors.append(f'Error enviando a {invitation.email}: {str(e)}')
-        
-        return Response({
-            'sent': sent,
-            'errors': errors
-        })
+
+        return Response({'sent': sent, 'errors': errors})
     
     @action(detail=True, methods=['post'], url_path='finalize')
     def finalize_event(self, request, pk=None):

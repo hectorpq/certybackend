@@ -74,40 +74,16 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email', 'full_name', 'role', 'is_staff', 'is_active']
 
 
-class UserLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-    
-    def validate(self, data):
-        from django.contrib.auth import authenticate
-        from django.conf import settings
-        
-        email = data.get('email')
-        password = data.get('password')
-        
-        if email and password:
-            user = authenticate(username=email, password=password)
-            if not user:
-                raise serializers.ValidationError('Credenciales inválidas')
-            if not user.is_active:
-                raise serializers.ValidationError('Usuario inactivo')
-            data['user'] = user
-        else:
-            raise serializers.ValidationError('Email y contraseña requeridos')
-        
-        return data
-
-
 class UserAuthSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-    
+
     def validate(self, data):
         from django.contrib.auth import authenticate
-        
+
         email = data.get('email')
         password = data.get('password')
-        
+
         if email and password:
             user = authenticate(username=email, password=password)
             if not user:
@@ -117,8 +93,11 @@ class UserAuthSerializer(serializers.Serializer):
             data['user'] = user
         else:
             raise serializers.ValidationError('Email y contraseña requeridos')
-        
+
         return data
+
+
+UserLoginSerializer = UserAuthSerializer
 
 
 class InstructorSerializer(serializers.ModelSerializer):
