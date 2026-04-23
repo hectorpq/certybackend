@@ -2212,3 +2212,179 @@ class TemplateUploadImageAltKeyTest(TestCase):
             format='multipart'
         )
         self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+
+# ─────────────────────────────────────────────
+# Serializer coverage: DateField and InvitationDetailSerializer
+# ─────────────────────────────────────────────
+
+class SerializerCoverageTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='ser_cov@test.com', full_name='S', password='pass')
+
+    def test_date_field_to_internal_value_empty_string_returns_none(self):
+        from api.serializers import DateField
+        field = DateField(allow_null=True, required=False)
+        result = field.to_internal_value('')
+        self.assertIsNone(result)
+
+    def test_user_auth_serializer_validate_raises_when_no_email_or_password(self):
+        from api.serializers import UserAuthSerializer
+        s = UserAuthSerializer()
+        with self.assertRaises(Exception):
+            s.validate({'email': '', 'password': ''})
+
+    def test_template_serializer_returns_background_image_url_when_set(self):
+        from api.serializers import TemplateSerializer
+        from unittest.mock import MagicMock
+        t = Template.objects.create(name='ImgBG', created_by=self.user)
+        mock_image = MagicMock()
+        mock_image.__bool__ = lambda self: True
+        mock_image.url = 'http://example.com/real-bg.png'
+        t.background_image = mock_image
+        s = TemplateSerializer(t)
+        self.assertEqual(s.get_background_image_url(t), 'http://example.com/real-bg.png')
+
+    def test_invitation_detail_student_exists_by_email_when_no_student_linked(self):
+        from api.serializers import InvitationDetailSerializer
+        from events.models import EventInvitation, Event
+        from students.models import Student
+
+        event = Event.objects.create(name='SrlEv', event_date=date(2026, 9, 1), created_by=self.user)
+        student = Student.objects.create(
+            document_id='SRLCOV1', first_name='A', last_name='B',
+            email='srlcov@test.com', created_by=self.user
+        )
+        inv = EventInvitation.objects.create(
+            event=event, email='srlcov@test.com', student=None, created_by=self.user
+        )
+        s = InvitationDetailSerializer(inv)
+        self.assertTrue(s.data['student_exists'])
+
+    def test_invitation_detail_student_not_exists_returns_false(self):
+        from api.serializers import InvitationDetailSerializer
+        from events.models import EventInvitation, Event
+
+        event = Event.objects.create(name='SrlEv2', event_date=date(2026, 9, 2), created_by=self.user)
+        inv = EventInvitation.objects.create(
+            event=event, email='nobody@test.com', student=None, created_by=self.user
+        )
+        s = InvitationDetailSerializer(inv)
+        self.assertFalse(s.data['student_exists'])
+
+
+# ─────────────────────────────────────────────
+# views.py: send_all_invitations token missing path
+# ─────────────────────────────────────────────
+
+class SendAllInvitationsTokenMissingTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin('toktest@test.com')
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name='Tok Event')
+
+    @patch('django.core.mail.send_mail')
+    def test_send_all_invitations_assigns_token_when_missing(self, mock_mail):
+        mock_mail.return_value = 1
+        from events.models import EventInvitation
+        inv = EventInvitation.objects.create(
+            event=self.event, email='notoken@test.com', status='pending', created_by=self.admin
+        )
+        EventInvitation.objects.filter(pk=inv.pk).update(token='')
+        res = self.client.post(f'/api/events/{self.event.id}/invitations/send-all/', {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# config/urls.py: DEBUG=True static URL coverage
+# ─────────────────────────────────────────────
+
+class DebugURLPatternTest(TestCase):
+    def test_debug_mode_adds_static_media_url(self):
+        import sys
+        from django.test import override_settings
+
+        original = sys.modules.pop('config.urls', None)
+        try:
+            with override_settings(DEBUG=True, MEDIA_URL='/media/', MEDIA_ROOT='/tmp/media'):
+                import config.urls as debug_urls
+                self.assertGreater(len(debug_urls.urlpatterns), 0)
+        finally:
+            if original is not None:
+                sys.modules['config.urls'] = original
+            elif 'config.urls' in sys.modules:
+                del sys.modules['config.urls']
+
+
+# ─────────────────────────────────────────────
+# views.py: uncovered queryset fallback paths + bulk success
+# ─────────────────────────────────────────────
+
+class ViewsQuersetFallbackTest(TestCase):
+    def setUp(self):
+        self.admin = make_admin('qs_fb@test.com')
+
+    def _make_anon_request(self):
+        from rest_framework.test import APIRequestFactory
+        from rest_framework.request import Request
+        from django.contrib.auth.models import AnonymousUser
+        factory = APIRequestFactory()
+        raw = factory.get('/')
+        raw.user = AnonymousUser()
+        req = Request(raw)
+        req._user = AnonymousUser()
+        return req
+
+    def test_certificate_queryset_returns_none_for_unauthenticated(self):
+        from api.views import CertificateViewSet
+        req = self._make_anon_request()
+        viewset = CertificateViewSet()
+        viewset.request = req
+        viewset.format_kwarg = None
+        viewset.action = 'list'
+        qs = viewset.get_queryset()
+        self.assertEqual(list(qs), [])
+
+    def test_events_queryset_returns_all_for_unauthenticated(self):
+        from api.views import EventsViewSet
+        req = self._make_anon_request()
+        viewset = EventsViewSet()
+        viewset.request = req
+        viewset.format_kwarg = None
+        viewset.action = 'list'
+        qs = viewset.get_queryset()
+        self.assertIsNotNone(qs)
+
+
+class BulkCertificateGenerationSuccessTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin('bulksucc@test.com')
+        self.client.force_authenticate(user=self.admin)
+
+    def _make_excel_file(self):
+        import pandas as pd
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        df = pd.DataFrame([{
+            'full_name': 'Test User',
+            'email': 'bulksucc@example.com',
+            'document_id': 'BULKSUCC01',
+            'event_name': 'Success Event',
+        }])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        return SimpleUploadedFile('bulk.xlsx', buf.read(),
+                                   content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    @patch('api.views.BulkCertificateGeneratorService.generate_from_excel')
+    def test_bulk_generate_success_returns_200(self, mock_gen):
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = {'total_rows': 1, 'successful': 1, 'failed': 0}
+        mock_result.get_summary.return_value = 'OK'
+        mock_gen.return_value = mock_result
+        f = self._make_excel_file()
+        res = self.client.post('/api/certificates/generate-bulk/', {'excel_file': f}, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)

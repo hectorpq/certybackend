@@ -175,3 +175,31 @@ class DeliveryQueryHelpersTest(TestCase):
         from core.helpers import get_failed_deliveries
         result = get_failed_deliveries(self.cert)
         self.assertEqual(result.count(), 0)
+
+
+class AdminUtilsTest(TestCase):
+    def test_active_badge_active_object(self):
+        from core.admin_utils import active_badge
+
+        class Obj:
+            is_active = True
+
+        result = str(active_badge(Obj()))
+        self.assertIn('green', result)
+        self.assertIn('Active', result)
+
+    def test_active_badge_inactive_object(self):
+        from core.admin_utils import active_badge
+
+        class Obj:
+            is_active = False
+
+        result = str(active_badge(Obj()))
+        self.assertIn('red', result)
+        self.assertIn('Inactive', result)
+
+    def test_color_badge_returns_html_with_color_and_label(self):
+        from core.admin_utils import color_badge
+        result = str(color_badge('blue', 'TestLabel'))
+        self.assertIn('blue', result)
+        self.assertIn('TestLabel', result)

@@ -240,3 +240,10 @@ class CertificateModelTest(TestCase):
         with patch.object(cert, '_determine_recipient', return_value=''):
             with self.assertRaises(Exception):
                 cert.deliver(method='email')
+
+    def test_send_delivery_whatsapp_module_not_found_returns_failure(self):
+        cert = self._make_cert()
+        with patch('services.whatsapp_service.get_whatsapp_service', side_effect=ModuleNotFoundError('No module')):
+            result = cert._send_delivery('whatsapp', '999000111')
+        self.assertFalse(result['success'])
+        self.assertIn('not configured', result['message'])
