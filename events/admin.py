@@ -1,9 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Event, EventCategory, Enrollment, EventInstructor
-
-# Constants
-_BOLD_FORMAT = '<b>{}</b>'
+from core.admin_utils import color_badge, BOLD_FORMAT
 
 
 @admin.register(EventCategory)
@@ -14,7 +12,7 @@ class EventCategoryAdmin(admin.ModelAdmin):
 
     def event_count(self, obj):
         count = obj.events.count()
-        return format_html(_BOLD_FORMAT, count)
+        return format_html(BOLD_FORMAT, count)
     event_count.short_description = 'Events'
 
 
@@ -56,28 +54,18 @@ class EventAdmin(admin.ModelAdmin):
     date_hierarchy = 'event_date'
 
     def status_badge(self, obj):
-        colors = {
-            'draft': 'gray',
-            'active': 'green',
-            'finished': 'blue',
-            'cancelled': 'red'
-        }
-        color = colors.get(obj.status, 'gray')
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color,
-            obj.get_status_display()
-        )
+        colors = {'draft': 'gray', 'active': 'green', 'finished': 'blue', 'cancelled': 'red'}
+        return color_badge(colors.get(obj.status, 'gray'), obj.get_status_display())
     status_badge.short_description = 'Status'
 
     def instructor_count(self, obj):
         count = obj.instructors.count()
-        return format_html(_BOLD_FORMAT, count)
+        return format_html(BOLD_FORMAT, count)
     instructor_count.short_description = 'Instructors'
 
     def enrollment_count(self, obj):
         count = obj.enrollments.count()
-        return format_html(_BOLD_FORMAT, count)
+        return format_html(BOLD_FORMAT, count)
     enrollment_count.short_description = 'Enrollments'
 
     def instructors_info(self, obj):

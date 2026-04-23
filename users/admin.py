@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import User
+from core.admin_utils import color_badge
 
 
 @admin.register(User)
@@ -33,11 +34,7 @@ class UserAdmin(admin.ModelAdmin):
     def role_badge(self, obj):
         colors = {'admin': 'red', 'editor': 'blue'}
         color = colors.get(obj.role, 'gray')
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color,
-            obj.get_role_display()
-        )
+        return color_badge(color, obj.get_role_display())
     role_badge.short_description = 'Role'
 
     def password_info(self, obj):

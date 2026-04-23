@@ -3,9 +3,7 @@ from django.utils.html import format_html
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from .models import Template, Certificate
-
-# Constants
-_STATUS_BADGE_STYLE = '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>'
+from core.admin_utils import active_badge, color_badge, BADGE_STYLE
 
 
 @admin.register(Template)
@@ -38,13 +36,7 @@ class TemplateAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
 
     def status_badge(self, obj):
-        color = 'green' if obj.is_active else 'red'
-        status = 'Active' if obj.is_active else 'Inactive'
-        return format_html(
-            _STATUS_BADGE_STYLE,
-            color,
-            status
-        )
+        return active_badge(obj)
     status_badge.short_description = 'Status'
 
     def usage_count(self, obj):
@@ -167,37 +159,16 @@ class CertificateAdmin(admin.ModelAdmin):
     event_name.short_description = 'Event'
 
     def status_badge(self, obj):
-        colors = {
-            'pending': 'orange',
-            'generated': 'blue',
-            'sent': 'green',
-            'failed': 'red'
-        }
-        color = colors.get(obj.status, 'gray')
-        return format_html(
-            _STATUS_BADGE_STYLE,
-            color,
-            obj.get_status_display()
-        )
+        colors = {'pending': 'orange', 'generated': 'blue', 'sent': 'green', 'failed': 'red'}
+        return color_badge(colors.get(obj.status, 'gray'), obj.get_status_display())
     status_badge.short_description = 'Status'
 
     def delivery_badge(self, obj):
-        """Show delivery status based on latest delivery log"""
         if not obj.has_delivery_attempts():
             return format_html('<span style="color: gray;">N/A</span>')
-        
         last_delivery = obj.last_delivery_attempt
-        colors = {
-            'success': 'green',
-            'error': 'red',
-            'pending': 'orange'
-        }
-        color = colors.get(last_delivery.status, 'gray')
-        return format_html(
-            _STATUS_BADGE_STYLE,
-            color,
-            last_delivery.get_delivery_method_display()
-        )
+        colors = {'success': 'green', 'error': 'red', 'pending': 'orange'}
+        return color_badge(colors.get(last_delivery.status, 'gray'), last_delivery.get_delivery_method_display())
     delivery_badge.short_description = 'Last Delivery'
 
     def verification_code_short(self, obj):

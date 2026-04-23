@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Student
+from core.admin_utils import active_badge, BOLD_FORMAT
 
 
 @admin.register(Student)
@@ -38,18 +39,12 @@ class StudentAdmin(admin.ModelAdmin):
     full_name.short_description = 'Full Name'
 
     def status_badge(self, obj):
-        color = 'green' if obj.is_active else 'red'
-        status = 'Active' if obj.is_active else 'Inactive'
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color,
-            status
-        )
+        return active_badge(obj)
     status_badge.short_description = 'Status'
 
     def enrollment_count(self, obj):
         count = obj.enrollments.count()
-        return format_html('<b>{}</b>', count)
+        return format_html(BOLD_FORMAT, count)
     enrollment_count.short_description = 'Enrollments'
 
     def enrollment_info(self, obj):
