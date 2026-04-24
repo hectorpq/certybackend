@@ -374,18 +374,22 @@ class CertificateViewSet(viewsets.ModelViewSet):
         }
         """
         certificate = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
+        template_id = request.data.get('template_id')
+
         try:
-            template_id = serializer.validated_data.get('template_id')
             if template_id:
                 from certificados.models import Template
-                template = Template.objects.get(id=template_id)
-                certificate.template = template
+                try:
+                    template = Template.objects.get(id=template_id)
+                    certificate.template = template
+                except Template.DoesNotExist:
+                    return Response(
+                        {'status': 'error', 'message': 'Plantilla no encontrada'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             
-            certificate.generate()
-            
+            certificate.generate(generated_by=request.user)
+
             return Response(
                 {
                     'status': 'success',
@@ -753,6 +757,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                         'status': cert.status
                     })
                 elif created:
+                    cert.generate(generated_by=request.user, skip_attendance_check=True)
                     results['created'].append({
                         'student_id': enrollment.student.id,
                         'student_name': enrollment.student.full_name,
@@ -822,17 +827,23 @@ class EventsViewSet(viewsets.ModelViewSet):
             try:
                 # Generate if not generated
                 if cert.status == 'pending':
-                    cert.generate(request.user)
+                    cert.generate(generated_by=request.user)
                 
                 # Deliver
-                result = cert.deliver(method=method, sent_by=request.user)
-                
-                results['sent'].append({
-                    'certificate_id': cert.id,
-                    'student_name': cert.student.full_name,
-                    'recipient': cert.student.email,
-                    'status': result.get('status') if isinstance(result, dict) else 'sent'
-                })
+                delivery_log = cert.deliver(method=method, sent_by=request.user)
+
+                if delivery_log.status == 'success':
+                    results['sent'].append({
+                        'certificate_id': cert.id,
+                        'student_name': cert.student.full_name,
+                        'recipient': cert.student.email,
+                    })
+                else:
+                    results['failed'].append({
+                        'certificate_id': cert.id,
+                        'student_name': cert.student.full_name,
+                        'error': delivery_log.error_message or 'Error al enviar',
+                    })
             except Exception as e:
                 results['failed'].append({
                     'certificate_id': cert.id,
@@ -1117,24 +1128,36 @@ Equipo CertyPro
         # Send certificates if requested
         if send_certificates:
             enrollments = Enrollment.objects.filter(event=event, attendance=True)
-            
+
             for enrollment in enrollments:
-                certificate = Certificate.objects.filter(
+                # Get or create certificate for this student
+                certificate, _ = Certificate.objects.get_or_create(
                     student=enrollment.student,
-                    event=event
-                ).first()
-                
-                if certificate and certificate.status == 'generated':
-                    # Send certificate
-                    try:
-                        certificate.deliver(method='email', sent_by=request.user)
+                    event=event,
+                    defaults={
+                        'template': event.template,
+                        'status': 'pending',
+                    }
+                )
+
+                try:
+                    # Generate if not already generated
+                    if certificate.status == 'pending':
+                        certificate.generate(generated_by=request.user)
+
+                    # Send
+                    delivery_log = certificate.deliver(method='email', sent_by=request.user)
+
+                    if delivery_log.status == 'success':
                         enrollment.certificate_sent = True
                         enrollment.certificate_sent_at = timezone.now()
                         enrollment.certificate_sent_method = 'email'
                         enrollment.save()
                         result['certificates_sent'] += 1
-                    except Exception as e:
-                        logger.error('Error delivering certificate %s: %s', certificate.id, str(e))
+                    else:
+                        logger.error('Failed to send certificate %s: %s', certificate.id, delivery_log.error_message)
+                except Exception as e:
+                    logger.error('Error processing certificate %s: %s', certificate.id, str(e))
 
         return Response(result)
 
@@ -1475,52 +1498,86 @@ class BulkCertificateGenerationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
-        """Procesa un archivo Excel para generar certificados masivamente"""
-        
+        """Procesa un archivo Excel para generar y enviar certificados masivamente"""
         from api.permissions import is_admin
-        
+        from django.utils import timezone as tz
+
         if not is_admin(request):
             return Response(
                 {'error': 'Solo administradores pueden generar certificados en masa'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        serializer = ExcelBulkImportSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        excel_file = serializer.validated_data['excel_file']
-        
+
+        excel_file = request.FILES.get('excel_file')
+        template_image = request.FILES.get('template_image')
+        event_id = request.data.get('event_id')
+
+        if not excel_file:
+            return Response({'error': 'Se requiere archivo Excel (excel_file)'}, status=status.HTTP_400_BAD_REQUEST)
+        if not template_image:
+            return Response({'error': 'Se requiere imagen de plantilla (template_image)'}, status=status.HTTP_400_BAD_REQUEST)
+        if not event_id:
+            return Response({'error': 'Se requiere el ID del evento (event_id)'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            # Convertir UploadedFile a BytesIO
+            event = Event.objects.get(id=int(event_id))
+        except (Event.DoesNotExist, ValueError):
+            return Response({'error': 'Evento no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Coordenadas del nombre (porcentaje 0-100, y desde arriba)
+        name_x = float(request.data.get('name_x', 50))
+        name_y = float(request.data.get('name_y', 40))
+        font_size = int(request.data.get('font_size', 28))
+        font_color = request.data.get('font_color', '#000000')
+        font_family = request.data.get('font_family', 'Helvetica')
+
+        # Convertir porcentaje a pulgadas para layout_config
+        # A4 horizontal: 841.89 x 595.28 pts / 72 pts/inch
+        x_inch = name_x / 100 * 841.89 / 72
+        y_inch = (1 - name_y / 100) * 595.28 / 72
+
+        layout_config = {
+            'student_name': {
+                'x': x_inch,
+                'y': y_inch,
+                'font_size': font_size,
+                'font_family': font_family,
+                'color': font_color,
+                'centered': True,
+            }
+        }
+
+        template = Template.objects.create(
+            name=f'Bulk - {event.name} - {tz.now().strftime("%Y%m%d%H%M%S")}',
+            created_by=request.user,
+            background_image=template_image,
+            layout_config=layout_config,
+            font_color=font_color,
+            font_family=font_family,
+            font_size=font_size,
+            x_coord=x_inch,
+            y_coord=y_inch,
+            is_active=False,
+        )
+
+        try:
             file_bytes = BytesIO(excel_file.read())
-            
-            # Procesar Excel
-            result = BulkCertificateGeneratorService.generate_from_excel(
-                excel_file=file_bytes,
-                user=request.user
+            from procesos.services import ExcelProcessingService
+            service = ExcelProcessingService(
+                file_object=file_bytes,
+                created_by_user=request.user,
+                event=event,
+                template=template,
             )
-            
-            # Convertir resultado a diccionario
+            result = service.process()
             result_dict = result.to_dict()
-            
-            # Log de resumen
-            print(result.get_summary())
-            
-            return Response(
-                result_dict,
-                status=status.HTTP_200_OK
-            )
-            
+            logger.info(result.get_summary())
+            return Response(result_dict, status=status.HTTP_200_OK)
+
         except Exception as e:
+            template.delete()
             return Response(
-                {
-                    'error': 'Error al procesar archivo Excel',
-                    'detail': str(e)
-                },
+                {'error': 'Error al procesar archivo Excel', 'detail': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -1971,19 +2028,34 @@ class InvitationPublicView(APIView):
             invitation.save()
         
         # Create enrollment (without invitation FK to avoid DB error)
-        Enrollment.objects.get_or_create(
+        enrollment, created = Enrollment.objects.get_or_create(
             student=invitation.student,
             event=invitation.event,
             defaults={
                 'created_by': invitation.created_by,
-                'invitation_sent': True
+                'invitation_sent': True,
+                'attendance': True,
+            }
+        )
+        if not created:
+            enrollment.attendance = True
+            enrollment.save()
+
+        # Auto-create certificate in pending status so it appears in the list
+        from certificados.models import Certificate
+        Certificate.objects.get_or_create(
+            student=invitation.student,
+            event=invitation.event,
+            defaults={
+                'template': invitation.event.template,
+                'status': 'pending',
             }
         )
 
         invitation.status = 'accepted'
         invitation.responded_at = timezone.now()
         invitation.save()
-        
+
         return Response({
             'message': '¡Inscripción exitosa!',
             'event': invitation.event.name,
@@ -2087,15 +2159,30 @@ class InvitationRegisterView(APIView):
         invitation.save()
         
         # Create enrollment (without invitation reference to avoid FK issues)
-        Enrollment.objects.get_or_create(
+        enrollment, created = Enrollment.objects.get_or_create(
             student=student,
             event=invitation.event,
             defaults={
                 'created_by': invitation.created_by,
-                'invitation_sent': True
+                'invitation_sent': True,
+                'attendance': True,
             }
         )
-        
+        if not created:
+            enrollment.attendance = True
+            enrollment.save()
+
+        # Auto-create certificate in pending status so it appears in the list
+        from certificados.models import Certificate
+        Certificate.objects.get_or_create(
+            student=student,
+            event=invitation.event,
+            defaults={
+                'template': invitation.event.template,
+                'status': 'pending',
+            }
+        )
+
         return Response({
             'message': '¡Registro exitoso! Ya estás inscrito en el evento.',
             'event': invitation.event.name,

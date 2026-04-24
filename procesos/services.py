@@ -95,7 +95,7 @@ class ExcelProcessingResult:
         Total procesados: {self.total_rows}
         ✓ Exitosos: {self.successful}
         ✗ Fallidos: {self.failed}
-        Tasa de éxito: {(self.successful/self.total_rows*100):.1f}% si self.total_rows > 0 else "0%"
+        Tasa de éxito: {(self.successful/self.total_rows*100):.1f if self.total_rows > 0 else 0}%
         ═══════════════════════════════════════
         """
         
@@ -127,26 +127,21 @@ class ExcelProcessingService:
         'full_name': 'Nombre completo del estudiante',
         'email': 'Email del estudiante',
         'document_id': 'Documento de identidad (único)',
-        'event_name': 'Nombre del evento',
     }
-    
+
     # Columnas opcionales
     OPTIONAL_COLUMNS = {
+        'event_name': 'Nombre del evento (si no se pasa un evento global)',
         'phone': 'Teléfono',
         'institution': 'Institución',
         'certificate_template': 'Plantilla de certificado (nombre)',
     }
-    
-    def __init__(self, file_object: BytesIO, created_by_user: User = None):
-        """
-        Inicializa el servicio
-        
-        Args:
-            file_object: Objeto BytesIO del archivo Excel
-            created_by_user: Usuario que hace la importación
-        """
+
+    def __init__(self, file_object: BytesIO, created_by_user: User = None, event=None, template=None):
         self.file_object = file_object
         self.created_by_user = created_by_user
+        self.event = event        # Event object: si se pasa, se usa para todas las filas
+        self.template = template  # Template object: si se pasa, sobrescribe la del evento
         self.result = ExcelProcessingResult()
         self.dataframe = None
     
@@ -331,26 +326,36 @@ class ExcelProcessingService:
             raise ValueError(f"Email inválido: {email}")
         if not document_id:
             raise ValueError("document_id no puede estar vacío")
-        if not event_name:
+        if not self.event and not event_name:
             raise ValueError("event_name no puede estar vacío")
-        
+
         # Procesar en transacción atómica
         with transaction.atomic():
             # 1. Obtener o crear Student
             student = self._get_or_create_student(full_name, email, document_id, phone)
-            
-            # 2. Obtener Event
+
+            # 2. Obtener Event (desde self.event o desde la columna event_name)
+            event_name = str(row.get('event_name', '')).strip() if not self.event else None
             event = self._get_event(event_name)
             
             # 3. Obtener o crear Enrollment (relación student-event)
             self._get_or_create_enrollment(student, event)
             
-            # 4. Generar Certificate
+            # 4. Crear Certificate (pending)
             certificate = self._create_certificate(student, event)
-            
+
+            # 5. Generar PDF si está en pending
+            if certificate.status == 'pending':
+                certificate.generate(generated_by=self.created_by_user, skip_attendance_check=True)
+
+            # 6. Enviar por correo
+            delivery_log = certificate.deliver(method='email', sent_by=self.created_by_user)
+            if delivery_log.status != 'success':
+                raise ValueError(f"Error al enviar correo a {student.email}: {delivery_log.error_message}")
+
             # Registrar éxito
             self.result.add_success(certificate.id)
-            logger.info("Fila %s: Certificado creado - %s en %s", row_number, student.email, event.name)
+            logger.info("Fila %s: Certificado enviado a %s en %s", row_number, student.email, event.name)
     
     def _validate_email(self, email: str) -> bool:
         """Valida formato de email"""
@@ -360,87 +365,104 @@ class ExcelProcessingService:
     def _get_or_create_student(self, full_name: str, email: str, document_id: str, phone: str = None) -> Student:
         """
         Obtiene o crea un Student
-        
+
         Estrategia:
-        1. Buscar por document_id (debe ser único)
-        2. Si no existe, crear nuevo estudiante
-        3. Si existe pero email es diferente, actualizar
+        1. Buscar por document_id
+        2. Si no existe por document_id, buscar por email
+        3. Si tampoco existe por email, crear nuevo estudiante
         """
+        # Buscar por document_id primero
         try:
-            # Intentar obtener por document_id
             student = Student.objects.get(document_id=document_id)
-            
-            # Si el email cambió, actualizar
             if student.email != email:
                 student.email = email
                 student.save()
                 logger.info("Student actualizado: %s", document_id)
-            
             return student
-            
         except Student.DoesNotExist:
-            # Crear nuevo estudiante
-            names = full_name.split(' ', 1)
-            first_name = names[0]
-            last_name = names[1] if len(names) > 1 else ''
-            
-            student = Student.objects.create(
-                document_id=document_id,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                phone=phone,
-                is_active=True
-            )
-            logger.info("Student creado: %s", email)
-            return student
-    
-    def _get_event(self, event_name: str) -> Event:
-        """
-        Obtiene un Event por nombre
-        
-        Nota: Si el evento no existe, lanza excepción (requiere crearse previamente)
-        """
+            pass
+
+        # Buscar por email antes de intentar crear
         try:
-            event = Event.objects.get(name=event_name)
-            return event
+            student = Student.objects.get(email=email)
+            logger.info("Student encontrado por email: %s", email)
+            return student
+        except Student.DoesNotExist:
+            pass
+
+        # Crear nuevo estudiante
+        names = full_name.split(' ', 1)
+        first_name = names[0]
+        last_name = names[1] if len(names) > 1 else ''
+
+        student = Student.objects.create(
+            document_id=document_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            is_active=True
+        )
+        logger.info("Student creado: %s", email)
+        return student
+    
+    def _get_event(self, event_name: str = None) -> Event:
+        if self.event:
+            return self.event
+        if not event_name:
+            raise ValueError("No se especificó un evento para esta fila")
+        try:
+            return Event.objects.get(name=event_name)
         except Event.DoesNotExist:
             raise ValueError(f"Evento no encontrado: '{event_name}'")
     
     def _get_or_create_enrollment(self, student: Student, event: Event):
-        """
-        Obtiene o crea una inscripción (relación student-event)
-        
-        Nota: Ajustarse al modelo real de tu proyecto
-        Aquí se asume que existe una tabla de Enrollments
-        """
-        # Esta lógica depende de tu modelo de Enrollments
-        # Por ahora retornamos None, pero se puede extender
-        _student = student  # Usar parámetro para evitar warning
-        _event = event  # Usar parámetro para evitar warning
-        return None
+        """Obtiene o crea una inscripción marcando asistencia = True"""
+        from events.models import Enrollment
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=student,
+            event=event,
+            defaults={
+                'created_by': self.created_by_user,
+                'attendance': True,
+                'invitation_sent': False,
+            }
+        )
+        if not created and not enrollment.attendance:
+            enrollment.attendance = True
+            enrollment.save()
+        return enrollment
     
     def _create_certificate(self, student: Student, event: Event) -> Certificate:
         """
-        Crea o obtiene un Certificate
-        
-        Evita duplicados usando get_or_create
+        Crea o obtiene un Certificate.
+        Si ya existe y se provee una plantilla nueva (bulk), siempre la actualiza
+        y resetea a 'pending' para que el PDF se regenere con la imagen correcta.
         """
+        new_template = self.template or event.template
+
         certificate, created = Certificate.objects.get_or_create(
             student=student,
             event=event,
             defaults={
                 'status': 'pending',
+                'template': new_template,
                 'generated_by': self.created_by_user,
                 'verification_code': self._generate_verification_code(student.id, event.id)
             }
         )
-        
-        if created:
+
+        if not created and self.template:
+            # Siempre usar la imagen recién subida en bulk, aunque el certificado ya exista
+            certificate.template = self.template
+            certificate.status = 'pending'
+            certificate.save(update_fields=['template', 'status'])
+            logger.info("Plantilla actualizada en certificado existente: %s - %s", student.email, event.name)
+        elif created:
             logger.info("Certificado creado: %s - %s", student.email, event.name)
         else:
-            logger.info("Certificado ya existe: %s - %s", student.email, event.name)
-        
+            logger.info("Certificado ya existe (sin plantilla nueva): %s - %s", student.email, event.name)
+
         return certificate
     
     def _generate_verification_code(self, student_id: int, event_id: int) -> str:

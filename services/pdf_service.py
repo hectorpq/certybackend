@@ -119,10 +119,12 @@ class PDFService:
         font_family = config.get('font_family', 'Helvetica')
         color = config.get('color', '#000000')
         
+        centered = config.get('centered', False)
+
         c.setFont(f"{font_family}-Bold" if 'Bold' not in font_family else font_family, font_size)
         c.setFillColor(HexColor(color) if color_primary is None else color_primary)
-        
-        if isinstance(x, (int, float)) and x > PDFService.BASE_WIDTH / 2:
+
+        if centered or (isinstance(x, (int, float)) and x > PDFService.BASE_WIDTH / 2):
             c.drawCentredString(x, y, text)
         else:
             c.drawString(x, y, text)

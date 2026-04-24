@@ -31,25 +31,29 @@ class EventSerializer(serializers.ModelSerializer):
     end_date = DateField(allow_null=True, required=False)
     template_name = serializers.SerializerMethodField()
     instructor_name = serializers.SerializerMethodField()
-    
+    status_display = serializers.SerializerMethodField()
+
     class Meta:
         model = Event
         fields = [
             'id', 'category', 'created_by', 'instructor', 'instructor_name', 'name', 'description',
             'event_date', 'end_date', 'duration_hours', 'location',
-            'status', 'is_active', 'auto_send_certificates',
+            'status', 'status_display', 'is_active', 'auto_send_certificates',
             'template', 'template_name',
             'invitation_message', 'is_public', 'max_capacity',
             'name_font_size', 'name_x', 'name_y', 'template_image',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
-    
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
     def get_template_name(self, obj):
         if obj.template:
             return obj.template.name
         return None
-    
+
     def get_instructor_name(self, obj):
         if obj.instructor:
             return obj.instructor.full_name
@@ -131,7 +135,8 @@ class CertificateGenerateSerializer(serializers.Serializer):
 
 
 class CertificateDeliverSerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=['email', 'whatsapp'])
+    method = serializers.ChoiceField(choices=['email', 'whatsapp', 'link'])
+    recipient = serializers.CharField(required=False, allow_blank=True)
 
 
 class TemplateSerializer(serializers.ModelSerializer):
@@ -142,9 +147,17 @@ class TemplateSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_background_image_url(self, obj):
+        request = self.context.get('request')
         if obj.background_image:
-            return obj.background_image.url
-        return obj.background_url or ''
+            url = obj.background_image.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        if obj.background_url:
+            if request and obj.background_url.startswith('/'):
+                return request.build_absolute_uri(obj.background_url)
+            return obj.background_url
+        return ''
 
 
 class TemplateUpdateSerializer(serializers.ModelSerializer):
@@ -171,13 +184,18 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 
 class EventInvitationSerializer(serializers.ModelSerializer):
+    status_display = serializers.SerializerMethodField()
+
     class Meta:
         model = EventInvitation
         fields = [
             'id', 'event', 'student', 'email',
-            'token', 'status', 'expires_at',
+            'token', 'status', 'status_display', 'expires_at',
             'sent_at', 'responded_at', 'created_by', 'created_at'
         ]
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
 
 
 class InvitationDetailSerializer(serializers.ModelSerializer):
@@ -211,9 +229,21 @@ class InvitationRegisterSerializer(serializers.Serializer):
 
 
 class DeliveryLogSerializer(serializers.ModelSerializer):
+    status_display = serializers.SerializerMethodField()
+    delivery_method_display = serializers.SerializerMethodField()
+    is_successful = serializers.ReadOnlyField()
+    is_failed = serializers.ReadOnlyField()
+    is_pending = serializers.ReadOnlyField()
+
     class Meta:
         model = DeliveryLog
         fields = '__all__'
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
+    def get_delivery_method_display(self, obj):
+        return obj.get_delivery_method_display()
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):

@@ -193,7 +193,7 @@ class Certificate(models.Model):
         
         # Generate real PDF
         from services.pdf_service import PDFService
-        pdf_result = PDFService.generate_certificate_pdf(self, template)
+        pdf_result = PDFService.generate_certificate_pdf(self, template or self.template)
         if pdf_result['success']:
             self.pdf_url = pdf_result['path']
         else:
