@@ -45,7 +45,7 @@ jobs:
       - name: black — formatting check
         run: |
           black --check --line-length=120 \
-            --exclude="/(migrations|__pycache__|\.git|venv)/" \
+            --exclude="/(migrations|__pycache__|\.git|venv|\.venv)/" \
             .
 
       - name: isort — import order check
@@ -54,6 +54,7 @@ jobs:
             --profile=black \
             --line-length=120 \
             --skip=migrations \
+            --skip=.venv \
             .
 
 # ─────────────────────────────────────────────────────────────────────────────
