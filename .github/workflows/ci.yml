@@ -142,7 +142,7 @@ jobs:
       - name: Run Bandit
         run: |
           bandit -r . \
-            --exclude ./.git,./migrations,./venv \
+            --exclude ./.git,./migrations,./venv,./.venv \
             --skip B101,B601 \
             --severity-level medium \
             --confidence-level medium \
