@@ -10,6 +10,12 @@ class Instructor(models.Model):
     specialty = models.CharField(max_length=200, blank=True)
     bio = models.TextField(blank=True)
     signature_url = models.TextField(blank=True)
+    signature_image = models.ImageField(
+        upload_to='instructors/signatures/',
+        blank=True,
+        null=True,
+        help_text='Imagen de firma del instructor (PNG/JPG con fondo transparente recomendado)',
+    )
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_instructors')
     created_at = models.DateTimeField(auto_now_add=True)

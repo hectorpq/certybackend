@@ -1,7 +1,7 @@
 """
-WhatsApp Service - Send certificates via WhatsApp using Twilio API
+WhatsApp Service - Send certificates via Meta WhatsApp Cloud API (free tier: 1,000/month)
 """
-from twilio.rest import Client
+import requests
 from django.conf import settings
 from django.utils import timezone
 import logging
@@ -10,118 +10,99 @@ logger = logging.getLogger(__name__)
 
 
 class WhatsAppService:
-    """Send certificate messages via WhatsApp using Twilio"""
-    
+    """Send certificate messages via WhatsApp using Meta Cloud API"""
+
+    BASE_URL = "https://graph.facebook.com/v19.0"
+
     def __init__(self):
-        """Initialize Twilio client"""
-        self.account_sid = settings.TWILIO_ACCOUNT_SID
-        self.auth_token = settings.TWILIO_AUTH_TOKEN
-        self.from_number = settings.TWILIO_PHONE_NUMBER
-        
-        if self.account_sid and self.auth_token:
-            self.client = Client(self.account_sid, self.auth_token)
-        else:
-            self.client = None
-    
+        self.token = getattr(settings, 'META_WHATSAPP_TOKEN', None)
+        self.phone_id = getattr(settings, 'META_WHATSAPP_PHONE_ID', None)
+
+    def _is_configured(self):
+        return bool(self.token and self.phone_id)
+
     def send_certificate(self, certificate, phone_number):
         """
         Send certificate message via WhatsApp
-        
+
         Args:
             certificate: Certificate object
-            phone_number: WhatsApp phone number (with country code, e.g. +57...)
-            
+            phone_number: WhatsApp phone number with country code (e.g. +51999888777)
+
         Returns:
-            dict: {'success': bool, 'message': str, 'sid': str}
+            dict: {'success': bool, 'message': str}
         """
-        try:
-            # Validate Twilio configuration
-            if not self.client:
-                return {
-                    'success': False,
-                    'message': 'Twilio not configured. Check TWILIO_ACCOUNT_SID, AUTH_TOKEN, and PHONE_NUMBER in .env',
-                    'sid': None
-                }
-            
-            if not phone_number:
-                return {
-                    'success': False,
-                    'message': 'No phone number provided',
-                    'sid': None
-                }
-            
-            # Ensure phone number has correct format
-            if not phone_number.startswith('+'):
-                phone_number = '+' + phone_number
-            
-            # Prepare message
-            message_text = f"""
-🎓 ¡Hola {certificate.student.first_name}!
-
-Tu certificado del evento "{certificate.event.name}" está listo.
-
-📜 Detalles:
-- Código: {certificate.verification_code}
-- PDF: {certificate.pdf_url}
-- Válido hasta: {certificate.expires_at.strftime('%d/%m/%Y')}
-
-¡Descárgalo desde el enlace!
-
-Sistema de Certificados
-            """.strip()
-            
-            # Send via WhatsApp
-            message = self.client.messages.create(
-                from_=f"whatsapp:{self.from_number}",
-                body=message_text,
-                to=f"whatsapp:{phone_number}"
-            )
-            
-            logger.info("WhatsApp message sent to %s, SID: %s", phone_number, message.sid)
-            
-            return {
-                'success': True,
-                'message': f'WhatsApp message sent to {phone_number}',
-                'sid': message.sid,
-                'timestamp': timezone.now()
-            }
-            
-        except Exception as e:
-            error_msg = str(e)
-            logger.error("Error sending WhatsApp: %s", error_msg)
+        if not self._is_configured():
             return {
                 'success': False,
-                'message': f'WhatsApp error: {error_msg}',
-                'sid': None
+                'message': 'WhatsApp no configurado. Agrega META_WHATSAPP_TOKEN y META_WHATSAPP_PHONE_ID en el .env'
             }
-    
+
+        if not phone_number:
+            return {'success': False, 'message': 'No se proporcionó número de teléfono'}
+
+        # Limpiar número: quitar +, espacios, guiones
+        clean_number = phone_number.replace('+', '').replace(' ', '').replace('-', '')
+
+        participant_name = certificate.participant.first_name
+        message_text = (
+            f"Hola {participant_name}!\n\n"
+            f"Tu certificado del evento \"{certificate.event.name}\" está listo.\n\n"
+            f"Detalles:\n"
+            f"- Código de verificación: {certificate.verification_code}\n"
+            f"- PDF: {certificate.pdf_url if certificate.pdf_url else 'Pendiente de generar'}\n\n"
+            f"Sistema de Certificados"
+        )
+
+        url = f"{self.BASE_URL}/{self.phone_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_number,
+            "type": "text",
+            "text": {"body": message_text}
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            data = response.json()
+
+            if response.status_code == 200 and 'messages' in data:
+                logger.info("WhatsApp enviado a %s", phone_number)
+                return {
+                    'success': True,
+                    'message': f'WhatsApp enviado a {phone_number}',
+                    'timestamp': timezone.now()
+                }
+            else:
+                error = data.get('error', {}).get('message', 'Error desconocido')
+                logger.error("Error Meta WhatsApp API: %s", error)
+                return {'success': False, 'message': f'Error WhatsApp: {error}'}
+
+        except Exception as e:
+            logger.error("Excepción enviando WhatsApp: %s", e)
+            return {'success': False, 'message': f'WhatsApp error: {str(e)}'}
+
     def send_bulk_certificates(self, certificates, phone_map=None):
         """
         Send certificates via WhatsApp in bulk
-        
+
         Args:
             certificates: Queryset of Certificate objects
             phone_map: Dict mapping certificate.id to phone number (optional)
-            
+
         Returns:
             dict: {'sent': int, 'failed': int, 'errors': list}
         """
-        results = {
-            'sent': 0,
-            'failed': 0,
-            'errors': []
-        }
-        
+        results = {'sent': 0, 'failed': 0, 'errors': []}
+
         for cert in certificates:
-            # Determine phone number
-            if phone_map and cert.id in phone_map:
-                phone = phone_map[cert.id]
-            else:
-                phone = cert.student.phone
-            
-            # Send
+            phone = phone_map.get(cert.id) if phone_map else cert.participant.phone
             result = self.send_certificate(cert, phone)
-            
+
             if result['success']:
                 results['sent'] += 1
             else:
@@ -131,12 +112,12 @@ Sistema de Certificados
                     'phone': phone,
                     'error': result['message']
                 })
-        
+
         return results
 
 
-# Singleton instance
 _whatsapp_service = None
+
 
 def get_whatsapp_service():
     """Get or create WhatsApp service instance"""

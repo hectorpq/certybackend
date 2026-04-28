@@ -11,7 +11,7 @@ from procesos.services import (
     BulkCertificateGeneratorService,
 )
 from users.models import User
-from students.models import Student
+from participants.models import Participant
 from events.models import Event, Enrollment
 from certificados.models import Certificate, Template
 
@@ -132,19 +132,19 @@ class ExcelProcessingServiceTest(TestCase):
 class BulkCertificateGeneratorServiceTest(TestCase):
     def setUp(self):
         self.user = make_admin()
-        self.student = Student.objects.create(
+        self.participant = Participant.objects.create(
             document_id='99999', first_name='Luis', last_name='Vega',
             email='luis@test.com', created_by=self.user
         )
         self.event = Event.objects.create(name='Bulk Event', event_date=date(2026, 4, 1), created_by=self.user)
         self.template = Template.objects.create(name='T', created_by=self.user)
-        Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.user)
+        Enrollment.objects.create(participant=self.participant, event=self.event, attendance=True, created_by=self.user)
 
     @patch('services.pdf_service.PDFService.generate_certificate_pdf')
     def test_generate_from_excel_creates_certificate(self, mock_pdf):
         mock_pdf.return_value = {'success': True, 'path': '/media/cert.pdf'}
         cert = Certificate.objects.create(
-            student=self.student, event=self.event, template=self.template, generated_by=self.user
+            participant=self.participant, event=self.event, template=self.template, generated_by=self.user
         )
         self.assertEqual(cert.status, 'pending')
         self.assertIsNotNone(cert.verification_code)
@@ -252,8 +252,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         self.assertGreater(result.failed, 0)
 
     def test_process_row_updates_student_email_when_changed(self):
-        from students.models import Student
-        Student.objects.create(
+        Participant.objects.create(
             document_id='UPDATE01', first_name='John', last_name='Doe',
             email='old@test.com', created_by=self.user
         )
@@ -265,9 +264,8 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         }])
         svc = ExcelProcessingService(buf, created_by_user=self.user)
         svc.process()
-        from students.models import Student
-        student = Student.objects.get(document_id='UPDATE01')
-        self.assertEqual(student.email, 'new@test.com')
+        participant = Participant.objects.get(document_id='UPDATE01')
+        self.assertEqual(participant.email, 'new@test.com')
 
     def test_read_excel_empty_data_error_raises_import_error(self):
         from procesos.services import ExcelImportError
@@ -306,7 +304,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
 
     def test_create_certificate_already_exists_logs_info(self):
         cert = Certificate.objects.create(
-            student=Student.objects.create(
+            participant=Participant.objects.create(
                 document_id='CERTDUP', first_name='A', last_name='B',
                 email='dup@certtest.com', created_by=self.user
             ),
@@ -315,7 +313,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         )
         buf = self._make_valid_excel()
         svc = ExcelProcessingService(buf, created_by_user=self.user)
-        result = svc._create_certificate(cert.student, self.event)
+        result = svc._create_certificate(cert.participant, self.event)
         self.assertEqual(result.id, cert.id)
 
     def test_validate_file_empty_excel_returns_false(self):

@@ -4,10 +4,11 @@ Serializers for API endpoints - Minimal working version
 from rest_framework import serializers
 from events.models import Event, EventCategory, Enrollment, EventInvitation
 from certificados.models import Certificate, Template
-from students.models import Student
+from participants.models import Participant
 from users.models import User
 from instructors.models import Instructor
 from deliveries.models import DeliveryLog
+from api.models import AuditLog
 
 
 class DateField(serializers.DateField):
@@ -44,7 +45,7 @@ class EventSerializer(serializers.ModelSerializer):
             'name_font_size', 'name_x', 'name_y', 'template_image',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'created_by']
 
     def get_status_display(self, obj):
         return obj.get_status_display()
@@ -66,10 +67,15 @@ class EventSimpleSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'status']
 
 
-class StudentSerializer(serializers.ModelSerializer):
+class ParticipantSerializer(serializers.ModelSerializer):
+    full_name = serializers.ReadOnlyField()
+
     class Meta:
-        model = Student
-        fields = '__all__'
+        model = Participant
+        fields = [
+            'id', 'document_id', 'first_name', 'last_name', 'full_name',
+            'email', 'phone', 'is_active', 'created_by', 'created_at', 'updated_at'
+        ]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -108,18 +114,78 @@ class InstructorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Instructor
         fields = '__all__'
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
 
 
 class CertificateListSerializer(serializers.ModelSerializer):
+    student = serializers.SerializerMethodField()
+    event = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+
     class Meta:
         model = Certificate
-        fields = '__all__'
+        fields = [
+            'id', 'student', 'event', 'template', 'status', 'status_display',
+            'verification_code', 'pdf_url', 'issued_at', 'updated_at', 'expires_at',
+            'generated_by',
+        ]
+
+    def get_student(self, obj):
+        return {
+            'id': obj.participant.id,
+            'full_name': obj.participant.full_name,
+            'email': obj.participant.email,
+            'phone': obj.participant.phone or '',
+        }
+
+    def get_event(self, obj):
+        return {
+            'id': obj.event.id,
+            'name': obj.event.name,
+            'event_date': str(obj.event.event_date) if obj.event.event_date else None,
+            'category': obj.event.category,
+        }
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
 
 
 class CertificateDetailSerializer(serializers.ModelSerializer):
+    student = serializers.SerializerMethodField()
+    event = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    delivery_history = serializers.SerializerMethodField()
+
     class Meta:
         model = Certificate
-        fields = '__all__'
+        fields = [
+            'id', 'student', 'event', 'template', 'status', 'status_display',
+            'verification_code', 'pdf_url', 'issued_at', 'updated_at', 'expires_at',
+            'generated_by', 'delivery_history',
+        ]
+
+    def get_student(self, obj):
+        return {
+            'id': obj.participant.id,
+            'full_name': obj.participant.full_name,
+            'email': obj.participant.email,
+            'phone': obj.participant.phone or '',
+        }
+
+    def get_event(self, obj):
+        return {
+            'id': obj.event.id,
+            'name': obj.event.name,
+            'event_date': str(obj.event.event_date) if obj.event.event_date else None,
+            'category': obj.event.category,
+        }
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
+    def get_delivery_history(self, obj):
+        logs = obj.deliveries.all().order_by('-sent_at')
+        return DeliveryLogSerializer(logs, many=True).data
 
 
 class CertificateCreateSerializer(serializers.ModelSerializer):
@@ -129,8 +195,8 @@ class CertificateCreateSerializer(serializers.ModelSerializer):
 
 
 class CertificateGenerateSerializer(serializers.Serializer):
-    student_id = serializers.IntegerField()
-    event_id = serializers.IntegerField()
+    participant_id = serializers.IntegerField(required=False, allow_null=True)
+    event_id = serializers.IntegerField(required=False, allow_null=True)
     template_id = serializers.IntegerField(required=False, allow_null=True)
 
 
@@ -163,20 +229,22 @@ class TemplateSerializer(serializers.ModelSerializer):
 class TemplateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Template
-        fields = ['name', 'category', 'is_active', 'font_color', 'font_family', 'font_size', 'x_coord', 'y_coord']
+        fields = ['id', 'name', 'category', 'is_active', 'font_color', 'font_family', 'font_size', 'x_coord', 'y_coord']
+        read_only_fields = ['id']
 
 
 class TemplateCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Template
-        fields = ['name', 'category', 'is_active', 'font_color', 'font_family', 'font_size', 'x_coord', 'y_coord']
+        fields = ['id', 'name', 'category', 'is_active', 'font_color', 'font_family', 'font_size', 'x_coord', 'y_coord']
+        read_only_fields = ['id']
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Enrollment
         fields = [
-            'id', 'student', 'event', 'created_by', 'invitation',
+            'id', 'participant', 'event', 'created_by', 'invitation',
             'status', 'invitation_sent', 'certificate_sent',
             'certificate_sent_at', 'certificate_sent_method',
             'enrolled_at', 'attendance', 'grade', 'notes'
@@ -185,11 +253,13 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 class EventInvitationSerializer(serializers.ModelSerializer):
     status_display = serializers.SerializerMethodField()
+    student_name = serializers.SerializerMethodField()
+    event_name = serializers.SerializerMethodField()
 
     class Meta:
         model = EventInvitation
         fields = [
-            'id', 'event', 'student', 'email',
+            'id', 'event', 'event_name', 'participant', 'student_name', 'email',
             'token', 'status', 'status_display', 'expires_at',
             'sent_at', 'responded_at', 'created_by', 'created_at'
         ]
@@ -197,28 +267,40 @@ class EventInvitationSerializer(serializers.ModelSerializer):
     def get_status_display(self, obj):
         return obj.get_status_display()
 
+    def get_student_name(self, obj):
+        return obj.participant.full_name if obj.participant else None
+
+    def get_event_name(self, obj):
+        return obj.event.name
+
 
 class InvitationDetailSerializer(serializers.ModelSerializer):
     event_name = serializers.CharField(source='event.name', read_only=True)
     event_date = DateField(source='event.event_date', read_only=True)
     event_location = serializers.CharField(source='event.location', read_only=True)
     event_description = serializers.CharField(source='event.description', read_only=True)
+    status_display = serializers.SerializerMethodField()
     student_exists = serializers.SerializerMethodField()
-    
+    student = serializers.SerializerMethodField()
+
     class Meta:
         model = EventInvitation
         fields = [
             'id', 'event', 'event_name', 'event_date', 'event_location',
-            'event_description', 'email', 'status', 'expires_at',
-            'student_exists', 'student'
+            'event_description', 'email', 'status', 'status_display', 'expires_at',
+            'student_exists', 'student', 'participant'
         ]
-    
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
     def get_student_exists(self, obj):
-        # Check if student is linked OR if a student with this email exists
-        if obj.student:
+        if obj.participant:
             return True
-        from students.models import Student
-        return Student.objects.filter(email__iexact=obj.email).exists()
+        return Participant.objects.filter(email__iexact=obj.email).exists()
+
+    def get_student(self, obj):
+        return obj.participant_id
 
 
 class InvitationRegisterSerializer(serializers.Serializer):
@@ -274,7 +356,7 @@ class ExcelBulkImportSerializer(serializers.Serializer):
 
 
 class EnrollmentCreateSerializer(serializers.Serializer):
-    student_id = serializers.IntegerField()
+    participant_id = serializers.IntegerField()
     attendance = serializers.BooleanField(required=False, default=False)
     grade = serializers.FloatField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, default='', allow_blank=True)
@@ -285,3 +367,25 @@ CertificateSerializer = CertificateListSerializer
 EventCertificateSerializer = EventSimpleSerializer
 EventParticipantWithCertificateSerializer = EventSimpleSerializer
 BulkImportResultSerializer = EventSimpleSerializer
+StudentSerializer = ParticipantSerializer  # backward compat alias
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_email = serializers.SerializerMethodField()
+    action_display = serializers.SerializerMethodField()
+    # Override to avoid DRF's GenericIPAddressField Django-5 incompatibility
+    ip_address = serializers.CharField(allow_null=True, allow_blank=True, required=False)
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id', 'action', 'action_display', 'user', 'user_email',
+            'certificate', 'ip_address', 'details', 'timestamp',
+        ]
+        read_only_fields = fields
+
+    def get_user_email(self, obj):
+        return obj.user.email if obj.user else None
+
+    def get_action_display(self, obj):
+        return obj.get_action_display()

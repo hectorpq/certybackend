@@ -1,13 +1,15 @@
 name: SonarQube Cloud Analysis
 
+# SonarQube analysis is handled by Stage 7 of ci.yml.
+# This file is kept for legacy reference.
+# The active SonarQube job runs as part of .github/workflows/ci.yml
+
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 jobs:
-  sonar:
+  sonar-standalone:
+    name: "Sonar (standalone)"
     runs-on: ubuntu-latest
 
     services:
@@ -38,12 +40,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-django Pillow twilio
+          pip install pytest pytest-cov pytest-django
 
       - name: Run tests with coverage
         continue-on-error: true
         env:
-          SECRET_KEY: django-insecure-ci-key-only-for-testing-not-production
+          SECRET_KEY: django-insecure-ci-key-only-for-testing
           DB_NAME: certydb
           DB_USER: certyuser
           DB_PASSWORD: certypass
@@ -52,14 +54,8 @@ jobs:
         run: |
           pytest --cov=. --cov-report=xml:coverage.xml -v
 
-      - name: Verify coverage file
-        run: |
-          ls -la coverage.xml || echo "WARNING: coverage.xml not found"
-          head -10 coverage.xml || echo "coverage.xml is empty or missing"
-
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-

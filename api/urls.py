@@ -4,18 +4,20 @@ URL Configuration for API endpoints
 from django.urls import path, include
 from rest_framework.routers import SimpleRouter
 from .views import (
-    CertificateViewSet, DeliveryLogViewSet, EventsViewSet, StudentsViewSet, InstructorsViewSet,
+    CertificateViewSet, DeliveryLogViewSet, EventsViewSet, ParticipantsViewSet, InstructorsViewSet,
     LoginView, RegisterView, GoogleAuthView, CurrentUserView, EnrollmentViewSet,
-    InvitationPublicView, InvitationRegisterView, TemplateViewSet
+    InvitationPublicView, InvitationRegisterView, TemplateViewSet, AuditLogViewSet,
 )
 
 router = SimpleRouter()
 router.register(r'certificates', CertificateViewSet, basename='certificate')
 router.register(r'deliveries', DeliveryLogViewSet, basename='delivery')
 router.register(r'events', EventsViewSet, basename='event')
-router.register(r'students', StudentsViewSet, basename='student')
+router.register(r'participants', ParticipantsViewSet, basename='participant')
+router.register(r'students', ParticipantsViewSet, basename='student')
 router.register(r'instructors', InstructorsViewSet, basename='instructor')
 router.register(r'templates', TemplateViewSet, basename='template')
+router.register(r'audit', AuditLogViewSet, basename='audit')
 
 urlpatterns = [
     path('', include(router.urls)),

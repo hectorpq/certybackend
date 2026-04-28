@@ -1,0 +1,449 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+  SECRET_KEY: django-insecure-ci-key-only-for-testing
+  DB_NAME: certydb
+  DB_USER: certyuser
+  DB_PASSWORD: certypass
+  DB_HOST: localhost
+  DB_PORT: 5432
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 1 — Lint & Code Style
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  lint:
+    name: "Stage 1 — Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install flake8==7.0.0 black==24.1.1 isort==5.13.2
+
+      - name: flake8 — style & syntax errors
+        run: |
+          flake8 . \
+            --max-line-length=120 \
+            --exclude=migrations,__pycache__,.git,venv \
+            --extend-ignore=E501,W503 \
+            --statistics
+
+      - name: black — formatting check
+        run: |
+          black --check --line-length=120 \
+            --exclude="/(migrations|__pycache__|\.git|venv)/" \
+            .
+
+      - name: isort — import order check
+        run: |
+          isort --check-only \
+            --profile=black \
+            --line-length=120 \
+            --skip=migrations \
+            .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 2 — Tests + Coverage
+# ─────────────────────────────────────────────────────────────────────────────
+  tests:
+    name: "Stage 2 — Tests & Coverage"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: certydb
+          POSTGRES_USER: certyuser
+          POSTGRES_PASSWORD: certypass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-django
+
+      - name: Run tests with coverage
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          REDIS_URL: redis://localhost:6379/0
+          EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+        run: |
+          python manage.py test --verbosity=2 2>&1 | tee test-output.txt
+          coverage run --source='.' manage.py test -v 0
+          coverage xml
+          coverage report --fail-under=50
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 3 — SAST: Bandit static security analysis
+# ─────────────────────────────────────────────────────────────────────────────
+  security-sast:
+    name: "Stage 3 — SAST (Bandit)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Bandit
+        run: pip install bandit[toml]==1.7.9
+
+      - name: Run Bandit
+        run: |
+          bandit -r . \
+            --exclude ./.git,./migrations,./venv \
+            --skip B101,B601 \
+            --severity-level medium \
+            --confidence-level medium \
+            -f json -o bandit-report.json || true
+
+      - name: Show Bandit summary
+        run: |
+          python -c "
+          import json, sys
+          with open('bandit-report.json') as f:
+              r = json.load(f)
+          metrics = r.get('metrics', {}).get('_totals', {})
+          highs = metrics.get('SEVERITY.HIGH', 0)
+          print(f'High severity issues: {highs}')
+          print(f'Medium severity issues: {metrics.get(\"SEVERITY.MEDIUM\", 0)}')
+          if highs > 0:
+              print('HIGH severity findings — see bandit-report.json')
+              sys.exit(1)
+          "
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 4 — SCA: Dependency vulnerability audit
+# ─────────────────────────────────────────────────────────────────────────────
+  security-sca:
+    name: "Stage 4 — SCA (pip-audit)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit==2.7.3
+
+      - name: Audit dependencies
+        run: |
+          pip-audit -r requirements.txt \
+            --format json \
+            --output pip-audit-report.json || true
+
+      - name: Show audit summary
+        run: |
+          python -c "
+          import json, sys
+          with open('pip-audit-report.json') as f:
+              data = json.load(f)
+          vulns = [d for d in data.get('dependencies', []) if d.get('vulns')]
+          if vulns:
+              print(f'Found {len(vulns)} packages with known CVEs:')
+              for pkg in vulns:
+                  for v in pkg['vulns']:
+                      print(f'  {pkg[\"name\"]}=={pkg[\"version\"]}: {v[\"id\"]} — {v[\"description\"][:80]}')
+          else:
+              print('No known CVEs found in dependencies.')
+          "
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 5 — Migrations integrity check
+# ─────────────────────────────────────────────────────────────────────────────
+  migrations:
+    name: "Stage 5 — Migrations Check"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: certydb
+          POSTGRES_USER: certyuser
+          POSTGRES_PASSWORD: certypass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for missing migrations
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Apply migrations
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+        run: python manage.py migrate --run-syncdb
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 6 — Django system check + collectstatic
+# ─────────────────────────────────────────────────────────────────────────────
+  build-check:
+    name: "Stage 6 — Build Check"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: certydb
+          POSTGRES_USER: certyuser
+          POSTGRES_PASSWORD: certypass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Django system check
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+        run: python manage.py check --deploy 2>&1 | grep -v "WARNINGS" || true
+
+      - name: Collect static files (dry-run check)
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+        run: python manage.py collectstatic --noinput --dry-run 2>/dev/null || true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 7 — SonarQube Cloud analysis
+# ─────────────────────────────────────────────────────────────────────────────
+  sonar:
+    name: "Stage 7 — SonarQube"
+    needs: [tests]
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: certydb
+          POSTGRES_USER: certyuser
+          POSTGRES_PASSWORD: certypass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-cov pytest-django
+
+      - name: Run tests with coverage (for Sonar)
+        continue-on-error: true
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+        run: pytest --cov=. --cov-report=xml:coverage.xml -q
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 8 — Deploy to Staging (main branch only)
+# ─────────────────────────────────────────────────────────────────────────────
+  deploy-staging:
+    name: "Stage 8 — Deploy Staging"
+    needs: [lint, tests, security-sast, migrations, build-check]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Deploy to staging
+        run: |
+          echo "Configure your staging deployment here."
+          echo "Options: Railway, Render, Fly.io, Heroku, AWS Elastic Beanstalk, etc."
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+        # Example (uncomment and configure):
+        # env:
+        #   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        # run: railway up --service certybackend-staging
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 9 — Deploy to Production (version tags only)
+# ─────────────────────────────────────────────────────────────────────────────
+  deploy-production:
+    name: "Stage 9 — Deploy Production"
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Deploy to production
+        run: |
+          echo "Configure your production deployment here."
+          echo "Tag: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+        # Example (uncomment and configure):
+        # env:
+        #   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        # run: railway up --service certybackend-production

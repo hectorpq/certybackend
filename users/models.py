@@ -23,6 +23,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ('admin', 'Admin'),
+        ('coordinador', 'Coordinador'),
         ('participante', 'Participante'),
     )
 

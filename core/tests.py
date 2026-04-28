@@ -139,13 +139,13 @@ class FormatDateEdgeCasesTest(TestCase):
 class DeliveryQueryHelpersTest(TestCase):
     def setUp(self):
         from users.models import User
-        from students.models import Student
+        from participants.models import Participant
         from events.models import Event
         from certificados.models import Template, Certificate
         from deliveries.models import DeliveryLog
 
         self.user = User.objects.create_user(email='h@test.com', full_name='Helper', password='pass')
-        self.student = Student.objects.create(
+        self.participant = Participant.objects.create(
             document_id='77777', first_name='Pia', last_name='Lima',
             email='pia@test.com', created_by=self.user
         )
@@ -153,7 +153,7 @@ class DeliveryQueryHelpersTest(TestCase):
         self.event = Event.objects.create(name='Q Event', event_date=datetime.date(2026, 3, 1), created_by=self.user)
         self.template = Template.objects.create(name='T', created_by=self.user)
         self.cert = Certificate.objects.create(
-            student=self.student, event=self.event,
+            participant=self.participant, event=self.event,
             template=self.template, generated_by=self.user,
         )
         self.log = DeliveryLog.objects.create(

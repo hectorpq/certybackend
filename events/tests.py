@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta, date
 from events.models import Event, EventCategory, EventInvitation, Enrollment
-from students.models import Student
+from participants.models import Participant
 from users.models import User
 
 
@@ -78,27 +78,27 @@ class EventInvitationTest(TestCase):
 class EnrollmentTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='admin@test.com', full_name='Admin', password='pass')
-        self.student = Student.objects.create(
+        self.participant = Participant.objects.create(
             document_id='99999', first_name='Ana', last_name='Torres',
             email='ana@test.com', created_by=self.user
         )
         self.event = Event.objects.create(name='Curso Test', event_date=date(2026, 5, 1), created_by=self.user)
 
     def test_str_shows_attendance_check(self):
-        enr = Enrollment.objects.create(student=self.student, event=self.event, attendance=True, created_by=self.user)
+        enr = Enrollment.objects.create(participant=self.participant, event=self.event, attendance=True, created_by=self.user)
         self.assertIn('✓', str(enr))
 
     def test_str_shows_attendance_cross_when_absent(self):
-        enr = Enrollment.objects.create(student=self.student, event=self.event, attendance=False, created_by=self.user)
+        enr = Enrollment.objects.create(participant=self.participant, event=self.event, attendance=False, created_by=self.user)
         self.assertIn('✗', str(enr))
 
-    def test_unique_student_event_pair(self):
-        Enrollment.objects.create(student=self.student, event=self.event, created_by=self.user)
+    def test_unique_participant_event_pair(self):
+        Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
         with self.assertRaises(Exception):
-            Enrollment.objects.create(student=self.student, event=self.event, created_by=self.user)
+            Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
 
     def test_attendance_default_false(self):
-        enr = Enrollment.objects.create(student=self.student, event=self.event, created_by=self.user)
+        enr = Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
         self.assertFalse(enr.attendance)
 
 

@@ -19,7 +19,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 import re
 
-from students.models import Student
+from participants.models import Participant
 from events.models import Event
 from deliveries.models import DeliveryLog
 from certificados.models import Certificate
@@ -95,7 +95,7 @@ class ExcelProcessingResult:
         Total procesados: {self.total_rows}
         ✓ Exitosos: {self.successful}
         ✗ Fallidos: {self.failed}
-        Tasa de éxito: {(self.successful/self.total_rows*100):.1f if self.total_rows > 0 else 0}%
+        Tasa de éxito: {(self.successful/self.total_rows*100) if self.total_rows > 0 else 0:.1f}%
         ═══════════════════════════════════════
         """
         
@@ -331,18 +331,18 @@ class ExcelProcessingService:
 
         # Procesar en transacción atómica
         with transaction.atomic():
-            # 1. Obtener o crear Student
-            student = self._get_or_create_student(full_name, email, document_id, phone)
+            # 1. Obtener o crear Participant
+            participant = self._get_or_create_participant(full_name, email, document_id, phone)
 
-            # 2. Obtener Event (desde self.event o desde la columna event_name)
+            # 2. Obtener Event
             event_name = str(row.get('event_name', '')).strip() if not self.event else None
             event = self._get_event(event_name)
-            
-            # 3. Obtener o crear Enrollment (relación student-event)
-            self._get_or_create_enrollment(student, event)
-            
+
+            # 3. Obtener o crear Enrollment
+            self._get_or_create_enrollment(participant, event)
+
             # 4. Crear Certificate (pending)
-            certificate = self._create_certificate(student, event)
+            certificate = self._create_certificate(participant, event)
 
             # 5. Generar PDF si está en pending
             if certificate.status == 'pending':
@@ -351,51 +351,48 @@ class ExcelProcessingService:
             # 6. Enviar por correo
             delivery_log = certificate.deliver(method='email', sent_by=self.created_by_user)
             if delivery_log.status != 'success':
-                raise ValueError(f"Error al enviar correo a {student.email}: {delivery_log.error_message}")
+                raise ValueError(f"Error al enviar correo a {participant.email}: {delivery_log.error_message}")
 
             # Registrar éxito
             self.result.add_success(certificate.id)
-            logger.info("Fila %s: Certificado enviado a %s en %s", row_number, student.email, event.name)
+            logger.info("Fila %s: Certificado enviado a %s en %s", row_number, participant.email, event.name)
     
     def _validate_email(self, email: str) -> bool:
         """Valida formato de email"""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
     
-    def _get_or_create_student(self, full_name: str, email: str, document_id: str, phone: str = None) -> Student:
+    def _get_or_create_participant(self, full_name: str, email: str, document_id: str, phone: str = None) -> Participant:
         """
-        Obtiene o crea un Student
+        Obtiene o crea un Participant
 
         Estrategia:
         1. Buscar por document_id
         2. Si no existe por document_id, buscar por email
-        3. Si tampoco existe por email, crear nuevo estudiante
+        3. Si tampoco existe por email, crear nuevo participante
         """
-        # Buscar por document_id primero
         try:
-            student = Student.objects.get(document_id=document_id)
-            if student.email != email:
-                student.email = email
-                student.save()
-                logger.info("Student actualizado: %s", document_id)
-            return student
-        except Student.DoesNotExist:
+            participant = Participant.objects.get(document_id=document_id)
+            if participant.email != email:
+                participant.email = email
+                participant.save()
+                logger.info("Participant actualizado: %s", document_id)
+            return participant
+        except Participant.DoesNotExist:
             pass
 
-        # Buscar por email antes de intentar crear
         try:
-            student = Student.objects.get(email=email)
-            logger.info("Student encontrado por email: %s", email)
-            return student
-        except Student.DoesNotExist:
+            participant = Participant.objects.get(email=email)
+            logger.info("Participant encontrado por email: %s", email)
+            return participant
+        except Participant.DoesNotExist:
             pass
 
-        # Crear nuevo estudiante
         names = full_name.split(' ', 1)
         first_name = names[0]
         last_name = names[1] if len(names) > 1 else ''
 
-        student = Student.objects.create(
+        participant = Participant.objects.create(
             document_id=document_id,
             first_name=first_name,
             last_name=last_name,
@@ -403,8 +400,8 @@ class ExcelProcessingService:
             phone=phone,
             is_active=True
         )
-        logger.info("Student creado: %s", email)
-        return student
+        logger.info("Participant creado: %s", email)
+        return participant
     
     def _get_event(self, event_name: str = None) -> Event:
         if self.event:
@@ -416,11 +413,11 @@ class ExcelProcessingService:
         except Event.DoesNotExist:
             raise ValueError(f"Evento no encontrado: '{event_name}'")
     
-    def _get_or_create_enrollment(self, student: Student, event: Event):
+    def _get_or_create_enrollment(self, participant: Participant, event: Event):
         """Obtiene o crea una inscripción marcando asistencia = True"""
         from events.models import Enrollment
         enrollment, created = Enrollment.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=event,
             defaults={
                 'created_by': self.created_by_user,
@@ -432,8 +429,8 @@ class ExcelProcessingService:
             enrollment.attendance = True
             enrollment.save()
         return enrollment
-    
-    def _create_certificate(self, student: Student, event: Event) -> Certificate:
+
+    def _create_certificate(self, participant: Participant, event: Event) -> Certificate:
         """
         Crea o obtiene un Certificate.
         Si ya existe y se provee una plantilla nueva (bulk), siempre la actualiza
@@ -442,13 +439,13 @@ class ExcelProcessingService:
         new_template = self.template or event.template
 
         certificate, created = Certificate.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=event,
             defaults={
                 'status': 'pending',
                 'template': new_template,
                 'generated_by': self.created_by_user,
-                'verification_code': self._generate_verification_code(student.id, event.id)
+                'verification_code': self._generate_verification_code(participant.id, event.id)
             }
         )
 
@@ -457,11 +454,11 @@ class ExcelProcessingService:
             certificate.template = self.template
             certificate.status = 'pending'
             certificate.save(update_fields=['template', 'status'])
-            logger.info("Plantilla actualizada en certificado existente: %s - %s", student.email, event.name)
+            logger.info("Plantilla actualizada en certificado existente: %s - %s", participant.email, event.name)
         elif created:
-            logger.info("Certificado creado: %s - %s", student.email, event.name)
+            logger.info("Certificado creado: %s - %s", participant.email, event.name)
         else:
-            logger.info("Certificado ya existe (sin plantilla nueva): %s - %s", student.email, event.name)
+            logger.info("Certificado ya existe (sin plantilla nueva): %s - %s", participant.email, event.name)
 
         return certificate
     

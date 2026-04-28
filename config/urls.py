@@ -19,6 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from api.views import RegisterView, LoginView, CurrentUserView, BulkCertificateGenerationView, BulkCertificatePreviewView, BulkCertificateProcessView
 
 urlpatterns = [
@@ -31,6 +32,10 @@ urlpatterns = [
     path('api/certificates/preview/', BulkCertificatePreviewView.as_view(), name='bulk_certificate_preview'),
     path('api/certificates/process/', BulkCertificateProcessView.as_view(), name='bulk_certificate_process'),
     path('api/', include('api.urls')),
+    # OpenAPI schema + UI
+    path('api/schema/', SpectacularAPIView.as_view(), name='api-schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='api-schema'), name='api-docs'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='api-schema'), name='api-redoc'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -111,7 +111,7 @@ class EnrollmentAdmin(admin.ModelAdmin):
     date_hierarchy = 'enrolled_at'
 
     def student_name(self, obj):
-        return f"{obj.student.first_name} {obj.student.last_name}"
+        return f"{obj.participant.first_name} {obj.participant.last_name}"
     student_name.short_description = 'Student'
 
     def event_name(self, obj):

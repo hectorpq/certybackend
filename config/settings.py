@@ -40,9 +40,12 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'django_filters',
+    'drf_spectacular',
+    'django_celery_results',
     'certificados',
     'users',
-    'students',
+    'participants',
     'instructors',
     'events',
     'core',
@@ -50,6 +53,7 @@ INSTALLED_APPS = [
     'deliveries',
     'procesos',
     'emails',
+    'students',
 ]
 AUTH_USER_MODEL = 'users.User'
 
@@ -149,14 +153,17 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='')
 
-# ========== TWILIO CONFIGURATION (WhatsApp) ==========
-TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
-TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
-TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='')
+# ========== META WHATSAPP CLOUD API ==========
+META_WHATSAPP_TOKEN = config('META_WHATSAPP_TOKEN', default='')
+META_WHATSAPP_PHONE_ID = config('META_WHATSAPP_PHONE_ID', default='')
 
 # ========== PDF GENERATION PATH ==========
 CERTIFICATES_PDF_PATH = BASE_DIR / 'certificates' / 'pdfs'
 CERTIFICATES_PDF_PATH.mkdir(parents=True, exist_ok=True)
+
+# Base URL used inside QR codes for certificate verification
+# Override in production with the public-facing domain (e.g. https://certypro.com)
+CERTIFICATE_VERIFY_BASE_URL = config('CERTIFICATE_VERIFY_BASE_URL', default='http://localhost:8000')
 
 # ========== CORS CONFIGURATION ==========
 # SECURITY WARNING: Update these URLs in production!
@@ -175,6 +182,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
@@ -190,6 +198,26 @@ REST_FRAMEWORK = {
         'anon': '100/day',
         'user': '1000/day',
     },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# ========== DRF SPECTACULAR (OpenAPI/Swagger) ==========
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SCAD-2026 — Sistema de Certificación Académica Digital',
+    'DESCRIPTION': (
+        'API REST para gestión de certificados académicos digitales. '
+        'Permite la generación, entrega y verificación de certificados '
+        'para eventos académicos.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'CONTACT': {'email': 'pacompiahectorrobert@gmail.com'},
+    'LICENSE': {'name': 'Proprietary'},
+    'SERVERS': [
+        {'url': 'http://localhost:8000', 'description': 'Local development'},
+    ],
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SORT_OPERATIONS': False,
 }
 
 # ========== JWT CONFIGURATION ==========
@@ -241,3 +269,15 @@ REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 # ========== CSRF CONFIGURATION ==========
 # CSRF settings are configured above with other security settings
+
+# ========== CELERY CONFIGURATION ==========
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 300  # 5 minutes hard limit
+CELERY_TASK_SOFT_TIME_LIMIT = 240  # 4 minutes soft limit

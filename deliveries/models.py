@@ -41,7 +41,7 @@ class DeliveryLog(models.Model):
         verbose_name_plural = 'Delivery Logs'
 
     def __str__(self):
-        return f"{self.certificate.student.first_name} - {self.delivery_method} [{self.status}]"
+        return f"{self.certificate.participant.first_name} - {self.delivery_method} [{self.status}]"
 
     @property
     def is_successful(self):

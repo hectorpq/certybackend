@@ -34,7 +34,7 @@ class DeliveryLogAdmin(admin.ModelAdmin):
     date_hierarchy = 'sent_at'
 
     def student_name(self, obj):
-        return f"{obj.certificate.student.first_name} {obj.certificate.student.last_name}"
+        return f"{obj.certificate.participant.first_name} {obj.certificate.participant.last_name}"
     student_name.short_description = 'Student'
 
     def certificate_event(self, obj):
@@ -63,7 +63,7 @@ class DeliveryLogAdmin(admin.ModelAdmin):
         code_display = f"{code[:20]}..." if len(code) > 20 else code
         return format_html(
             '<b>{}</b><br/>Code: <code style="background: #f0f0f0; padding: 2px 5px;">{}</code><br/>Event: {}',
-            obj.certificate.student.full_name,
+            obj.certificate.participant.full_name,
             code_display,
             obj.certificate.event.name
         )

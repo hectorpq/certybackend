@@ -151,7 +151,7 @@ class CertificateAdmin(admin.ModelAdmin):
     date_hierarchy = 'issued_at'
 
     def student_name(self, obj):
-        return f"{obj.student.first_name} {obj.student.last_name}"
+        return f"{obj.participant.first_name} {obj.participant.last_name}"
     student_name.short_description = 'Student'
 
     def event_name(self, obj):
@@ -189,9 +189,9 @@ class CertificateAdmin(admin.ModelAdmin):
     def student_info(self, obj):
         return format_html(
             '<b>{}</b><br/>Document: {}<br/>Email: {}',
-            obj.student.full_name,
-            obj.student.document_id,
-            obj.student.email
+            obj.participant.full_name,
+            obj.participant.document_id,
+            obj.participant.email
         )
     student_info.short_description = 'Student'
 
@@ -255,20 +255,20 @@ class CertificateAdmin(admin.ModelAdmin):
                 from events.models import Enrollment
                 try:
                     enrollment = Enrollment.objects.get(
-                        student=certificate.student,
+                        participant=certificate.participant,
                         event=certificate.event
                     )
                     if not enrollment.attendance:
                         self.message_user(
                             request,
-                            f"⚠️  {certificate.student.first_name}: No attendance record",
+                            f"⚠️  {certificate.participant.first_name}: No attendance record",
                             messages.WARNING
                         )
                         continue
                 except Enrollment.DoesNotExist:
                     self.message_user(
                         request,
-                        f"⚠️  {certificate.student.first_name}: Not enrolled in event",
+                        f"⚠️  {certificate.participant.first_name}: Not enrolled in event",
                         messages.WARNING
                     )
                     continue
@@ -302,7 +302,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 # Deliver via REAL email
                 delivery_log = certificate.deliver(
                     method='email',
-                    recipient=certificate.student.email,
+                    recipient=certificate.participant.email,
                     sent_by=request.user
                 )
                 
@@ -311,7 +311,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 else:
                     failed += 1
                     if delivery_log.error_message:
-                        errors.append(f"{certificate.student.first_name}: {delivery_log.error_message}")
+                        errors.append(f"{certificate.participant.first_name}: {delivery_log.error_message}")
                     
             except ValidationError as e:
                 self.message_user(request, f"❌ Validation Error: {str(e)}", messages.ERROR)
@@ -388,10 +388,10 @@ class CertificateAdmin(admin.ModelAdmin):
         for certificate in queryset.filter(status__in=['generated', 'sent']):
             try:
                 # Check if student has phone
-                if not certificate.student.phone:
+                if not certificate.participant.phone:
                     self.message_user(
                         request,
-                        f"⚠️  {certificate.student.first_name}: No phone number on file",
+                        f"⚠️  {certificate.participant.first_name}: No phone number on file",
                         messages.WARNING
                     )
                     failed += 1
@@ -400,7 +400,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 # Deliver via REAL WhatsApp
                 delivery_log = certificate.deliver(
                     method='whatsapp',
-                    recipient=certificate.student.phone,
+                    recipient=certificate.participant.phone,
                     sent_by=request.user
                 )
                 
@@ -409,7 +409,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 else:
                     failed += 1
                     if delivery_log.error_message:
-                        errors.append(f"{certificate.student.first_name}: {delivery_log.error_message}")
+                        errors.append(f"{certificate.participant.first_name}: {delivery_log.error_message}")
                     
             except ValidationError as e:
                 self.message_user(request, f"❌ Error: {str(e)}", messages.ERROR)

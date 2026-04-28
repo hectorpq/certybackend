@@ -14,10 +14,13 @@ from io import BytesIO
 from certificados.models import Certificate, Template
 from deliveries.models import DeliveryLog
 from events.models import Event
-from students.models import Student
+from participants.models import Participant
 from users.models import User
 from instructors.models import Instructor
 from procesos.services import ExcelProcessingService, BulkCertificateGeneratorService, ExcelImportError
+from api.permissions import is_admin, is_operational_user
+from api.audit import log_action, get_client_ip
+from api.models import AuditLog
 from .serializers import (
     CertificateListSerializer,
     CertificateDetailSerializer,
@@ -26,7 +29,7 @@ from .serializers import (
     CertificateDeliverSerializer,
     DeliveryLogSerializer,
     EventSerializer,
-    StudentSerializer,
+    ParticipantSerializer,
     InstructorSerializer,
     UserRegisterSerializer,
     UserLoginSerializer,
@@ -43,6 +46,7 @@ from .serializers import (
     EventInvitationSerializer,
     InvitationDetailSerializer,
     InvitationRegisterSerializer,
+    AuditLogSerializer,
 )
 
 
@@ -133,13 +137,12 @@ class LoginView(APIView):
     
     def post(self, request):
         serializer = UserAuthSerializer(data=request.data)
-        
+
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            
-            # Generar tokens JWT
             refresh = RefreshToken.for_user(user)
-            
+            logger.info('LOGIN_SUCCESS email=%s ip=%s', user.email, self._get_client_ip(request))
+            log_action('user_login', user=user, ip_address=get_client_ip(request))
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
@@ -151,8 +154,23 @@ class LoginView(APIView):
                     'is_staff': user.is_staff,
                 }
             }, status=status.HTTP_200_OK)
-        
+
+        attempted_email = request.data.get('email', '')
+        logger.warning(
+            'LOGIN_FAILED email=%s ip=%s errors=%s',
+            attempted_email,
+            self._get_client_ip(request),
+            serializer.errors,
+        )
+        log_action('user_login_failed', ip_address=get_client_ip(request), email=attempted_email)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def _get_client_ip(request):
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', 'unknown')
 
 
 class GoogleAuthView(APIView):
@@ -313,22 +331,20 @@ class CertificateViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Return queryset based on user and action
-        Admin sees all, Participante sees only THEIR certificates
+        Admin/coordinator sees all, Participante sees only THEIR certificates
         """
-        from api.permissions import is_admin
-        
-        if is_admin(self.request):
+        if is_operational_user(self.request):
             return Certificate.objects.all().select_related(
-                'student', 'event', 'template', 'generated_by'
+                'participant', 'event', 'template', 'generated_by'
             )
-        
+
         # Participante: see only their own certificates
         if self.request.user and self.request.user.is_authenticated:
             user_email = self.request.user.email
             return Certificate.objects.filter(
-                student__email=user_email
-            ).select_related('student', 'event', 'template', 'generated_by')
-        
+                participant__email=user_email
+            ).select_related('participant', 'event', 'template', 'generated_by')
+
         return Certificate.objects.none()
     
     def get_serializer_class(self):
@@ -345,20 +361,17 @@ class CertificateViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Set permissions based on action"""
-        from api.permissions import is_admin
-        
         if self.action == 'verify':
-            # Public endpoint
             self.permission_classes = [permissions.AllowAny]
-        elif self.action in ['create', 'update', 'partial_update', 'destroy', 'generate', 'deliver']:
-            if is_admin(self.request):
+        elif self.action == 'export':
+            self.permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy', 'generate', 'deliver', 'retry']:
+            if is_operational_user(self.request):
                 self.permission_classes = [permissions.IsAuthenticated]
             else:
                 self.permission_classes = [permissions.IsAdminUser]
         else:
-            # Reading is allowed to authenticated users
             self.permission_classes = [permissions.IsAuthenticated]
-        
         return super().get_permissions()
     
     @action(detail=True, methods=['post'])
@@ -389,6 +402,12 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     )
             
             certificate.generate(generated_by=request.user)
+            log_action(
+                'certificate_generated',
+                user=request.user,
+                certificate=certificate,
+                ip_address=get_client_ip(request),
+            )
 
             return Response(
                 {
@@ -434,7 +453,14 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     recipient=recipient,
                     sent_by=request.user
                 )
-                
+                log_action(
+                    'certificate_delivered',
+                    user=request.user,
+                    certificate=certificate,
+                    ip_address=get_client_ip(request),
+                    method=method,
+                )
+
                 return Response(
                     {
                         'status': 'success',
@@ -474,6 +500,149 @@ class CertificateViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
+    @action(detail=True, methods=['post'], url_path='retry')
+    def retry(self, request, pk=None):
+        """
+        Retry delivery for a failed certificate.
+
+        POST /certificates/{id}/retry/
+        Body: {"method": "email|whatsapp|link"}  (optional — uses last failed method if omitted)
+        """
+        certificate = self.get_object()
+
+        if certificate.status != 'failed':
+            return Response(
+                {'status': 'error', 'message': 'Only failed certificates can be retried'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        method = request.data.get('method')
+        if not method:
+            last = certificate.last_delivery_attempt
+            if not last:
+                return Response(
+                    {'status': 'error', 'message': 'No previous delivery found. Provide a method.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            method = last.delivery_method
+
+        try:
+            with transaction.atomic():
+                certificate.deliver(method=method, sent_by=request.user)
+                log_action(
+                    'certificate_retried',
+                    user=request.user,
+                    certificate=certificate,
+                    ip_address=get_client_ip(request),
+                    method=method,
+                )
+                return Response(
+                    {
+                        'status': 'success',
+                        'message': f'Certificate retried via {method}',
+                        'delivery_log': DeliveryLogSerializer(
+                            certificate.last_delivery_attempt
+                        ).data,
+                        'certificate': CertificateDetailSerializer(certificate).data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+        except Exception as e:
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='export',
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
+    def export(self, request):
+        """
+        Export certificates as CSV or Excel for administrator audit.
+
+        GET /certificates/export/?file_format=csv&event_id=1&status=generated
+        Query params:
+          file_format — csv (default) | excel
+          event_id    — filter by event
+          status      — filter by certificate status
+        """
+        import csv
+        import io
+        from django.http import HttpResponse
+
+        fmt = request.query_params.get('file_format', 'csv').lower()
+        event_id = request.query_params.get('event_id')
+        cert_status = request.query_params.get('status')
+        log_action(
+            'export_requested',
+            user=request.user,
+            ip_address=get_client_ip(request),
+            file_format=fmt,
+            event_id=event_id,
+            status_filter=cert_status,
+        )
+
+        qs = Certificate.objects.select_related(
+            'participant', 'event', 'generated_by'
+        ).prefetch_related('deliveries').order_by('-issued_at')
+
+        if event_id:
+            qs = qs.filter(event_id=event_id)
+        if cert_status:
+            qs = qs.filter(status=cert_status)
+
+        headers = [
+            'id', 'participant_name', 'participant_email', 'participant_document',
+            'event_name', 'event_date', 'status', 'verification_code',
+            'pdf_url', 'issued_at', 'last_delivery_status',
+        ]
+
+        def row_for(cert):
+            last = cert.deliveries.first()
+            return [
+                cert.id,
+                f'{cert.participant.first_name} {cert.participant.last_name}',
+                cert.participant.email,
+                cert.participant.document_id,
+                cert.event.name,
+                cert.event.event_date.isoformat() if cert.event.event_date else '',
+                cert.status,
+                cert.verification_code,
+                cert.pdf_url,
+                cert.issued_at.isoformat(),
+                last.status if last else '',
+            ]
+
+        if fmt == 'excel':
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'Certificados'
+            ws.append(headers)
+            for cert in qs:
+                ws.append(row_for(cert))
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            response = HttpResponse(
+                buf.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+            response['Content-Disposition'] = 'attachment; filename="certificados.xlsx"'
+            return response
+
+        # Default: CSV
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="certificados.csv"'
+        writer = csv.writer(response)
+        writer.writerow(headers)
+        for cert in qs:
+            writer.writerow(row_for(cert))
+        return response
+
     @action(
         detail=False,
         methods=['get'],
@@ -482,7 +651,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
     def verify(self, request):
         """
         Verify a certificate by verification code (public endpoint)
-        
+
         GET /certificates/verify/?code=XXXX-XXXX-XXXX-XXXX
         """
         code = request.query_params.get('code')
@@ -569,7 +738,7 @@ class EventsViewSet(viewsets.ModelViewSet):
     - status: Filter by event status (draft, active, finished, cancelled)
     - search: Search in name and description
     """
-    queryset = Event.objects.select_related('category', 'created_by').order_by('-event_date')
+    queryset = Event.objects.select_related('category', 'created_by', 'instructor', 'template').order_by('-event_date')
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['status', 'category']
@@ -578,23 +747,20 @@ class EventsViewSet(viewsets.ModelViewSet):
     ordering = ['-event_date']
     
     def get_queryset(self):
-        """Admin sees all events, Participante sees only their enrolled events"""
-        from api.permissions import is_admin
+        """Operational users (admin/coordinador) see all events; participante sees only enrolled."""
         from events.models import Enrollment
-        
+
         queryset = super().get_queryset()
-        
-        # If admin, show all events
-        if is_admin(self.request):
+
+        if is_operational_user(self.request):
             return queryset
-        
-        # If participante, show only events they are enrolled in
+
         if self.request.user and self.request.user.is_authenticated:
             enrolled_event_ids = Enrollment.objects.filter(
-                student__email=self.request.user.email
+                participant__email=self.request.user.email
             ).values_list('event_id', flat=True)
             return queryset.filter(id__in=enrolled_event_ids)
-        
+
         return queryset
 
     def get_permissions(self):
@@ -615,18 +781,22 @@ class EventsViewSet(viewsets.ModelViewSet):
         from events.models import Enrollment
         
         event = self.get_object()
-        enrollments = Enrollment.objects.filter(event=event).select_related('student')
+        enrollments = Enrollment.objects.filter(event=event).select_related('participant')
         
         participants = []
         for enrollment in enrollments:
-            certificate = Certificate.objects.filter(student=enrollment.student, event=event).first()
+            certificate = Certificate.objects.filter(participant=enrollment.participant, event=event).first()
             
             participants.append({
                 'enrollment_id': enrollment.id,
-                'student_id': enrollment.student.id,
-                'student_name': f"{enrollment.student.first_name} {enrollment.student.last_name}",
-                'student_email': enrollment.student.email,
-                'student_phone': enrollment.student.phone or '',
+                'participant_id': enrollment.participant.id,
+                'student_id': enrollment.participant.id,
+                'participant_name': enrollment.participant.full_name,
+                'student_name': enrollment.participant.full_name,
+                'participant_email': enrollment.participant.email,
+                'student_email': enrollment.participant.email,
+                'participant_phone': enrollment.participant.phone or '',
+                'student_phone': enrollment.participant.phone or '',
                 'attendance': enrollment.attendance,
                 'certificate_id': certificate.id if certificate else None,
                 'certificate_status': certificate.status if certificate else None,
@@ -640,43 +810,41 @@ class EventsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='enroll')
     def enroll(self, request, pk=None):
         """
-        Enroll a student to this event
+        Enroll a participant to this event
         POST /events/{id}/enroll/
-        Body: {"student_id": 1} OR {"student_email": "email@example.com"}
+        Body: {"participant_id": 1} OR {"participant_email": "email@example.com"}
         Admin only
         """
         from events.models import Enrollment
-        from students.models import Student
+        from participants.models import Participant
         from api.permissions import is_admin
-        
-        if not is_admin(request):
+
+        if not is_operational_user(request):
             return Response(
-                {'error': 'Solo administradores pueden inscribir participantes'},
+                {'error': 'Solo administradores o coordinadores pueden inscribir participantes'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         event = self.get_object()
-        student_id = request.data.get('student_id')
-        student_email = request.data.get('student_email')
-        
-        # Find student by id or email
-        if student_id:
+        participant_id = request.data.get('participant_id') or request.data.get('student_id')
+        participant_email = request.data.get('participant_email') or request.data.get('student_email')
+
+        if participant_id:
             try:
-                student = Student.objects.get(id=student_id)
-            except Student.DoesNotExist:
+                participant = Participant.objects.get(id=participant_id)
+            except Participant.DoesNotExist:
                 return Response(
-                    {'error': 'Estudiante no encontrado'},
+                    {'error': 'Participante no encontrado'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        elif student_email:
-            # Generate unique document_id for new student
+        elif participant_email:
             import uuid
-            doc_id = f"EST-{uuid.uuid4().hex[:8].upper()}"
-            student, created = Student.objects.get_or_create(
-                email=student_email,
+            doc_id = f"PART-{uuid.uuid4().hex[:8].upper()}"
+            participant, created = Participant.objects.get_or_create(
+                email=participant_email,
                 defaults={
                     'document_id': doc_id,
-                    'first_name': student_email.split('@')[0],
+                    'first_name': participant_email.split('@')[0],
                     'last_name': '',
                     'phone': '',
                     'is_active': True,
@@ -684,18 +852,18 @@ class EventsViewSet(viewsets.ModelViewSet):
             )
         else:
             return Response(
-                {'error': 'student_id o student_email es requerido'},
+                {'error': 'participant_id o participant_email es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         enrollment, created = Enrollment.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=event
         )
-        
+
         if not created:
             return Response(
-                {'error': 'El estudiante ya está inscritos'},
+                {'error': 'El participante ya está inscrito'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -709,36 +877,38 @@ class EventsViewSet(viewsets.ModelViewSet):
         """
         Generate certificates for event participants (only those with attendance=True)
         POST /events/{id}/certificates/generate/
-        Body: {"student_ids": [1, 2, 3]} (optional, if empty generates for all with attendance)
+        Body: {"participant_ids": [1, 2, 3]} (optional, if empty generates for all with attendance)
         Admin only
         """
         from api.permissions import is_admin
-        
-        if not is_admin(request):
+
+        if not is_operational_user(request):
             return Response(
-                {'error': 'Solo administradores pueden generar certificados'},
+                {'error': 'Solo administradores o coordinadores pueden generar certificados'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         from events.models import Enrollment
-        
+
         event = self.get_object()
-        student_ids = request.data.get('student_ids', [])
-        
-        enrollments = Enrollment.objects.filter(event=event).select_related('student')
-        if student_ids:
-            enrollments = enrollments.filter(student_id__in=student_ids)
-        
+        participant_ids = request.data.get('participant_ids') or request.data.get('student_ids', [])
+
+        enrollments = Enrollment.objects.filter(
+            event=event, attendance=True
+        ).select_related('participant')
+        if participant_ids:
+            enrollments = enrollments.filter(participant_id__in=participant_ids)
+
         results = {
             'created': [],
             'already_exists': [],
             'errors': []
         }
-        
+
         for enrollment in enrollments:
             try:
                 cert, created = Certificate.objects.get_or_create(
-                    student=enrollment.student,
+                    participant=enrollment.participant,
                     event=event,
                     defaults={
                         'status': 'pending',
@@ -746,35 +916,34 @@ class EventsViewSet(viewsets.ModelViewSet):
                         'template': event.template
                     }
                 )
-                
-                # If already exists with pending status, generate it now
+
                 if not created and cert.status == 'pending':
                     cert.generate(generated_by=request.user, skip_attendance_check=True)
                     results['created'].append({
-                        'student_id': enrollment.student.id,
-                        'student_name': enrollment.student.full_name,
+                        'participant_id': enrollment.participant.id,
+                        'participant_name': enrollment.participant.full_name,
                         'certificate_id': cert.id,
                         'status': cert.status
                     })
                 elif created:
                     cert.generate(generated_by=request.user, skip_attendance_check=True)
                     results['created'].append({
-                        'student_id': enrollment.student.id,
-                        'student_name': enrollment.student.full_name,
+                        'participant_id': enrollment.participant.id,
+                        'participant_name': enrollment.participant.full_name,
                         'certificate_id': cert.id,
                         'status': cert.status
                     })
                 else:
                     results['already_exists'].append({
-                        'student_id': enrollment.student.id,
-                        'student_name': enrollment.student.full_name,
+                        'participant_id': enrollment.participant.id,
+                        'participant_name': enrollment.participant.full_name,
                         'certificate_id': cert.id,
                         'status': cert.status
                     })
             except Exception as e:
                 results['errors'].append({
-                    'student_id': enrollment.student.id,
-                    'student_name': enrollment.student.full_name,
+                    'participant_id': enrollment.participant.id,
+                    'participant_name': enrollment.participant.full_name,
                     'error': str(e)
                 })
         
@@ -795,59 +964,57 @@ class EventsViewSet(viewsets.ModelViewSet):
         POST /events/{id}/certificates/send/
         Body: {
             "method": "email|whatsapp|link",
-            "student_ids": [1, 2, 3] (optional, if empty sends to all with certificates)
+            "participant_ids": [1, 2, 3] (optional, if empty sends to all with certificates)
         }
         Admin only
         """
         from api.permissions import is_admin
-        
-        if not is_admin(request):
+
+        if not is_operational_user(request):
             return Response(
-                {'error': 'Solo administradores pueden enviar certificados'},
+                {'error': 'Solo administradores o coordinadores pueden enviar certificados'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         from events.models import Enrollment
-        
+
         event = self.get_object()
         method = request.data.get('method', 'email')
-        student_ids = request.data.get('student_ids', [])
-        
-        certificates = Certificate.objects.filter(event=event, status__in=['generated', 'sent', 'pending']).select_related('student')
-        if student_ids:
-            certificates = certificates.filter(student_id__in=student_ids)
-        
+        participant_ids = request.data.get('participant_ids') or request.data.get('student_ids', [])
+
+        certificates = Certificate.objects.filter(event=event, status__in=['generated', 'sent', 'pending']).select_related('participant')
+        if participant_ids:
+            certificates = certificates.filter(participant_id__in=participant_ids)
+
         results = {
             'sent': [],
             'failed': [],
             'created_and_sent': []
         }
-        
+
         for cert in certificates:
             try:
-                # Generate if not generated
                 if cert.status == 'pending':
                     cert.generate(generated_by=request.user)
-                
-                # Deliver
+
                 delivery_log = cert.deliver(method=method, sent_by=request.user)
 
                 if delivery_log.status == 'success':
                     results['sent'].append({
                         'certificate_id': cert.id,
-                        'student_name': cert.student.full_name,
-                        'recipient': cert.student.email,
+                        'participant_name': cert.participant.full_name,
+                        'recipient': cert.participant.email,
                     })
                 else:
                     results['failed'].append({
                         'certificate_id': cert.id,
-                        'student_name': cert.student.full_name,
+                        'participant_name': cert.participant.full_name,
                         'error': delivery_log.error_message or 'Error al enviar',
                     })
             except Exception as e:
                 results['failed'].append({
                     'certificate_id': cert.id,
-                    'student_name': cert.student.full_name,
+                    'participant_name': cert.participant.full_name,
                     'error': str(e)
                 })
         
@@ -918,7 +1085,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         from events.models import EventInvitation
         
         event = self.get_object()
-        invitations = EventInvitation.objects.filter(event=event).select_related('student')
+        invitations = EventInvitation.objects.filter(event=event).select_related('participant')
         
         serializer = EventInvitationSerializer(invitations, many=True)
         return Response(serializer.data)
@@ -1024,10 +1191,10 @@ Equipo CertyPro
                 errors.append(f'Ya existe invitación para: {email}')
                 continue
 
-            student = Student.objects.filter(email__iexact=email).first()
+            participant = Participant.objects.filter(email__iexact=email).first()
             invitation = EventInvitation.objects.create(
                 event=event,
-                student=student,
+                participant=participant,
                 email=email,
                 token=uuid.uuid4(),
                 status='pending',
@@ -1079,8 +1246,8 @@ Equipo CertyPro
 
         for invitation in pending:
             invitation.expires_at = expires_at
-            if not invitation.student:
-                invitation.student = Student.objects.filter(email__iexact=invitation.email).first()
+            if not invitation.participant:
+                invitation.participant = Participant.objects.filter(email__iexact=invitation.email).first()
             if not invitation.token:
                 invitation.token = uuid.uuid4()
 
@@ -1132,7 +1299,7 @@ Equipo CertyPro
             for enrollment in enrollments:
                 # Get or create certificate for this student
                 certificate, _ = Certificate.objects.get_or_create(
-                    student=enrollment.student,
+                    participant=enrollment.participant,
                     event=event,
                     defaults={
                         'template': event.template,
@@ -1162,7 +1329,7 @@ Equipo CertyPro
         return Response(result)
 
 
-class StudentsViewSet(viewsets.ModelViewSet):
+class ParticipantsViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing students
     
@@ -1178,37 +1345,34 @@ class StudentsViewSet(viewsets.ModelViewSet):
     - search: Search by name, email, or document_id
     - is_active: Filter by active status (true/false)
     """
-    queryset = Student.objects.all().order_by('first_name', 'last_name')
-    serializer_class = StudentSerializer
+    queryset = Participant.objects.all().order_by('first_name', 'last_name')
+    serializer_class = ParticipantSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['is_active']
     search_fields = ['first_name', 'last_name', 'email', 'document_id']
     ordering_fields = ['first_name', 'last_name', 'created_at']
     ordering = ['first_name', 'last_name']
-    
+
     def get_queryset(self):
-        """Filter students by created_by or user's enrollments for non-admin users"""
+        """Operational users see all participants; participante sees only relevant ones."""
         from events.models import Enrollment
-        from api.permissions import is_admin
         queryset = super().get_queryset()
-        
-        if not is_admin(self.request):
-            # Show students created by user OR students enrolled in user's events
-            user_events = Event.objects.filter(created_by=self.request.user).values_list('id', flat=True)
-            queryset = queryset.filter(
-                models.Q(created_by=self.request.user) |
-                models.Q(enrollments__event_id__in=user_events)
-            ).distinct()
-        
-        return queryset
+
+        if is_operational_user(self.request):
+            return queryset
+
+        user_events = Event.objects.filter(created_by=self.request.user).values_list('id', flat=True)
+        return queryset.filter(
+            models.Q(created_by=self.request.user) |
+            models.Q(enrollments__event_id__in=user_events)
+        ).distinct()
     
     def get_permissions(self):
         """Only admins can modify"""
-        from api.permissions import is_admin
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.IsAuthenticated]
         else:
-            if is_admin(self.request):
+            if is_operational_user(self.request):
                 permission_classes = [permissions.IsAuthenticated]
             else:
                 permission_classes = [permissions.IsAdminUser]
@@ -1221,6 +1385,7 @@ class StudentsViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=['post'],
+        url_path='import',
         permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser]
     )
     def import_students(self, request):
@@ -1242,48 +1407,69 @@ class StudentsViewSet(viewsets.ModelViewSet):
         """
         import pandas as pd
         from django.db import IntegrityError
-        
+
         if 'file' not in request.FILES:
             return Response(
                 {'error': 'No file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         file = request.FILES['file']
         imported = 0
         errors = []
-        
+
         try:
-            # Read Excel or CSV file
-            if file.name.endswith('.xlsx'):
+            if file.name.endswith('.xlsx') or file.name.endswith('.xls'):
                 df = pd.read_excel(file)
             else:
                 df = pd.read_csv(file)
-            
-            # Process each row
+
+            # Normalize column names: strip whitespace, lowercase
+            df.columns = [str(c).strip().lower() for c in df.columns]
+
             for idx, row in df.iterrows():
                 try:
-                    _, created = Student.objects.get_or_create(
-                        document_id=row.get('document_id'),
+                    doc_id = str(row.get('document_id', row.get('documento', ''))).strip()
+                    email  = str(row.get('email', '')).strip()
+
+                    if not doc_id or not email:
+                        errors.append({'row': idx + 2, 'error': 'Faltan document_id o email'})
+                        continue
+
+                    # Support both first_name/last_name columns and a single full_name column
+                    first_name = str(row.get('first_name', row.get('nombre', ''))).strip()
+                    last_name  = str(row.get('last_name',  row.get('apellido', ''))).strip()
+
+                    if not first_name and not last_name:
+                        full = str(row.get('full_name', row.get('nombre_completo', ''))).strip()
+                        if full:
+                            parts = full.split(' ', 1)
+                            first_name = parts[0]
+                            last_name  = parts[1] if len(parts) > 1 else ''
+
+                    phone = str(row.get('phone', row.get('telefono', ''))).strip()
+                    if phone.lower() in ('nan', 'none', ''):
+                        phone = ''
+
+                    _, created = Participant.objects.get_or_create(
+                        document_id=doc_id,
                         defaults={
-                            'first_name': row.get('first_name', ''),
-                            'last_name': row.get('last_name', ''),
-                            'email': row.get('email', ''),
-                            'phone': row.get('phone', ''),
+                            'first_name': first_name,
+                            'last_name': last_name,
+                            'email': email,
+                            'phone': phone,
+                            'created_by': request.user,
                         }
                     )
                     if created:
                         imported += 1
-                except IntegrityError as e:
-                    errors.append({
-                        'row': idx + 2,  # +2 because of header and 0-indexing
-                        'error': f'Duplicate email or document_id: {str(e)}'
-                    })
-                except Exception as e:
+                except IntegrityError:
                     errors.append({
                         'row': idx + 2,
-                        'error': str(e)
+                        'error': f'Email o documento duplicado: {email}'
                     })
+                except Exception as e:
+                    errors.append({'row': idx + 2, 'error': str(e)})
             
             return Response({
                 'total_rows': len(df),
@@ -1320,22 +1506,17 @@ class InstructorsViewSet(viewsets.ModelViewSet):
     ordering = ['full_name']
     
     def get_queryset(self):
-        """Filter instructors by created_by for non-admin users"""
-        from api.permissions import is_admin
         queryset = super().get_queryset()
-        
-        if not is_admin(self.request):
+        if not is_operational_user(self.request):
             queryset = queryset.filter(created_by=self.request.user)
-        
         return queryset
     
     def get_permissions(self):
         """Only admins can modify"""
-        from api.permissions import is_admin
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.IsAuthenticated]
         else:
-            if is_admin(self.request):
+            if is_operational_user(self.request):
                 permission_classes = [permissions.IsAuthenticated]
             else:
                 permission_classes = [permissions.IsAdminUser]
@@ -1371,17 +1552,17 @@ class TemplateViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Filter templates based on user - only see own templates"""
-        user = self.request.user
-        return Template.objects.filter(created_by=user)
+        """Admin sees all templates; other users see only their own."""
+        if is_operational_user(self.request):
+            return Template.objects.all()
+        return Template.objects.filter(created_by=self.request.user)
     
     def get_permissions(self):
         """Only admins can modify"""
-        from api.permissions import is_admin
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.IsAuthenticated]
         else:
-            if is_admin(self.request):
+            if is_operational_user(self.request):
                 permission_classes = [permissions.IsAuthenticated]
             else:
                 permission_classes = [permissions.IsAdminUser]
@@ -1444,6 +1625,48 @@ class TemplateViewSet(viewsets.ModelViewSet):
             'message': 'Imagen subida correctamente'
         })
     
+    @action(detail=True, methods=['post'], url_path='upload-signature')
+    def upload_signature(self, request, pk=None):
+        """Upload instructor signature image for a template and save metadata to layout_config."""
+        import pathlib
+        from django.conf import settings as django_settings
+
+        template = self.get_object()
+
+        signature_file = request.FILES.get('signature_image') or request.FILES.get('file')
+        instructor_name = request.data.get('instructor_name', '').strip()
+        instructor_specialty = request.data.get('instructor_specialty', '').strip()
+
+        sig_config = dict(template.layout_config.get('signature', {}))
+
+        if signature_file:
+            valid_types = ['image/png', 'image/jpeg', 'image/jpg']
+            if getattr(signature_file, 'content_type', '') not in valid_types:
+                return Response({'error': 'Solo se permiten archivos PNG o JPG'}, status=status.HTTP_400_BAD_REQUEST)
+
+            sig_dir = pathlib.Path(django_settings.MEDIA_ROOT) / 'templates' / 'signatures'
+            sig_dir.mkdir(parents=True, exist_ok=True)
+            suffix = pathlib.Path(signature_file.name).suffix or '.png'
+            sig_filename = f"sig_{template.id}_{pk}{suffix}"
+            sig_path = sig_dir / sig_filename
+            with open(sig_path, 'wb+') as dest:
+                for chunk in signature_file.chunks():
+                    dest.write(chunk)
+            sig_config['image_path'] = str(sig_path)
+            sig_config['image_url'] = f'/media/templates/signatures/{sig_filename}'
+
+        if instructor_name:
+            sig_config['instructor_name'] = instructor_name
+        if instructor_specialty:
+            sig_config['instructor_specialty'] = instructor_specialty
+
+        layout = dict(template.layout_config)
+        layout['signature'] = sig_config
+        template.layout_config = layout
+        template.save()
+
+        return Response({'success': True, 'signature': sig_config, 'message': 'Firma guardada correctamente'})
+
     @action(detail=True, methods=['get'], url_path='preview')
     def get_preview(self, request, pk=None):
         """Get preview URL for template"""
@@ -1499,17 +1722,18 @@ class BulkCertificateGenerationView(APIView):
     
     def post(self, request):
         """Procesa un archivo Excel para generar y enviar certificados masivamente"""
-        from api.permissions import is_admin
+        from api.permissions import is_operational_user
         from django.utils import timezone as tz
 
-        if not is_admin(request):
+        if not is_operational_user(request):
             return Response(
-                {'error': 'Solo administradores pueden generar certificados en masa'},
+                {'error': 'Solo administradores y coordinadores pueden generar certificados en masa'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         excel_file = request.FILES.get('excel_file')
         template_image = request.FILES.get('template_image')
+        signature_image = request.FILES.get('signature_image')
         event_id = request.data.get('event_id')
 
         if not excel_file:
@@ -1530,6 +1754,8 @@ class BulkCertificateGenerationView(APIView):
         font_size = int(request.data.get('font_size', 28))
         font_color = request.data.get('font_color', '#000000')
         font_family = request.data.get('font_family', 'Helvetica')
+        instructor_name = request.data.get('instructor_name', '').strip()
+        instructor_specialty = request.data.get('instructor_specialty', '').strip()
 
         # Convertir porcentaje a pulgadas para layout_config
         # A4 horizontal: 841.89 x 595.28 pts / 72 pts/inch
@@ -1546,6 +1772,29 @@ class BulkCertificateGenerationView(APIView):
                 'centered': True,
             }
         }
+
+        # Save ad-hoc signature image and add to layout_config
+        if signature_image:
+            from django.conf import settings as django_settings
+            import pathlib
+            sig_dir = pathlib.Path(django_settings.MEDIA_ROOT) / 'bulk_signatures'
+            sig_dir.mkdir(parents=True, exist_ok=True)
+            sig_filename = f"sig_{tz.now().strftime('%Y%m%d%H%M%S%f')}{pathlib.Path(signature_image.name).suffix}"
+            sig_path = sig_dir / sig_filename
+            with open(sig_path, 'wb+') as dest:
+                for chunk in signature_image.chunks():
+                    dest.write(chunk)
+            layout_config['signature'] = {
+                'image_path': str(sig_path),
+                'instructor_name': instructor_name,
+                'instructor_specialty': instructor_specialty,
+            }
+        elif instructor_name:
+            # No image but have a name — still render line + name
+            layout_config['signature'] = {
+                'instructor_name': instructor_name,
+                'instructor_specialty': instructor_specialty,
+            }
 
         template = Template.objects.create(
             name=f'Bulk - {event.name} - {tz.now().strftime("%Y%m%d%H%M%S")}',
@@ -1666,11 +1915,11 @@ class BulkCertificatePreviewView(APIView):
     def post(self, request):
         """Extrae datos del Excel para preview"""
         
-        from api.permissions import is_admin
-        
-        if not is_admin(request):
+        from api.permissions import is_operational_user
+
+        if not is_operational_user(request):
             return Response(
-                {'error': 'Solo administradores pueden previsualizar archivos'},
+                {'error': 'Solo administradores y coordinadores pueden previsualizar archivos'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -1820,11 +2069,10 @@ class EnrollmentViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_permissions(self):
-        from api.permissions import is_admin
         if self.action in ['list', 'retrieve']:
             self.permission_classes = [permissions.IsAuthenticated]
         else:
-            if is_admin(self.request):
+            if is_operational_user(self.request):
                 self.permission_classes = [permissions.IsAuthenticated]
             else:
                 self.permission_classes = [permissions.IsAdminUser]
@@ -1836,7 +2084,7 @@ class EnrollmentViewSet(viewsets.ViewSet):
         from api.permissions import is_admin
         
         # Verify user has access to this event
-        if not is_admin(request):
+        if not is_operational_user(request):
             event = Event.objects.filter(id=event_pk, created_by=request.user).first()
             if not event:
                 return Response(
@@ -1844,32 +2092,32 @@ class EnrollmentViewSet(viewsets.ViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
         
-        enrollments = Enrollment.objects.filter(event_id=event_pk).select_related('student', 'created_by')
+        enrollments = Enrollment.objects.filter(event_id=event_pk).select_related('participant', 'created_by')
         serializer = EnrollmentSerializer(enrollments, many=True)
         return Response(serializer.data)
-    
+
     def create(self, request, event_pk=None):
-        """Enroll a student to an event"""
+        """Enroll a participant to an event"""
         from events.models import Enrollment
-        from students.models import Student
-        
+        from participants.models import Participant
+
         serializer = EnrollmentCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        student_id = serializer.validated_data['student_id']
+
+        participant_id = serializer.validated_data['participant_id']
         attendance = serializer.validated_data.get('attendance', False)
         grade = serializer.validated_data.get('grade')
         notes = serializer.validated_data.get('notes', '')
-        
+
         try:
-            student = Student.objects.get(id=student_id)
-        except Student.DoesNotExist:
+            participant = Participant.objects.get(id=participant_id)
+        except Participant.DoesNotExist:
             return Response(
-                {'error': 'Estudiante no encontrado'},
+                {'error': 'Participante no encontrado'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         resolved_event_pk = event_pk or request.data.get('event_id')
         try:
             event = Event.objects.get(id=resolved_event_pk)
@@ -1878,9 +2126,9 @@ class EnrollmentViewSet(viewsets.ViewSet):
                 {'error': 'Evento no encontrado'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         enrollment, created = Enrollment.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=event,
             defaults={
                 'attendance': attendance,
@@ -1889,10 +2137,10 @@ class EnrollmentViewSet(viewsets.ViewSet):
                 'created_by': request.user
             }
         )
-        
+
         if not created:
             return Response(
-                {'error': 'El estudiante ya está inscrito en este evento'},
+                {'error': 'El participante ya está inscrito en este evento'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2015,12 +2263,10 @@ class InvitationPublicView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Must have existing student to accept directly
-        if not invitation.student:
-            # Check if a student exists with this email
-            from students.models import Student
-            invitation.student = Student.objects.filter(email__iexact=invitation.email).first()
-            if not invitation.student:
+        if not invitation.participant:
+            from participants.models import Participant
+            invitation.participant = Participant.objects.filter(email__iexact=invitation.email).first()
+            if not invitation.participant:
                 return Response(
                     {'error': 'Debes registrarte primero'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -2029,7 +2275,7 @@ class InvitationPublicView(APIView):
         
         # Create enrollment (without invitation FK to avoid DB error)
         enrollment, created = Enrollment.objects.get_or_create(
-            student=invitation.student,
+            participant=invitation.participant,
             event=invitation.event,
             defaults={
                 'created_by': invitation.created_by,
@@ -2044,7 +2290,7 @@ class InvitationPublicView(APIView):
         # Auto-create certificate in pending status so it appears in the list
         from certificados.models import Certificate
         Certificate.objects.get_or_create(
-            student=invitation.student,
+            participant=invitation.participant,
             event=invitation.event,
             defaults={
                 'template': invitation.event.template,
@@ -2059,7 +2305,7 @@ class InvitationPublicView(APIView):
         return Response({
             'message': '¡Inscripción exitosa!',
             'event': invitation.event.name,
-            'student': invitation.student.full_name
+            'participant': invitation.participant.full_name
         })
 
 
@@ -2121,8 +2367,7 @@ class InvitationRegisterView(APIView):
         existing_user = user_model.objects.filter(email__iexact=email).first()
 
         if existing_user:
-            # Link to existing user as student
-            student, _ = Student.objects.get_or_create(
+            participant, _ = Participant.objects.get_or_create(
                 email=email,
                 defaults={
                     'first_name': data['first_name'],
@@ -2132,35 +2377,31 @@ class InvitationRegisterView(APIView):
                 }
             )
         else:
-            # Create new user and student
             with transaction.atomic():
-                # Create user account
                 user = user_model.objects.create_user(
                     email=email,
                     full_name=f"{data['first_name']} {data['last_name']}",
                     password=data['password'],
                     role='participante'
                 )
-                
-                # Create student
-                student = Student.objects.create(
+                participant = Participant.objects.create(
                     email=email,
                     first_name=data['first_name'],
                     last_name=data['last_name'],
                     phone=data.get('phone', ''),
-                    document_id=f"STD-{user.id}",
+                    document_id=f"PART-{user.id}",
                     created_by=invitation.created_by
                 )
-        
+
         # Update invitation
-        invitation.student = student
+        invitation.participant = participant
         invitation.status = 'accepted'
         invitation.responded_at = timezone.now()
         invitation.save()
         
         # Create enrollment (without invitation reference to avoid FK issues)
         enrollment, created = Enrollment.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=invitation.event,
             defaults={
                 'created_by': invitation.created_by,
@@ -2175,7 +2416,7 @@ class InvitationRegisterView(APIView):
         # Auto-create certificate in pending status so it appears in the list
         from certificados.models import Certificate
         Certificate.objects.get_or_create(
-            student=student,
+            participant=participant,
             event=invitation.event,
             defaults={
                 'template': invitation.event.template,
@@ -2186,7 +2427,28 @@ class InvitationRegisterView(APIView):
         return Response({
             'message': '¡Registro exitoso! Ya estás inscrito en el evento.',
             'event': invitation.event.name,
-            'student': student.full_name,
+            'participant': participant.full_name,
             'email': email
         })
 
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only viewset for audit logs. Admin access only.
+
+    GET /api/audit/          — paginated list, supports ?action=&user_id=
+    GET /api/audit/{id}/     — single entry
+    """
+    serializer_class = AuditLogSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = AuditLog.objects.select_related('user', 'certificate').order_by('-timestamp')
+        action_filter = self.request.query_params.get('action')
+        user_id = self.request.query_params.get('user_id')
+        if action_filter:
+            qs = qs.filter(action=action_filter)
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        return qs

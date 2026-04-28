@@ -1,15 +1,31 @@
 """
 Custom permission classes for role-based access control
-Solo dos roles: admin y participante
+Roles: admin, coordinador, participante
 """
 from rest_framework import permissions
 
+OPERATIONAL_ROLES = ('admin', 'coordinador')
+
 
 def is_admin(request):
-    """Helper to check if user is admin"""
+    """True only for 'admin' role (auditing, bulk actions, user management)."""
     if not request.user or not request.user.is_authenticated:
         return False
     return request.user.role == 'admin'
+
+
+def is_coordinator(request):
+    """True only for 'coordinador' role (day-to-day operations)."""
+    if not request.user or not request.user.is_authenticated:
+        return False
+    return request.user.role == 'coordinador'
+
+
+def is_operational_user(request):
+    """True for admin OR coordinador — can register, enroll, generate, deliver."""
+    if not request.user or not request.user.is_authenticated:
+        return False
+    return request.user.role in OPERATIONAL_ROLES
 
 
 class IsAdmin(permissions.BasePermission):
@@ -21,6 +37,30 @@ class IsAdmin(permissions.BasePermission):
             request.user
             and request.user.is_authenticated
             and is_admin(request)
+        )
+
+
+class IsCoordinator(permissions.BasePermission):
+    """
+    Permite acceso solo a usuarios con rol 'coordinador'
+    """
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and is_coordinator(request)
+        )
+
+
+class IsOperationalUser(permissions.BasePermission):
+    """
+    Permite acceso a admin y coordinador (operaciones del día a día)
+    """
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and is_operational_user(request)
         )
 
 

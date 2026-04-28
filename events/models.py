@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from users.models import User
-from students.models import Student
+from participants.models import Participant
 from instructors.models import Instructor
 import uuid
 
@@ -96,7 +96,7 @@ class EventInvitation(models.Model):
 
     id = models.BigAutoField(primary_key=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invitations')
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='event_invitations', null=True, blank=True)
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='event_invitations', null=True, blank=True)
     email = models.EmailField()
     token = models.CharField(max_length=64, unique=True, default=uuid.uuid4)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -130,8 +130,8 @@ class Enrollment(models.Model):
         ('cancelled', 'Cancelled'),
     )
     
-    student = models.ForeignKey(
-        Student,
+    participant = models.ForeignKey(
+        Participant,
         on_delete=models.CASCADE,
         related_name="enrollments"
     )
@@ -153,13 +153,13 @@ class Enrollment(models.Model):
     notes = models.TextField(blank=True)
 
     class Meta:
-        unique_together = ('student', 'event')
+        unique_together = ('participant', 'event')
         ordering = ['enrolled_at']
         indexes = [
-            models.Index(fields=['student', 'event']),
+            models.Index(fields=['participant', 'event']),
             models.Index(fields=['attendance']),
         ]
 
     def __str__(self):
         attendance_mark = "✓" if self.attendance else "✗"
-        return f"{self.student.first_name} - {self.event.name} [{attendance_mark}]"
+        return f"{self.participant.first_name} - {self.event.name} [{attendance_mark}]"

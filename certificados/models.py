@@ -4,7 +4,7 @@ from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from users.models import User
-from students.models import Student
+from participants.models import Participant
 from events.models import Event
 
 class Template(models.Model):
@@ -83,8 +83,8 @@ class Certificate(models.Model):
 
     id = models.BigAutoField(primary_key=True)
 
-    student = models.ForeignKey(
-        Student,
+    participant = models.ForeignKey(
+        Participant,
         on_delete=models.CASCADE,
         related_name="certificates"
     )
@@ -126,16 +126,16 @@ class Certificate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('student', 'event')
+        unique_together = ('participant', 'event')
         ordering = ['-issued_at']
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['verification_code']),
-            models.Index(fields=['student', 'event']),
+            models.Index(fields=['participant', 'event']),
         ]
 
     def __str__(self):
-        return f"{self.student} - {self.event.name} [{self.status}]"
+        return f"{self.participant} - {self.event.name} [{self.status}]"
 
     def is_expired(self):
         """Check if certificate has expired"""
@@ -144,16 +144,16 @@ class Certificate(models.Model):
         return timezone.now() > self.expires_at
 
     @staticmethod
-    def generate_verification_code(student_id, event_id):
-        """Generate unique verification code from student and event"""
-        code_source = f"{student_id}{event_id}{timezone.now().isoformat()}".encode()
+    def generate_verification_code(participant_id, event_id):
+        """Generate unique verification code from participant and event"""
+        code_source = f"{participant_id}{event_id}{timezone.now().isoformat()}".encode()
         return hashlib.md5(code_source).hexdigest()[:20].upper()
 
     def save(self, *args, **kwargs):
         """Auto-generate verification code if not set"""
         if not self.verification_code:
             self.verification_code = self.generate_verification_code(
-                str(self.student.id), 
+                str(self.participant.id),
                 str(self.event.id)
             )
         super().save(*args, **kwargs)
@@ -162,21 +162,20 @@ class Certificate(models.Model):
         """Generate certificate from enrollment"""
         if self.status != 'pending':
             raise ValidationError(f"Certificate already {self.status}")
-        
-        # Check if student attended (skip if requested)
+
         if not skip_attendance_check:
             from events.models import Enrollment
             try:
-                enrollment = Enrollment.objects.get(student=self.student, event=self.event)
+                enrollment = Enrollment.objects.get(participant=self.participant, event=self.event)
                 if not enrollment.attendance:
-                    raise ValidationError("Student did not attend the event")
+                    raise ValidationError("Participant did not attend the event")
             except Enrollment.DoesNotExist:
-                raise ValidationError("Student not enrolled in this event")
-        
+                raise ValidationError("Participant not enrolled in this event")
+
         # Generate code if not set
         if not self.verification_code:
             self.verification_code = self.generate_verification_code(
-                str(self.student.id), 
+                str(self.participant.id),
                 str(self.event.id)
             )
         
@@ -206,13 +205,15 @@ class Certificate(models.Model):
         return self
 
     def _determine_recipient(self, method):
-        """Determine the recipient email/phone based on delivery method"""
+        """Determine the recipient email/phone based on delivery method.
+        WhatsApp requires a phone number — returns None if absent (caller raises).
+        """
         if method == 'email':
-            return self.student.email
+            return self.participant.email
         elif method == 'whatsapp':
-            return self.student.phone or self.student.email
+            return self.participant.phone or None
         else:  # link
-            return self.student.email
+            return self.participant.email
 
     def _send_delivery(self, method, recipient):
         """Send delivery and return result dict"""
@@ -257,7 +258,7 @@ class Certificate(models.Model):
             recipient = self._determine_recipient(method)
         
         if not recipient:
-            raise ValidationError(f"No {method} address found for student")
+            raise ValidationError(f"No {method} address found for participant")
         
         # Create delivery log entry
         from deliveries.models import DeliveryLog
