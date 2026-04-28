@@ -83,9 +83,7 @@ class EventAdmin(admin.ModelAdmin):
         instructors = obj.instructors.all()
         if not instructors:
             return "No instructors assigned"
-        return "\n".join(
-            [f"• {e.instructor.full_name} - {e.role}" for e in instructors]
-        )
+        return "\n".join([f"• {e.instructor.full_name} - {e.role}" for e in instructors])
 
     instructors_info.short_description = "Assigned Instructors"
 
@@ -139,13 +137,9 @@ class EnrollmentAdmin(admin.ModelAdmin):
 
     def attendance_badge(self, obj):
         if obj.attendance:
-            return format_html(
-                '<span style="color: green; font-weight: bold;">✓ Present</span>'
-            )
+            return format_html('<span style="color: green; font-weight: bold;">✓ Present</span>')
         else:
-            return format_html(
-                '<span style="color: red; font-weight: bold;">✗ Absent</span>'
-            )
+            return format_html('<span style="color: red; font-weight: bold;">✗ Absent</span>')
 
     attendance_badge.short_description = "Attendance"
 

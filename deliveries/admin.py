@@ -68,9 +68,7 @@ class DeliveryLogAdmin(admin.ModelAdmin):
 
     def method_badge(self, obj):
         colors = {"email": "blue", "whatsapp": "green", "link": "purple"}
-        return color_badge(
-            colors.get(obj.delivery_method, "gray"), obj.get_delivery_method_display()
-        )
+        return color_badge(colors.get(obj.delivery_method, "gray"), obj.get_delivery_method_display())
 
     method_badge.short_description = "Method"
 
@@ -118,9 +116,7 @@ class DeliveryLogAdmin(admin.ModelAdmin):
                 messages.INFO,
             )
         else:
-            self.message_user(
-                request, "No failed deliveries to retry", messages.WARNING
-            )
+            self.message_user(request, "No failed deliveries to retry", messages.WARNING)
 
     retry_delivery.short_description = "↩️  Retry Failed Deliveries"
 
@@ -129,8 +125,6 @@ class DeliveryLogAdmin(admin.ModelAdmin):
         count = queryset.exclude(status="success").update(status="success")
 
         if count > 0:
-            self.message_user(
-                request, f"✅ {count} deliveries marked as successful", messages.SUCCESS
-            )
+            self.message_user(request, f"✅ {count} deliveries marked as successful", messages.SUCCESS)
 
     mark_as_successful.short_description = "✅ Mark as Successful"

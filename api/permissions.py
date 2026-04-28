@@ -44,9 +44,7 @@ class IsCoordinator(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return (
-            request.user and request.user.is_authenticated and is_coordinator(request)
-        )
+        return request.user and request.user.is_authenticated and is_coordinator(request)
 
 
 class IsOperationalUser(permissions.BasePermission):
@@ -55,11 +53,7 @@ class IsOperationalUser(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and is_operational_user(request)
-        )
+        return request.user and request.user.is_authenticated and is_operational_user(request)
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):

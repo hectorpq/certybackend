@@ -11,9 +11,7 @@ class Student(models.Model):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True, default="")
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="created_students"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_students")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

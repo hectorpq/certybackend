@@ -269,13 +269,9 @@ class CertificateAdmin(admin.ModelAdmin):
             method = delivery.get_delivery_method_display()
             timestamp = delivery.sent_at.strftime("%d/%m/%Y %H:%M")
 
-            html_list.append(
-                f"<li>{icon} {method_icon} {method} → {delivery.recipient} ({timestamp})</li>"
-            )
+            html_list.append(f"<li>{icon} {method_icon} {method} → {delivery.recipient} ({timestamp})</li>")
 
-        return format_html(
-            '<ul style="list-style: none; padding: 0;">{}</ul>', "".join(html_list)
-        )
+        return format_html('<ul style="list-style: none; padding: 0;">{}</ul>', "".join(html_list))
 
     delivery_history.short_description = "Delivery History"
 
@@ -291,9 +287,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 from events.models import Enrollment
 
                 try:
-                    enrollment = Enrollment.objects.get(
-                        participant=certificate.participant, event=certificate.event
-                    )
+                    enrollment = Enrollment.objects.get(participant=certificate.participant, event=certificate.event)
                     if not enrollment.attendance:
                         self.message_user(
                             request,
@@ -310,9 +304,7 @@ class CertificateAdmin(admin.ModelAdmin):
                     continue
 
                 # Generate certificate
-                certificate.generate(
-                    template=certificate.template, generated_by=request.user
-                )
+                certificate.generate(template=certificate.template, generated_by=request.user)
                 generated += 1
             except ValidationError as e:
                 self.message_user(request, f"❌ Error: {e.message}", messages.ERROR)
@@ -346,19 +338,13 @@ class CertificateAdmin(admin.ModelAdmin):
                 else:
                     failed += 1
                     if delivery_log.error_message:
-                        errors.append(
-                            f"{certificate.participant.first_name}: {delivery_log.error_message}"
-                        )
+                        errors.append(f"{certificate.participant.first_name}: {delivery_log.error_message}")
 
             except ValidationError as e:
-                self.message_user(
-                    request, f"❌ Validation Error: {str(e)}", messages.ERROR
-                )
+                self.message_user(request, f"❌ Validation Error: {str(e)}", messages.ERROR)
                 failed += 1
             except Exception as e:
-                self.message_user(
-                    request, f"❌ Unexpected Error: {str(e)}", messages.ERROR
-                )
+                self.message_user(request, f"❌ Unexpected Error: {str(e)}", messages.ERROR)
                 failed += 1
 
         # Summary message
@@ -370,9 +356,7 @@ class CertificateAdmin(admin.ModelAdmin):
             )
 
         if failed > 0:
-            error_detail = (
-                "\n".join(errors[:3]) if errors else "Check email configuration"
-            )
+            error_detail = "\n".join(errors[:3]) if errors else "Check email configuration"
             self.message_user(
                 request,
                 f"⚠️  {failed} delivery failures. {error_detail}",
@@ -396,9 +380,7 @@ class CertificateAdmin(admin.ModelAdmin):
 
         for certificate in valid_certs:
             try:
-                certificate.mark_as_failed(
-                    error_message="Marked as failed from admin", sent_by=request.user
-                )
+                certificate.mark_as_failed(error_message="Marked as failed from admin", sent_by=request.user)
             except ValidationError:
                 pass  # Already filtered, but just in case
 
@@ -413,9 +395,7 @@ class CertificateAdmin(admin.ModelAdmin):
     def reset_to_pending(self, request, queryset):
         """Action: Reset certificates to pending (for retry workflows)"""
         count = queryset.update(status="pending")
-        self.message_user(
-            request, f"↩️  {count} certificates reset to pending", messages.INFO
-        )
+        self.message_user(request, f"↩️  {count} certificates reset to pending", messages.INFO)
 
     reset_to_pending.short_description = "↩️  Reset to Pending (for retry)"
 
@@ -449,9 +429,7 @@ class CertificateAdmin(admin.ModelAdmin):
                 else:
                     failed += 1
                     if delivery_log.error_message:
-                        errors.append(
-                            f"{certificate.participant.first_name}: {delivery_log.error_message}"
-                        )
+                        errors.append(f"{certificate.participant.first_name}: {delivery_log.error_message}")
 
             except ValidationError as e:
                 self.message_user(request, f"❌ Error: {str(e)}", messages.ERROR)
@@ -465,12 +443,8 @@ class CertificateAdmin(admin.ModelAdmin):
             )
 
         if failed > 0:
-            error_detail = (
-                "\n".join(errors[:3]) if errors else "Check Twilio configuration"
-            )
-            self.message_user(
-                request, f"⚠️  {failed} failures. {error_detail}", messages.WARNING
-            )
+            error_detail = "\n".join(errors[:3]) if errors else "Check Twilio configuration"
+            self.message_user(request, f"⚠️  {failed} failures. {error_detail}", messages.WARNING)
 
     deliver_whatsapp.short_description = "💬 Deliver via WhatsApp (REAL WHATSAPP)"
 

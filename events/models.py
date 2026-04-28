@@ -60,9 +60,7 @@ class Event(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     is_active = models.BooleanField(default=True)
     auto_send_certificates = models.BooleanField(default=False)
-    template = models.ForeignKey(
-        "certificados.Template", on_delete=models.SET_NULL, null=True, blank=True
-    )
+    template = models.ForeignKey("certificados.Template", on_delete=models.SET_NULL, null=True, blank=True)
     invitation_message = models.TextField(default="", blank=True)
     is_public = models.BooleanField(default=False)
     max_capacity = models.IntegerField(null=True, blank=True)
@@ -85,16 +83,10 @@ class Event(models.Model):
 
 
 class EventInstructor(models.Model):
-    event = models.ForeignKey(
-        Event, on_delete=models.CASCADE, related_name="event_instructors"
-    )
-    instructor = models.ForeignKey(
-        Instructor, on_delete=models.CASCADE, related_name="event_instructor_roles"
-    )
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="event_instructors")
+    instructor = models.ForeignKey(Instructor, on_delete=models.CASCADE, related_name="event_instructor_roles")
     role = models.CharField(max_length=50, default="principal")
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="event_instructors"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="event_instructors")
 
     class Meta:
         unique_together = ("event", "instructor")
@@ -115,9 +107,7 @@ class EventInvitation(models.Model):
     )
 
     id = models.BigAutoField(primary_key=True)
-    event = models.ForeignKey(
-        Event, on_delete=models.CASCADE, related_name="invitations"
-    )
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="invitations")
     participant = models.ForeignKey(
         Participant,
         on_delete=models.CASCADE,
@@ -131,9 +121,7 @@ class EventInvitation(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     responded_at = models.DateTimeField(null=True, blank=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="sent_invitations"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="sent_invitations")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -160,15 +148,9 @@ class Enrollment(models.Model):
         ("cancelled", "Cancelled"),
     )
 
-    participant = models.ForeignKey(
-        Participant, on_delete=models.CASCADE, related_name="enrollments"
-    )
-    event = models.ForeignKey(
-        Event, on_delete=models.CASCADE, related_name="enrollments"
-    )
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="enrollments"
-    )
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="enrollments")
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="enrollments")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="enrollments")
     invitation = models.ForeignKey(
         EventInvitation,
         on_delete=models.SET_NULL,

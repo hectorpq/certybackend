@@ -13,21 +13,15 @@ from users.models import User
 
 
 def make_admin(email="admin@test.com"):
-    return User.objects.create_user(
-        email=email, full_name="Admin", password="pass123", role="admin", is_staff=True
-    )
+    return User.objects.create_user(email=email, full_name="Admin", password="pass123", role="admin", is_staff=True)
 
 
 def make_user(email="user@test.com"):
-    return User.objects.create_user(
-        email=email, full_name="User", password="pass123", role="participante"
-    )
+    return User.objects.create_user(email=email, full_name="User", password="pass123", role="participante")
 
 
 def make_event(user, name="Evento Test", ev_date=None):
-    return Event.objects.create(
-        name=name, event_date=ev_date or date(2026, 6, 1), created_by=user
-    )
+    return Event.objects.create(name=name, event_date=ev_date or date(2026, 6, 1), created_by=user)
 
 
 def make_participant(user, doc="12345", email="participant@test.com"):
@@ -95,23 +89,17 @@ class LoginViewTest(TestCase):
         self.user = make_admin()
 
     def test_login_success(self):
-        res = self.client.post(
-            "/api/login/", {"email": "admin@test.com", "password": "pass123"}
-        )
+        res = self.client.post("/api/login/", {"email": "admin@test.com", "password": "pass123"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("access", res.data)
         self.assertIn("refresh", res.data)
 
     def test_login_wrong_password(self):
-        res = self.client.post(
-            "/api/login/", {"email": "admin@test.com", "password": "wrong"}
-        )
+        res = self.client.post("/api/login/", {"email": "admin@test.com", "password": "wrong"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_login_nonexistent_user(self):
-        res = self.client.post(
-            "/api/login/", {"email": "ghost@test.com", "password": "pass123"}
-        )
+        res = self.client.post("/api/login/", {"email": "ghost@test.com", "password": "pass123"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -171,9 +159,7 @@ class ParticipantsViewSetTest(TestCase):
 
     def test_update_participant(self):
         s = make_participant(self.admin)
-        res = self.client.patch(
-            f"/api/participants/{s.id}/", {"first_name": "Cambiado"}
-        )
+        res = self.client.patch(f"/api/participants/{s.id}/", {"first_name": "Cambiado"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["first_name"], "Cambiado")
 
@@ -226,24 +212,18 @@ class InstructorsViewSetTest(TestCase):
         self.assertEqual(res.data["full_name"], "Rosa Diaz")
 
     def test_retrieve_instructor(self):
-        inst = Instructor.objects.create(
-            full_name="Carlos", email="carlos@test.com", created_by=self.admin
-        )
+        inst = Instructor.objects.create(full_name="Carlos", email="carlos@test.com", created_by=self.admin)
         res = self.client.get(f"/api/instructors/{inst.id}/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_update_instructor(self):
-        inst = Instructor.objects.create(
-            full_name="Pedro", email="pedro@test.com", created_by=self.admin
-        )
+        inst = Instructor.objects.create(full_name="Pedro", email="pedro@test.com", created_by=self.admin)
         res = self.client.patch(f"/api/instructors/{inst.id}/", {"specialty": "Django"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["specialty"], "Django")
 
     def test_delete_instructor(self):
-        inst = Instructor.objects.create(
-            full_name="Temp", email="temp@test.com", created_by=self.admin
-        )
+        inst = Instructor.objects.create(full_name="Temp", email="temp@test.com", created_by=self.admin)
         res = self.client.delete(f"/api/instructors/{inst.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -297,9 +277,7 @@ class EventsViewSetTest(TestCase):
     def test_participants_with_enrollment(self):
         e = make_event(self.admin)
         s = make_participant(self.admin)
-        Enrollment.objects.create(
-            participant=s, event=e, attendance=True, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=s, event=e, attendance=True, created_by=self.admin)
         res = self.client.get(f"/api/events/{e.id}/participants/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
@@ -313,9 +291,7 @@ class EventsViewSetTest(TestCase):
 
     def test_enroll_student_by_email(self):
         e = make_event(self.admin)
-        res = self.client.post(
-            f"/api/events/{e.id}/enroll/", {"student_email": "new@enroll.com"}
-        )
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_email": "new@enroll.com"})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_enroll_duplicate_returns_400(self):
@@ -344,9 +320,7 @@ class EventsViewSetTest(TestCase):
         regular = make_user("regular@test.com")
         self.client.force_authenticate(user=regular)
         e = make_event(self.admin)
-        res = self.client.post(
-            f"/api/events/{e.id}/enroll/", {"student_email": "x@x.com"}
-        )
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_email": "x@x.com"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -384,9 +358,7 @@ class CertificateViewSetTest(TestCase):
         self.assertIn("total_attempts", res.data)
 
     def test_verify_with_valid_code(self):
-        res = self.client.get(
-            f"/api/certificates/verify/?code={self.cert.verification_code}"
-        )
+        res = self.client.get(f"/api/certificates/verify/?code={self.cert.verification_code}")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["status"], "success")
 
@@ -411,9 +383,7 @@ class CertificateViewSetTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_deliver_raises_if_not_generated(self):
-        res = self.client.post(
-            f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -434,9 +404,7 @@ class TemplateViewSetTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_create_template(self):
-        res = self.client.post(
-            "/api/templates/", {"name": "Nueva Plantilla", "category": "Cursos"}
-        )
+        res = self.client.post("/api/templates/", {"name": "Nueva Plantilla", "category": "Cursos"})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["name"], "Nueva Plantilla")
 
@@ -475,9 +443,7 @@ class DeliveryLogViewSetTest(TestCase):
         student = make_participant(self.admin)
         event = make_event(self.admin)
         template = Template.objects.create(name="T", created_by=self.admin)
-        cert = Certificate.objects.create(
-            participant=student, event=event, template=template, generated_by=self.admin
-        )
+        cert = Certificate.objects.create(participant=student, event=event, template=template, generated_by=self.admin)
         res = self.client.get(f"/api/deliveries/?certificate_id={cert.id}")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -578,9 +544,7 @@ class PermissionsTest(TestCase):
     def test_can_manage_certificates_admin(self):
         from api.permissions import CanManageCertificates
 
-        self.assertTrue(
-            self._check_permission(CanManageCertificates, self.admin, "POST")
-        )
+        self.assertTrue(self._check_permission(CanManageCertificates, self.admin, "POST"))
 
     def test_can_manage_events_admin(self):
         from api.permissions import CanManageEvents
@@ -595,9 +559,7 @@ class PermissionsTest(TestCase):
     def test_can_manage_instructors_admin(self):
         from api.permissions import CanManageInstructors
 
-        self.assertTrue(
-            self._check_permission(CanManageInstructors, self.admin, "POST")
-        )
+        self.assertTrue(self._check_permission(CanManageInstructors, self.admin, "POST"))
 
     def test_can_manage_templates_admin(self):
         from api.permissions import CanManageTemplates
@@ -607,10 +569,16 @@ class PermissionsTest(TestCase):
     def test_all_permissions_deny_anonymous(self):
         from django.contrib.auth.models import AnonymousUser
 
-        from api.permissions import (CanManageCertificates, CanManageEvents,
-                                     CanManageInstructors, CanManageStudents,
-                                     CanManageTemplates, CanManageUsers,
-                                     IsAdmin, IsAdminOrReadOnly)
+        from api.permissions import (
+            CanManageCertificates,
+            CanManageEvents,
+            CanManageInstructors,
+            CanManageStudents,
+            CanManageTemplates,
+            CanManageUsers,
+            IsAdmin,
+            IsAdminOrReadOnly,
+        )
 
         anon = AnonymousUser()
         for perm_class in [
@@ -653,9 +621,7 @@ class ParticipanteAccessTest(TestCase):
                 "phone": "",
             },
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     def test_participante_can_view_certificates(self):
         res = self.client.get("/api/certificates/")
@@ -664,9 +630,7 @@ class ParticipanteAccessTest(TestCase):
     def test_participante_can_verify_certificate_public(self):
         self.client.force_authenticate(user=None)
         res = self.client.get("/api/certificates/verify/?code=INVALID")
-        self.assertIn(
-            res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST])
 
     def test_participante_can_list_events(self):
         res = self.client.get("/api/events/")
@@ -710,9 +674,7 @@ class EventExtraEndpointsTest(TestCase):
         self.assertEqual(res.data, [])
 
     def test_generate_certificates_no_enrollments(self):
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["created"], 0)
 
@@ -723,25 +685,19 @@ class EventExtraEndpointsTest(TestCase):
             attendance=True,
             created_by=self.admin,
         )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_generate_certificates_non_admin_forbidden(self):
         regular = make_user("r@test.com")
         self.client.force_authenticate(user=regular)
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_send_certificates_non_admin_forbidden(self):
         regular = make_user("r2@test.com")
         self.client.force_authenticate(user=regular)
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -771,15 +727,11 @@ class CertificateExtraTest(TestCase):
             generated_by=self.admin,
             expires_at=timezone.now() - timedelta(days=1),
         )
-        res = self.client.get(
-            f"/api/certificates/verify/?code={cert.verification_code}"
-        )
+        res = self.client.get(f"/api/certificates/verify/?code={cert.verification_code}")
         self.assertEqual(res.status_code, 410)
 
     def test_participante_sees_own_certificates(self):
-        participante = User.objects.create_user(
-            email="p@test.com", full_name="P", password="pass", role="participante"
-        )
+        participante = User.objects.create_user(email="p@test.com", full_name="P", password="pass", role="participante")
         participant2 = Participant.objects.create(
             document_id="88888",
             first_name="Par",
@@ -823,9 +775,7 @@ class EnrollmentViewSetTest(TestCase):
                 "event_id": self.event.id,
             },
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
 
     def test_create_enrollment_invalid_participant(self):
         res = self.client.post(
@@ -835,9 +785,7 @@ class EnrollmentViewSetTest(TestCase):
                 "event_id": self.event.id,
             },
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST])
 
 
 # ─────────────────────────────────────────────
@@ -864,14 +812,10 @@ class GoogleAuthViewTest(TestCase):
         from django.conf import settings
 
         settings.GOOGLE_CLIENT_ID = "test-client-id"
-        User.objects.create_user(
-            email="google@test.com", full_name="G", password="pass"
-        )
+        User.objects.create_user(email="google@test.com", full_name="G", password="pass")
         mock_verify.return_value = {"email": "google@test.com", "name": "G"}
         res = self.client.post("/api/auth/google/", {"token": "valid-token"})
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR])
 
     @patch("google.oauth2.id_token.verify_oauth2_token")
     def test_google_auth_new_user(self, mock_verify):
@@ -880,9 +824,7 @@ class GoogleAuthViewTest(TestCase):
         settings.GOOGLE_CLIENT_ID = "test-client-id"
         mock_verify.return_value = {"email": "newgoogle@test.com", "name": "New"}
         res = self.client.post("/api/auth/google/", {"token": "valid-token"})
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR])
 
 
 # ─────────────────────────────────────────────
@@ -896,9 +838,7 @@ class InvitationPublicViewTest(TestCase):
         self.admin = make_admin()
         self.event = make_event(self.admin)
 
-    def _make_invitation(
-        self, email="invite@test.com", status_val="pending", expires=None
-    ):
+    def _make_invitation(self, email="invite@test.com", status_val="pending", expires=None):
         from events.models import EventInvitation
 
         inv = EventInvitation.objects.create(
@@ -947,9 +887,7 @@ class InvitationPublicViewTest(TestCase):
             participant=student,
             created_by=self.admin,
         )
-        res = self.client.post(
-            f"/api/invitations/{inv.token}/accept/", {"email": student.email}
-        )
+        res = self.client.post(f"/api/invitations/{inv.token}/accept/", {"email": student.email})
         self.assertIn(
             res.status_code,
             [
@@ -1005,13 +943,9 @@ class CertificateGenerateTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
-        res = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     @patch("services.email_service.EmailService.send_certificate")
@@ -1023,16 +957,10 @@ class CertificateGenerateTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
-        res = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"}
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"})
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
 
 # ─────────────────────────────────────────────
@@ -1075,9 +1003,7 @@ class ParticipantsImportTest(TestCase):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("imported", res.data)
 
@@ -1086,9 +1012,7 @@ class ParticipantsImportTest(TestCase):
 
         csv_content = b"document_id,first_name,last_name,email,phone\nCSV001,CSV,User,csv@test.com,\n"
         f = SimpleUploadedFile("students.csv", csv_content, content_type="text/csv")
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("imported", res.data)
 
@@ -1100,9 +1024,7 @@ class ParticipantsImportTest(TestCase):
             b"not-real-excel",
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -1188,9 +1110,7 @@ class ViewPermissionClassesTest(TestCase):
 
         factory = APIRequestFactory()
         raw = factory.post("/")
-        user = User.objects.create_user(
-            email="nonadmin@test.com", full_name="N", password="pass"
-        )
+        user = User.objects.create_user(email="nonadmin@test.com", full_name="N", password="pass")
         raw.user = user
         req = Request(raw)
         req._user = user
@@ -1220,9 +1140,7 @@ class ViewPermissionClassesTest(TestCase):
 
         factory = APIRequestFactory()
         raw = factory.post("/")
-        admin = User.objects.create_user(
-            email="staff@test.com", full_name="A", password="pass", is_staff=True
-        )
+        admin = User.objects.create_user(email="staff@test.com", full_name="A", password="pass", is_staff=True)
         raw.user = admin
         req = Request(raw)
         req._user = admin
@@ -1242,32 +1160,20 @@ class InstructorNonAdminTest(TestCase):
         self.regular = make_user("regular@test.com")
 
     def test_non_admin_gets_own_instructors(self):
-        Instructor.objects.create(
-            full_name="Own", email="own@test.com", created_by=self.regular
-        )
-        Instructor.objects.create(
-            full_name="Other", email="other@test.com", created_by=self.admin
-        )
+        Instructor.objects.create(full_name="Own", email="own@test.com", created_by=self.regular)
+        Instructor.objects.create(full_name="Other", email="other@test.com", created_by=self.admin)
         self.client.force_authenticate(user=self.regular)
         res = self.client.get("/api/instructors/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        items = (
-            res.data.get("results", res.data)
-            if isinstance(res.data, dict)
-            else res.data
-        )
+        items = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
         names = [i["full_name"] for i in items]
         self.assertIn("Own", names)
         self.assertNotIn("Other", names)
 
     def test_non_admin_cannot_create_instructor(self):
         self.client.force_authenticate(user=self.regular)
-        res = self.client.post(
-            "/api/instructors/", {"full_name": "X", "email": "x@test.com"}
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        res = self.client.post("/api/instructors/", {"full_name": "X", "email": "x@test.com"})
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
 
 # ─────────────────────────────────────────────
@@ -1280,14 +1186,10 @@ class TemplateUploadTest(TestCase):
         self.client = APIClient()
         self.admin = make_admin()
         self.client.force_authenticate(user=self.admin)
-        self.template = Template.objects.create(
-            name="Upload Test", created_by=self.admin
-        )
+        self.template = Template.objects.create(name="Upload Test", created_by=self.admin)
 
     def test_upload_image_no_file_returns_400(self):
-        res = self.client.post(
-            f"/api/templates/{self.template.id}/upload-image/", {}, format="multipart"
-        )
+        res = self.client.post(f"/api/templates/{self.template.id}/upload-image/", {}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_upload_image_invalid_type_returns_400(self):
@@ -1328,9 +1230,7 @@ class TemplateUploadTest(TestCase):
             {"file": f},
             format="multipart",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     def test_get_preview(self):
         res = self.client.get(f"/api/templates/{self.template.id}/preview/")
@@ -1353,9 +1253,7 @@ class EventsAdvancedTest(TestCase):
         self.template = Template.objects.create(name="T", created_by=self.admin)
 
     def test_send_certificates_empty(self):
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["total_sent"], 0)
 
@@ -1374,12 +1272,8 @@ class EventsAdvancedTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/cert.pdf"
-        )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/cert.pdf")
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_send_invitations_no_emails_returns_400(self):
@@ -1403,9 +1297,7 @@ class EventsAdvancedTest(TestCase):
         mock_mail.return_value = 1
         from events.models import EventInvitation
 
-        EventInvitation.objects.create(
-            event=self.event, email="dup@test.com", created_by=self.admin
-        )
+        EventInvitation.objects.create(event=self.event, email="dup@test.com", created_by=self.admin)
         import json
 
         res = self.client.post(
@@ -1460,12 +1352,8 @@ class EventsAdvancedTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/cert.pdf"
-        )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/finalize/", {"send_certificates": True}
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/cert.pdf")
+        res = self.client.post(f"/api/events/{self.event.id}/finalize/", {"send_certificates": True})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_participante_sees_enrolled_events(self):
@@ -1477,9 +1365,7 @@ class EventsAdvancedTest(TestCase):
             email="part@test.com",
             created_by=self.admin,
         )
-        Enrollment.objects.create(
-            participant=participant2, event=self.event, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=participant2, event=self.event, created_by=self.admin)
         self.client.force_authenticate(user=participante)
         res = self.client.get("/api/events/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -1498,9 +1384,7 @@ class EventsAdvancedTest(TestCase):
             generated_by=self.admin,
         )
         Certificate.objects.filter(pk=cert.pk).update(status="generated")
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("already_exists", res.data["results"])
 
@@ -1569,12 +1453,8 @@ class BulkCertificateGenerationViewTest(TestCase):
 
     def test_post_with_valid_excel(self):
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        res = self.client.post("/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart")
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
 
 # ─────────────────────────────────────────────
@@ -1626,12 +1506,8 @@ class BulkCertificatePreviewViewTest(TestCase):
 
     def test_post_with_valid_excel(self):
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/preview/", {"excel_file": f}, format="multipart"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     def test_post_with_invalid_excel(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1641,12 +1517,8 @@ class BulkCertificatePreviewViewTest(TestCase):
             b"notexcel",
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/certificates/preview/", {"excel_file": f}, format="multipart"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_200_OK]
-        )
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
+        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_200_OK])
 
 
 # ─────────────────────────────────────────────
@@ -1717,9 +1589,7 @@ class EnrollmentViewSetAdvancedTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
 
     def test_create_enrollment_nonexistent_participant(self):
         res = self.client.post(
@@ -1730,9 +1600,7 @@ class EnrollmentViewSetAdvancedTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST])
 
     def test_create_enrollment_nonexistent_event(self):
         res = self.client.post(
@@ -1743,9 +1611,7 @@ class EnrollmentViewSetAdvancedTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST])
 
     def test_non_admin_list_enrollments_returns_403_without_event_pk(self):
         regular = make_user("r@test.com")
@@ -1754,9 +1620,7 @@ class EnrollmentViewSetAdvancedTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_can_list_all_enrollments(self):
-        Enrollment.objects.create(
-            participant=self.participant, event=self.event, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.admin)
         res = self.client.get("/api/enrollments/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -1772,9 +1636,7 @@ class InvitationPublicPostTest(TestCase):
         self.admin = make_admin()
         self.event = make_event(self.admin)
 
-    def _make_invitation(
-        self, email="invite@test.com", status_val="pending", expires=None
-    ):
+    def _make_invitation(self, email="invite@test.com", status_val="pending", expires=None):
         from events.models import EventInvitation
 
         return EventInvitation.objects.create(
@@ -1830,9 +1692,7 @@ class InvitationRegisterViewTest(TestCase):
         self.admin = make_admin()
         self.event = make_event(self.admin)
 
-    def _make_invitation(
-        self, email="reg@test.com", status_val="pending", expires=None
-    ):
+    def _make_invitation(self, email="reg@test.com", status_val="pending", expires=None):
         from events.models import EventInvitation
 
         return EventInvitation.objects.create(
@@ -1881,22 +1741,16 @@ class InvitationRegisterViewTest(TestCase):
                 "phone": "999",
             },
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     def test_register_existing_user_links_student(self):
-        User.objects.create_user(
-            email="existing@test.com", full_name="Exist", password="pass"
-        )
+        User.objects.create_user(email="existing@test.com", full_name="Exist", password="pass")
         inv = self._make_invitation(email="existing@test.com")
         res = self.client.post(
             f"/api/invitations/{inv.token}/register/",
             {"first_name": "Exist", "last_name": "User", "password": "Pass1234!"},
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     def test_register_missing_fields_returns_400(self):
         inv = self._make_invitation(email="incomplete@test.com")
@@ -1941,11 +1795,7 @@ class CertificateViewSetAdvancedTest(TestCase):
         self.client.force_authenticate(user=participante)
         res = self.client.get("/api/certificates/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        items = (
-            res.data.get("results", res.data)
-            if isinstance(res.data, dict)
-            else res.data
-        )
+        items = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
         ids = [c["id"] for c in items]
         self.assertIn(own_cert.id, ids)
         self.assertNotIn(other_cert.id, ids)
@@ -1976,9 +1826,7 @@ class CertificateViewSetAdvancedTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
 
 # ─────────────────────────────────────────────
@@ -1988,9 +1836,7 @@ class CertificateViewSetAdvancedTest(TestCase):
 
 class SerializerEdgeCasesTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="serial@test.com", full_name="S", password="pass", is_staff=True
-        )
+        self.user = User.objects.create_user(email="serial@test.com", full_name="S", password="pass", is_staff=True)
 
     def test_date_field_none_returns_none(self):
         from api.serializers import DateField
@@ -2024,9 +1870,7 @@ class SerializerEdgeCasesTest(TestCase):
         from api.serializers import EventSerializer
         from instructors.models import Instructor
 
-        inst = Instructor.objects.create(
-            full_name="Inst", email="inst@test.com", created_by=self.user
-        )
+        inst = Instructor.objects.create(full_name="Inst", email="inst@test.com", created_by=self.user)
         template = Template.objects.create(name="Tmpl", created_by=self.user)
         event = Event.objects.create(
             name="Ev",
@@ -2042,9 +1886,7 @@ class SerializerEdgeCasesTest(TestCase):
     def test_user_login_serializer_inactive_user(self):
         from api.serializers import UserLoginSerializer
 
-        User.objects.create_user(
-            email="inactive@test.com", full_name="I", password="pass", is_active=False
-        )
+        User.objects.create_user(email="inactive@test.com", full_name="I", password="pass", is_active=False)
         s = UserLoginSerializer(data={"email": "inactive@test.com", "password": "pass"})
         self.assertFalse(s.is_valid())
 
@@ -2057,9 +1899,7 @@ class SerializerEdgeCasesTest(TestCase):
     def test_template_serializer_with_background_url(self):
         from api.serializers import TemplateSerializer
 
-        t = Template.objects.create(
-            name="BG", created_by=self.user, background_url="http://example.com/bg.png"
-        )
+        t = Template.objects.create(name="BG", created_by=self.user, background_url="http://example.com/bg.png")
         s = TemplateSerializer(t)
         self.assertEqual(s.data["background_image_url"], "http://example.com/bg.png")
 
@@ -2067,9 +1907,7 @@ class SerializerEdgeCasesTest(TestCase):
         from api.serializers import InvitationDetailSerializer
         from events.models import EventInvitation
 
-        event = Event.objects.create(
-            name="Inv Ev", event_date=date(2026, 7, 1), created_by=self.user
-        )
+        event = Event.objects.create(name="Inv Ev", event_date=date(2026, 7, 1), created_by=self.user)
         participant = Participant.objects.create(
             document_id="INVSER",
             first_name="A",
@@ -2216,9 +2054,7 @@ class CertificateViewSetCoverageTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
 
     def test_non_admin_create_certificate_uses_is_admin_user_permission(self):
         regular = make_user("certperm@test.com")
@@ -2231,9 +2067,7 @@ class CertificateViewSetCoverageTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     @patch("certificados.models.Certificate.generate")
     def test_generate_exception_caught_returns_400(self, mock_generate):
@@ -2276,16 +2110,12 @@ class CertificateViewSetCoverageTest(TestCase):
             },
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     def test_unauthenticated_cert_queryset_returns_none(self):
         self.client.force_authenticate(user=None)
         res = self.client.get("/api/certificates/verify/?code=ABCD-ABCD-ABCD-ABCD")
-        self.assertIn(
-            res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND]
-        )
+        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
 
 
 # ─────────────────────────────────────────────
@@ -2326,9 +2156,7 @@ class EventsCertificateActionsTest(TestCase):
             generated_by=self.admin,
             status="pending",
         )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_send_certificates_with_participant_ids_filter(self):
@@ -2338,9 +2166,7 @@ class EventsCertificateActionsTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/cert.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/cert.pdf")
         with patch("services.email_service.EmailService.send_certificate") as mock_send:
             mock_send.return_value = {"success": True, "message": "sent"}
             res = self.client.post(
@@ -2362,9 +2188,7 @@ class EventsCertificateActionsTest(TestCase):
             generated_by=self.admin,
             status="pending",
         )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     @patch("certificados.models.Certificate.deliver")
@@ -2376,12 +2200,8 @@ class EventsCertificateActionsTest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/cert.pdf"
-        )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/cert.pdf")
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(res.data["total_failed"], 0)
 
@@ -2426,9 +2246,7 @@ class EventsEmailParsingTest(TestCase):
     def test_send_invitations_file_read_error_returns_400(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        f = SimpleUploadedFile(
-            "bad.csv", b"corrupted\x00\x01\x02", content_type="text/csv"
-        )
+        f = SimpleUploadedFile("bad.csv", b"corrupted\x00\x01\x02", content_type="text/csv")
         with patch("pandas.read_csv", side_effect=Exception("read error")):
             res = self.client.post(
                 f"/api/events/{self.event.id}/invitations/send/",
@@ -2511,9 +2329,7 @@ class GenerateCertificatesLoopExceptionTest(TestCase):
     def test_generate_certificates_exception_logged_in_errors(self, mock_objects):
         mock_objects.get_or_create.side_effect = Exception("DB error")
         mock_objects.filter.return_value = Certificate.objects.filter(event=self.event)
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
@@ -2556,53 +2372,35 @@ class BulkCertificateViewExceptionTest(TestCase):
 
     def test_bulk_generate_post_with_valid_excel_reaches_processing(self):
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        res = self.client.post("/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart")
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     @patch("api.views.BulkCertificateGeneratorService.generate_from_excel")
     def test_bulk_generate_exception_returns_400(self, mock_gen):
         mock_gen.side_effect = Exception("processing error")
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart"
-        )
+        res = self.client.post("/api/certificates/generate-bulk/", {"excel_file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_bulk_preview_post_with_valid_excel(self):
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/preview/", {"excel_file": f}, format="multipart"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
     @patch("api.views.ExcelProcessingService")
     def test_bulk_preview_excel_import_error_returns_400(self, mock_svc):
         from procesos.services import ExcelImportError
 
-        mock_svc.return_value.read_and_validate_structure.side_effect = (
-            ExcelImportError("bad file")
-        )
+        mock_svc.return_value.read_and_validate_structure.side_effect = ExcelImportError("bad file")
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/preview/", {"excel_file": f}, format="multipart"
-        )
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     @patch("api.views.ExcelProcessingService")
     def test_bulk_preview_generic_exception_returns_400(self, mock_svc):
-        mock_svc.return_value.read_and_validate_structure.side_effect = Exception(
-            "unexpected"
-        )
+        mock_svc.return_value.read_and_validate_structure.side_effect = Exception("unexpected")
         f = self._make_excel_file()
-        res = self.client.post(
-            "/api/certificates/preview/", {"excel_file": f}, format="multipart"
-        )
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     @patch("api.views.ExcelProcessingService")
@@ -2610,19 +2408,13 @@ class BulkCertificateViewExceptionTest(TestCase):
         from procesos.services import ExcelImportError
 
         mock_svc.return_value.process_records.side_effect = ExcelImportError("bad data")
-        res = self.client.post(
-            "/api/certificates/process/", {"data": [{"full_name": "X"}]}, format="json"
-        )
+        res = self.client.post("/api/certificates/process/", {"data": [{"full_name": "X"}]}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     @patch("api.views.ExcelProcessingService")
     def test_bulk_process_generic_exception_returns_500(self, mock_svc):
-        mock_svc.return_value.process_records.side_effect = RuntimeError(
-            "unexpected error"
-        )
-        res = self.client.post(
-            "/api/certificates/process/", {"data": [{"full_name": "X"}]}, format="json"
-        )
+        mock_svc.return_value.process_records.side_effect = RuntimeError("unexpected error")
+        res = self.client.post("/api/certificates/process/", {"data": [{"full_name": "X"}]}, format="json")
         self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2662,17 +2454,11 @@ class EnrollmentViewSetDestroyAttendanceTest(TestCase):
         self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
 
     def test_attendance_missing_field_returns_400(self):
-        res = self.client.patch(
-            f"/api/enrollments/{self.enrollment.id}/attendance/", {}, format="json"
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND]
-        )
+        res = self.client.patch(f"/api/enrollments/{self.enrollment.id}/attendance/", {}, format="json")
+        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
 
     def test_attendance_not_found(self):
-        res = self.client.patch(
-            "/api/enrollments/99999/attendance/", {"attendance": True}, format="json"
-        )
+        res = self.client.patch("/api/enrollments/99999/attendance/", {"attendance": True}, format="json")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_non_admin_list_returns_403(self):
@@ -2777,18 +2563,14 @@ class ImportStudentsErrorPathTest(TestCase):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_template_non_admin_cannot_create(self):
         regular = make_user("tperm@test.com")
         self.client.force_authenticate(user=regular)
         res = self.client.post("/api/templates/", {"name": "Test"})
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     def test_import_with_duplicate_email_triggers_integrity_error(self):
         from io import BytesIO
@@ -2816,9 +2598,7 @@ class ImportStudentsErrorPathTest(TestCase):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data.get("errors", [])), 0)
 
@@ -2849,9 +2629,7 @@ class ImportStudentsErrorPathTest(TestCase):
             buf.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        res = self.client.post(
-            "/api/participants/import_students/", {"file": f}, format="multipart"
-        )
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data.get("errors", [])), 0)
 
@@ -2867,9 +2645,7 @@ class FinalizeEventCertificateSentTest(TestCase):
         self.admin = make_admin("fin_admin@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="FinalizeTest")
-        self.participant = make_participant(
-            self.admin, doc="FINSTUD", email="finstud@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="FINSTUD", email="finstud@test.com")
 
     @patch("certificados.models.Certificate.deliver")
     def test_finalize_with_send_certificates_covers_sent_fields(self, mock_deliver):
@@ -2885,13 +2661,9 @@ class FinalizeEventCertificateSentTest(TestCase):
             attendance=True,
             created_by=self.admin,
         )
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.admin
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.admin)
         Certificate.objects.filter(pk=cert.pk).update(status="generated")
-        res = self.client.post(
-            f"/api/events/{self.event.id}/finalize/", {"send_certificates": True}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/finalize/", {"send_certificates": True})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["certificates_sent"], 1)
 
@@ -2908,13 +2680,9 @@ class FinalizeEventCertificateSentTest(TestCase):
             attendance=True,
             created_by=self.admin,
         )
-        cert = Certificate.objects.create(
-            participant=self.participant, event=event2, generated_by=self.admin
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=event2, generated_by=self.admin)
         Certificate.objects.filter(pk=cert.pk).update(status="generated")
-        res = self.client.post(
-            f"/api/events/{event2.id}/finalize/", {"send_certificates": True}
-        )
+        res = self.client.post(f"/api/events/{event2.id}/finalize/", {"send_certificates": True})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["certificates_sent"], 0)
 
@@ -2932,9 +2700,7 @@ class EnrollmentEdgeCasesTest(TestCase):
         self.event = make_event(self.admin)
 
     def test_create_enrollment_missing_participant_id_returns_400(self):
-        res = self.client.post(
-            "/api/enrollments/", {"event_id": self.event.id}, format="json"
-        )
+        res = self.client.post("/api/enrollments/", {"event_id": self.event.id}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_non_admin_cannot_create_enrollment(self):
@@ -2945,9 +2711,7 @@ class EnrollmentEdgeCasesTest(TestCase):
             {"participant_id": 1, "event_id": self.event.id},
             format="json",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
 
 # ─────────────────────────────────────────────
@@ -2973,9 +2737,7 @@ class TemplateUploadImageAltKeyTest(TestCase):
             {"background": img},
             format="multipart",
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
-        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
 
 
 # ─────────────────────────────────────────────
@@ -2985,9 +2747,7 @@ class TemplateUploadImageAltKeyTest(TestCase):
 
 class SerializerCoverageTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="ser_cov@test.com", full_name="S", password="pass"
-        )
+        self.user = User.objects.create_user(email="ser_cov@test.com", full_name="S", password="pass")
 
     def test_date_field_to_internal_value_empty_string_returns_none(self):
         from api.serializers import DateField
@@ -3014,18 +2774,14 @@ class SerializerCoverageTest(TestCase):
         mock_image.url = "http://example.com/real-bg.png"
         t.background_image = mock_image
         s = TemplateSerializer(t)
-        self.assertEqual(
-            s.get_background_image_url(t), "http://example.com/real-bg.png"
-        )
+        self.assertEqual(s.get_background_image_url(t), "http://example.com/real-bg.png")
 
     def test_invitation_detail_participant_exists_by_email_when_no_student_linked(self):
         from api.serializers import InvitationDetailSerializer
         from events.models import Event, EventInvitation
         from participants.models import Participant
 
-        event = Event.objects.create(
-            name="SrlEv", event_date=date(2026, 9, 1), created_by=self.user
-        )
+        event = Event.objects.create(name="SrlEv", event_date=date(2026, 9, 1), created_by=self.user)
         Participant.objects.create(
             document_id="SRLCOV1",
             first_name="A",
@@ -3043,9 +2799,7 @@ class SerializerCoverageTest(TestCase):
         from api.serializers import InvitationDetailSerializer
         from events.models import Event, EventInvitation
 
-        event = Event.objects.create(
-            name="SrlEv2", event_date=date(2026, 9, 2), created_by=self.user
-        )
+        event = Event.objects.create(name="SrlEv2", event_date=date(2026, 9, 2), created_by=self.user)
         inv = EventInvitation.objects.create(
             event=event, email="nobody@test.com", participant=None, created_by=self.user
         )
@@ -3094,9 +2848,7 @@ class DebugURLPatternTest(TestCase):
 
         original = sys.modules.pop("config.urls", None)
         try:
-            with override_settings(
-                DEBUG=True, MEDIA_URL="/media/", MEDIA_ROOT="/tmp/media"
-            ):
+            with override_settings(DEBUG=True, MEDIA_URL="/media/", MEDIA_ROOT="/tmp/media"):
                 import config.urls as debug_urls
 
                 self.assertGreater(len(debug_urls.urlpatterns), 0)
@@ -3365,9 +3117,7 @@ class CoordinadorOperationalAccessTest(TestCase):
         self.template = Template.objects.create(name="T", created_by=self.admin)
 
     def test_coordinator_can_enroll_participant(self):
-        res = self.client.post(
-            f"/api/events/{self.event.id}/enroll/", {"student_id": self.participant.id}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/enroll/", {"student_id": self.participant.id})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_generate_certificates(self):
@@ -3377,15 +3127,11 @@ class CoordinadorOperationalAccessTest(TestCase):
             attendance=True,
             created_by=self.admin,
         )
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_coordinator_can_send_certificates(self):
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/send/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
@@ -3412,25 +3158,19 @@ class LoginAttemptLoggingTest(TestCase):
 
     def test_failed_login_nonexistent_email_logs_warning(self):
         with self.assertLogs("api.views", level="WARNING") as cm:
-            res = self.client.post(
-                "/api/login/", {"email": "ghost@test.com", "password": "anypassword"}
-            )
+            res = self.client.post("/api/login/", {"email": "ghost@test.com", "password": "anypassword"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(any("LOGIN_FAILED" in line for line in cm.output))
 
     def test_successful_login_logs_info(self):
         with self.assertLogs("api.views", level="INFO") as cm:
-            res = self.client.post(
-                "/api/login/", {"email": "log_admin@test.com", "password": "pass123"}
-            )
+            res = self.client.post("/api/login/", {"email": "log_admin@test.com", "password": "pass123"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(any("LOGIN_SUCCESS" in line for line in cm.output))
 
     def test_failed_login_logs_attempted_email(self):
         with self.assertLogs("api.views", level="WARNING") as cm:
-            self.client.post(
-                "/api/login/", {"email": "target@test.com", "password": "wrong"}
-            )
+            self.client.post("/api/login/", {"email": "target@test.com", "password": "wrong"})
         self.assertTrue(any("target@test.com" in line for line in cm.output))
 
 
@@ -3452,11 +3192,7 @@ class TemplateVisibilityTest(TestCase):
         self.client.force_authenticate(user=self.admin)
         res = self.client.get("/api/templates/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        items = (
-            res.data.get("results", res.data)
-            if isinstance(res.data, dict)
-            else res.data
-        )
+        items = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
         names = [t["name"] for t in items]
         self.assertIn("OtherTemplate", names)
 
@@ -3466,11 +3202,7 @@ class TemplateVisibilityTest(TestCase):
         self.client.force_authenticate(user=coord)
         res = self.client.get("/api/templates/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        items = (
-            res.data.get("results", res.data)
-            if isinstance(res.data, dict)
-            else res.data
-        )
+        items = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
         names = [t["name"] for t in items]
         self.assertIn("AdminTemplate", names)
 
@@ -3481,11 +3213,7 @@ class TemplateVisibilityTest(TestCase):
         self.client.force_authenticate(user=participante)
         res = self.client.get("/api/templates/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        items = (
-            res.data.get("results", res.data)
-            if isinstance(res.data, dict)
-            else res.data
-        )
+        items = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
         names = [t["name"] for t in items]
         self.assertIn("ParticipanteOwned", names)
         self.assertNotIn("AdminOwned", names)
@@ -3526,9 +3254,7 @@ class CoordinadorWriteAccessTest(TestCase):
             email="cwupd@test.com",
             created_by=self.admin,
         )
-        res = self.client.patch(
-            f"/api/participants/{p.id}/", {"first_name": "Actualizado"}
-        )
+        res = self.client.patch(f"/api/participants/{p.id}/", {"first_name": "Actualizado"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["first_name"], "Actualizado")
 
@@ -3555,9 +3281,7 @@ class CoordinadorWriteAccessTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_create_template(self):
-        res = self.client.post(
-            "/api/templates/", {"name": "Coord Template", "category": "Test"}
-        )
+        res = self.client.post("/api/templates/", {"name": "Coord Template", "category": "Test"})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_create_enrollment(self):
@@ -3578,18 +3302,14 @@ class CoordinadorWriteAccessTest(TestCase):
         admin = make_admin("coord_gen_adm@test.com")
         event = make_event(admin, name="CW Gen Event")
         participant = make_participant(admin, doc="CW005", email="cwgen@test.com")
-        Enrollment.objects.create(
-            participant=participant, event=event, attendance=True, created_by=admin
-        )
+        Enrollment.objects.create(participant=participant, event=event, attendance=True, created_by=admin)
         cert = Certificate.objects.create(
             participant=participant,
             event=event,
             template=Template.objects.create(name="T", created_by=admin),
             generated_by=admin,
         )
-        with patch(
-            "services.pdf_service.PDFService.generate_certificate_pdf"
-        ) as mock_pdf:
+        with patch("services.pdf_service.PDFService.generate_certificate_pdf") as mock_pdf:
             mock_pdf.return_value = {"success": True, "path": "/media/cert.pdf"}
             res = self.client.post(f"/api/certificates/{cert.id}/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -3598,18 +3318,12 @@ class CoordinadorWriteAccessTest(TestCase):
         admin = make_admin("coord_del_adm@test.com")
         event = make_event(admin, name="CW Del Event")
         participant = make_participant(admin, doc="CW006", email="cwdel2@test.com")
-        cert = Certificate.objects.create(
-            participant=participant, event=event, generated_by=admin
-        )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        cert = Certificate.objects.create(participant=participant, event=event, generated_by=admin)
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
         with patch("services.email_service.EmailService.send_certificate") as mock_send:
             mock_send.return_value = {"success": True, "message": "sent"}
-            res = self.client.post(
-                f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-            )
+            res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_participante_cannot_create_participant(self):
@@ -3624,27 +3338,19 @@ class CoordinadorWriteAccessTest(TestCase):
                 "email": "nopart@test.com",
             },
         )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     def test_participante_cannot_create_instructor(self):
         participante = make_user("cwnoinst@test.com")
         self.client.force_authenticate(user=participante)
-        res = self.client.post(
-            "/api/instructors/", {"full_name": "X", "email": "x@test.com"}
-        )
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        res = self.client.post("/api/instructors/", {"full_name": "X", "email": "x@test.com"})
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     def test_participante_cannot_create_template(self):
         participante = make_user("cwnotmpl@test.com")
         self.client.force_authenticate(user=participante)
         res = self.client.post("/api/templates/", {"name": "X"})
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
 
 # ─────────────────────────────────────────────
@@ -3677,18 +3383,14 @@ class WhatsAppAPITest(TestCase):
             template=self.template,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/cert.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/cert.pdf")
         cert.refresh_from_db()
         return cert
 
     def test_tc020_whatsapp_api_without_phone_returns_400(self):
         """TC-020: API debe devolver 400 si participante no tiene teléfono."""
         cert = self._make_cert(phone="")
-        res = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"}
-        )
+        res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     @patch("services.whatsapp_service.get_whatsapp_service")
@@ -3702,9 +3404,7 @@ class WhatsAppAPITest(TestCase):
         }
         mock_get.return_value = mock_ws
         cert = self._make_cert(phone="999000111")
-        res = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"}
-        )
+        res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "whatsapp"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     @patch("services.email_service.EmailService.send_certificate")
@@ -3716,12 +3416,8 @@ class WhatsAppAPITest(TestCase):
         cert.refresh_from_db()
         original_pdf = cert.pdf_url
 
-        res1 = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-        )
-        res2 = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-        )
+        res1 = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
+        res2 = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
 
         self.assertEqual(res1.status_code, status.HTTP_200_OK)
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
@@ -3743,9 +3439,7 @@ class AttendanceAPIBlockTest(TestCase):
         self.admin = make_admin("att_api@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin)
-        self.participant = make_participant(
-            self.admin, doc="ATT_API_01", email="att_api@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="ATT_API_01", email="att_api@test.com")
         self.template = Template.objects.create(name="T", created_by=self.admin)
 
     def test_tc011_generate_blocked_when_attendance_false_via_api(self):
@@ -3814,9 +3508,7 @@ class RateLimitingTest(TestCase):
         self.assertIn("anon", rates)
         self.assertIn("user", rates)
 
-    @patch(
-        "rest_framework.throttling.AnonRateThrottle.get_rate", return_value="1/minute"
-    )
+    @patch("rest_framework.throttling.AnonRateThrottle.get_rate", return_value="1/minute")
     def test_anon_rate_limit_returns_429(self, _mock):
         """TC-025: Second anonymous request past the 1/minute limit → 429."""
         cache.clear()
@@ -3875,9 +3567,7 @@ class TokenValidityTest(TestCase):
 
     def test_garbled_token_returns_401(self):
         self.client.credentials(HTTP_AUTHORIZATION="Bearer notavalidtoken.abc.xyz")
-        self.assertEqual(
-            self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED
-        )
+        self.assertEqual(self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_expired_token_returns_401(self):
         import datetime
@@ -3885,13 +3575,9 @@ class TokenValidityTest(TestCase):
         from rest_framework_simplejwt.tokens import AccessToken
 
         token = AccessToken.for_user(self.admin)
-        token.payload["exp"] = int(
-            datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc).timestamp()
-        )
+        token.payload["exp"] = int(datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc).timestamp())
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(token)}")
-        self.assertEqual(
-            self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED
-        )
+        self.assertEqual(self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_valid_refresh_returns_new_access_token(self):
         from rest_framework_simplejwt.tokens import RefreshToken
@@ -3918,9 +3604,7 @@ class AuthRequiredTest(TestCase):
         self.client = APIClient()  # no credentials
 
     def test_me_requires_auth(self):
-        self.assertEqual(
-            self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED
-        )
+        self.assertEqual(self.client.get("/api/me/").status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_participants_requires_auth(self):
         self.assertEqual(
@@ -3929,9 +3613,7 @@ class AuthRequiredTest(TestCase):
         )
 
     def test_events_requires_auth(self):
-        self.assertEqual(
-            self.client.get("/api/events/").status_code, status.HTTP_401_UNAUTHORIZED
-        )
+        self.assertEqual(self.client.get("/api/events/").status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_certificates_requires_auth(self):
         self.assertEqual(
@@ -3940,9 +3622,7 @@ class AuthRequiredTest(TestCase):
         )
 
     def test_templates_requires_auth(self):
-        self.assertEqual(
-            self.client.get("/api/templates/").status_code, status.HTTP_401_UNAUTHORIZED
-        )
+        self.assertEqual(self.client.get("/api/templates/").status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_instructors_requires_auth(self):
         self.assertEqual(
@@ -3985,9 +3665,7 @@ class InputValidationTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_enrollment_nonexistent_event_returns_400_or_404(self):
-        participant = make_participant(
-            self.admin, doc="IV29P1", email="iv29p1@test.com"
-        )
+        participant = make_participant(self.admin, doc="IV29P1", email="iv29p1@test.com")
         res = self.client.post(
             "/api/enrollments/",
             {
@@ -4068,9 +3746,7 @@ class FullHappyPathE2ETest(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {login_res.data["access"]}')
 
         # 2. Create event
-        ev = self.client.post(
-            "/api/events/", {"name": "E2E Event", "event_date": "2026-08-29"}
-        )
+        ev = self.client.post("/api/events/", {"name": "E2E Event", "event_date": "2026-08-29"})
         self.assertEqual(ev.status_code, status.HTTP_201_CREATED)
         event_id = ev.data["id"]
 
@@ -4120,16 +3796,12 @@ class FullHappyPathE2ETest(TestCase):
         self.assertEqual(gen.data["status"], "success")
 
         # 7. Deliver via email
-        delv = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-        )
+        delv = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
         self.assertEqual(delv.status_code, status.HTTP_200_OK)
 
         # 8. Public verification
         cert.refresh_from_db()
-        verify = self.client.get(
-            f"/api/certificates/verify/?code={cert.verification_code}"
-        )
+        verify = self.client.get(f"/api/certificates/verify/?code={cert.verification_code}")
         self.assertEqual(verify.status_code, status.HTTP_200_OK)
         self.assertEqual(verify.data["status"], "success")
 
@@ -4156,27 +3828,15 @@ class BatchGenerationAttendanceTest(TestCase):
         p2 = make_participant(self.admin, doc="B31P2", email="b31p2@test.com")
         p3 = make_participant(self.admin, doc="B31P3", email="b31p3@test.com")
 
-        Enrollment.objects.create(
-            participant=p1, event=self.event, attendance=True, created_by=self.admin
-        )
-        Enrollment.objects.create(
-            participant=p2, event=self.event, attendance=True, created_by=self.admin
-        )
-        Enrollment.objects.create(
-            participant=p3, event=self.event, attendance=False, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=p1, event=self.event, attendance=True, created_by=self.admin)
+        Enrollment.objects.create(participant=p2, event=self.event, attendance=True, created_by=self.admin)
+        Enrollment.objects.create(participant=p3, event=self.event, attendance=False, created_by=self.admin)
 
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["created"], 2)
 
-        ids = set(
-            Certificate.objects.filter(event=self.event).values_list(
-                "participant_id", flat=True
-            )
-        )
+        ids = set(Certificate.objects.filter(event=self.event).values_list("participant_id", flat=True))
         self.assertIn(p1.id, ids)
         self.assertIn(p2.id, ids)
         self.assertNotIn(p3.id, ids)
@@ -4185,13 +3845,9 @@ class BatchGenerationAttendanceTest(TestCase):
     def test_all_absent_creates_zero_certificates(self, mock_pdf):
         mock_pdf.return_value = {"success": True, "path": "/media/b.pdf"}
         p = make_participant(self.admin, doc="B31P4", email="b31p4@test.com")
-        Enrollment.objects.create(
-            participant=p, event=self.event, attendance=False, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=p, event=self.event, attendance=False, created_by=self.admin)
 
-        res = self.client.post(
-            f"/api/events/{self.event.id}/certificates/generate/", {}
-        )
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/generate/", {})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["created"], 0)
         self.assertEqual(Certificate.objects.filter(event=self.event).count(), 0)
@@ -4216,22 +3872,12 @@ class EventStatsAccuracyTest(TestCase):
         p2 = make_participant(self.admin, doc="S32P2", email="s32p2@test.com")
         p3 = make_participant(self.admin, doc="S32P3", email="s32p3@test.com")
 
-        Enrollment.objects.create(
-            participant=p1, event=self.event, attendance=True, created_by=self.admin
-        )
-        Enrollment.objects.create(
-            participant=p2, event=self.event, attendance=True, created_by=self.admin
-        )
-        Enrollment.objects.create(
-            participant=p3, event=self.event, attendance=False, created_by=self.admin
-        )
+        Enrollment.objects.create(participant=p1, event=self.event, attendance=True, created_by=self.admin)
+        Enrollment.objects.create(participant=p2, event=self.event, attendance=True, created_by=self.admin)
+        Enrollment.objects.create(participant=p3, event=self.event, attendance=False, created_by=self.admin)
 
-        Certificate.objects.create(
-            participant=p1, event=self.event, generated_by=self.admin
-        )
-        c2 = Certificate.objects.create(
-            participant=p2, event=self.event, generated_by=self.admin
-        )
+        Certificate.objects.create(participant=p1, event=self.event, generated_by=self.admin)
+        c2 = Certificate.objects.create(participant=p2, event=self.event, generated_by=self.admin)
         Certificate.objects.filter(pk=c2.pk).update(status="generated")
 
         res = self.client.get(f"/api/events/{self.event.id}/stats/")
@@ -4261,17 +3907,13 @@ class DeliveryHistoryE2ETest(TestCase):
         self.admin = make_admin("hist33@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Hist TC-033")
-        self.participant = make_participant(
-            self.admin, doc="H33P1", email="h33@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="H33P1", email="h33@test.com")
         self.cert = Certificate.objects.create(
             participant=self.participant,
             event=self.event,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=self.cert.pk).update(
-            status="generated", pdf_url="/media/h.pdf"
-        )
+        Certificate.objects.filter(pk=self.cert.pk).update(status="generated", pdf_url="/media/h.pdf")
         self.cert.refresh_from_db()
 
     def test_history_empty_before_delivery(self):
@@ -4284,14 +3926,10 @@ class DeliveryHistoryE2ETest(TestCase):
         """TC-033: Two deliver() calls produce two entries in history."""
         mock_send.return_value = {"success": True, "message": "ok"}
 
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
         Certificate.objects.filter(pk=self.cert.pk).update(status="failed")
         self.cert.refresh_from_db()
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
 
         res = self.client.get(f"/api/certificates/{self.cert.id}/history/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -4303,14 +3941,10 @@ class DeliveryHistoryE2ETest(TestCase):
         mock_send.return_value = {"success": True, "message": "ok"}
         original_pdf = self.cert.pdf_url
 
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
         Certificate.objects.filter(pk=self.cert.pk).update(status="failed")
         self.cert.refresh_from_db()
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
 
         self.cert.refresh_from_db()
         self.assertEqual(self.cert.pdf_url, original_pdf)
@@ -4335,9 +3969,7 @@ class CoordinatorUATTest(TestCase):
         mock_pdf.return_value = {"success": True, "path": "/media/uat34.pdf"}
         mock_email.return_value = {"success": True, "message": "sent"}
 
-        ev = self.client.post(
-            "/api/events/", {"name": "UAT34 Event", "event_date": "2026-10-15"}
-        )
+        ev = self.client.post("/api/events/", {"name": "UAT34 Event", "event_date": "2026-10-15"})
         self.assertEqual(ev.status_code, status.HTTP_201_CREATED)
         event_id = ev.data["id"]
 
@@ -4378,9 +4010,7 @@ class CoordinatorUATTest(TestCase):
         self.assertIsNotNone(cert)
         self.assertEqual(cert.status, "generated")
 
-        delv = self.client.post(
-            f"/api/certificates/{cert.id}/deliver/", {"method": "email"}
-        )
+        delv = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
         self.assertEqual(delv.status_code, status.HTTP_200_OK)
         cert.refresh_from_db()
         self.assertEqual(cert.status, "sent")
@@ -4398,9 +4028,7 @@ class PublicVerificationE2ETest(TestCase):
         self.client = APIClient()
         self.admin = make_admin("pv35@test.com")
         self.event = make_event(self.admin, name="PV35 Event")
-        self.participant = make_participant(
-            self.admin, doc="PV35P1", email="pv35@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="PV35P1", email="pv35@test.com")
 
     def test_valid_code_returns_200(self):
         cert = Certificate.objects.create(
@@ -4408,9 +4036,7 @@ class PublicVerificationE2ETest(TestCase):
             event=self.event,
             generated_by=self.admin,
         )
-        res = self.client.get(
-            f"/api/certificates/verify/?code={cert.verification_code}"
-        )
+        res = self.client.get(f"/api/certificates/verify/?code={cert.verification_code}")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["status"], "success")
 
@@ -4428,13 +4054,9 @@ class PublicVerificationE2ETest(TestCase):
             event=self.event,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            expires_at=timezone.now() - timedelta(days=1)
-        )
+        Certificate.objects.filter(pk=cert.pk).update(expires_at=timezone.now() - timedelta(days=1))
         cert.refresh_from_db()
-        res = self.client.get(
-            f"/api/certificates/verify/?code={cert.verification_code}"
-        )
+        res = self.client.get(f"/api/certificates/verify/?code={cert.verification_code}")
         self.assertEqual(res.status_code, status.HTTP_410_GONE)
 
     def test_missing_code_returns_400(self):
@@ -4470,26 +4092,20 @@ class CertificateRetryEndpointTest(TestCase):
         self.admin = make_admin("retry4@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Retry P4 Event")
-        self.participant = make_participant(
-            self.admin, doc="R4P1", email="r4p1@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="R4P1", email="r4p1@test.com")
         self.cert = Certificate.objects.create(
             participant=self.participant,
             event=self.event,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=self.cert.pk).update(
-            status="failed", pdf_url="/media/retry.pdf"
-        )
+        Certificate.objects.filter(pk=self.cert.pk).update(status="failed", pdf_url="/media/retry.pdf")
         self.cert.refresh_from_db()
 
     @patch("services.email_service.EmailService.send_certificate")
     def test_retry_failed_cert_with_explicit_method(self, mock_send):
         """Retry a failed cert providing method explicitly → 200."""
         mock_send.return_value = {"success": True, "message": "resent"}
-        res = self.client.post(
-            f"/api/certificates/{self.cert.id}/retry/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["status"], "success")
 
@@ -4514,9 +4130,7 @@ class CertificateRetryEndpointTest(TestCase):
         """Retry a generated (non-failed) cert → 400."""
         Certificate.objects.filter(pk=self.cert.pk).update(status="generated")
         self.cert.refresh_from_db()
-        res = self.client.post(
-            f"/api/certificates/{self.cert.id}/retry/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_retry_without_method_and_no_history_returns_400(self):
@@ -4531,14 +4145,10 @@ class CertificateRetryEndpointTest(TestCase):
         from deliveries.models import DeliveryLog
 
         before = DeliveryLog.objects.filter(certificate=self.cert).count()
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/retry/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         # cert is now 'sent'; force back to failed for a second retry
         Certificate.objects.filter(pk=self.cert.pk).update(status="failed")
-        self.client.post(
-            f"/api/certificates/{self.cert.id}/retry/", {"method": "email"}
-        )
+        self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         after = DeliveryLog.objects.filter(certificate=self.cert).count()
         self.assertEqual(after - before, 2)
 
@@ -4554,9 +4164,7 @@ class CertificateRetryEndpointTest(TestCase):
         mock_send.return_value = {"success": True, "message": "ok"}
         coord = make_coordinator("retry4_coord@test.com")
         self.client.force_authenticate(user=coord)
-        res = self.client.post(
-            f"/api/certificates/{self.cert.id}/retry/", {"method": "email"}
-        )
+        res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
@@ -4573,9 +4181,7 @@ class CertificateExportEndpointTest(TestCase):
         self.admin = make_admin("export4@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Export P4 Event")
-        self.participant = make_participant(
-            self.admin, doc="EXP4P1", email="exp4p1@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="EXP4P1", email="exp4p1@test.com")
         self.cert = Certificate.objects.create(
             participant=self.participant,
             event=self.event,
@@ -4637,9 +4243,7 @@ class CertificateExportEndpointTest(TestCase):
         """event_id filter narrows results to that event only."""
         other_event = make_event(self.admin, name="Other Export Event")
         other_part = make_participant(self.admin, doc="EXP4P2", email="exp4p2@test.com")
-        Certificate.objects.create(
-            participant=other_part, event=other_event, generated_by=self.admin
-        )
+        Certificate.objects.create(participant=other_part, event=other_event, generated_by=self.admin)
 
         res = self.client.get(f"/api/certificates/export/?event_id={self.event.id}")
         content = res.content.decode()
@@ -4700,9 +4304,7 @@ class AuditLogModelTest(TestCase):
     def setUp(self):
         self.admin = make_admin("audit_model@test.com")
         self.event = make_event(self.admin, name="Audit Event")
-        self.participant = make_participant(
-            self.admin, doc="AM01", email="am01@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="AM01", email="am01@test.com")
         self.cert = Certificate.objects.create(
             participant=self.participant,
             event=self.event,
@@ -4758,9 +4360,7 @@ class AuditLogInstrumentationTest(TestCase):
         self.admin = make_admin("audit_instr@test.com")
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Instr Event")
-        self.participant = make_participant(
-            self.admin, doc="AI01", email="ai01@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="AI01", email="ai01@test.com")
 
     def test_successful_login_logs_user_login(self):
         User.objects.create_user(
@@ -4771,19 +4371,13 @@ class AuditLogInstrumentationTest(TestCase):
             is_staff=True,
         )
         before = AuditLog.objects.filter(action="user_login").count()
-        self.client.post(
-            "/api/login/", {"email": "login_aud@test.com", "password": "Pass1234!"}
-        )
-        self.assertEqual(
-            AuditLog.objects.filter(action="user_login").count(), before + 1
-        )
+        self.client.post("/api/login/", {"email": "login_aud@test.com", "password": "Pass1234!"})
+        self.assertEqual(AuditLog.objects.filter(action="user_login").count(), before + 1)
 
     def test_failed_login_logs_user_login_failed(self):
         before = AuditLog.objects.filter(action="user_login_failed").count()
         self.client.post("/api/login/", {"email": "nobody@x.com", "password": "wrong"})
-        self.assertEqual(
-            AuditLog.objects.filter(action="user_login_failed").count(), before + 1
-        )
+        self.assertEqual(AuditLog.objects.filter(action="user_login_failed").count(), before + 1)
 
     @patch("services.pdf_service.PDFService.generate_certificate_pdf")
     def test_generate_logs_certificate_generated(self, mock_pdf):
@@ -4814,9 +4408,7 @@ class AuditLogInstrumentationTest(TestCase):
             event=self.event,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/m/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/m/c.pdf")
         before = AuditLog.objects.filter(action="certificate_delivered").count()
         self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
         self.assertEqual(
@@ -4832,9 +4424,7 @@ class AuditLogInstrumentationTest(TestCase):
             event=self.event,
             generated_by=self.admin,
         )
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="failed", pdf_url="/m/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="failed", pdf_url="/m/c.pdf")
         before = AuditLog.objects.filter(action="certificate_retried").count()
         self.client.post(f"/api/certificates/{cert.id}/retry/", {"method": "email"})
         self.assertEqual(
@@ -4886,9 +4476,7 @@ class AuditLogViewSetTest(TestCase):
         part = make_user("audit_part@test.com")
         self.client.force_authenticate(user=part)
         res = self.client.get("/api/audit/")
-        self.assertIn(
-            res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED]
-        )
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
 
     def test_unauthenticated_cannot_access_audit(self):
         anon = APIClient()
@@ -4975,9 +4563,7 @@ class CeleryTasksTest(TestCase):
 
     def setUp(self):
         self.admin = make_admin("celery_admin@test.com")
-        self.participant = make_participant(
-            self.admin, doc="CEL001", email="celery_p@test.com"
-        )
+        self.participant = make_participant(self.admin, doc="CEL001", email="celery_p@test.com")
         self.event = make_event(self.admin, name="Celery Event")
         self.template = Template.objects.create(name="CeleryTpl", created_by=self.admin)
         self.cert = Certificate.objects.create(

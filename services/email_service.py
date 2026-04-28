@@ -19,9 +19,7 @@ def get_emails_sent_today():
     from deliveries.models import DeliveryLog
 
     today = timezone.now().date()
-    return DeliveryLog.objects.filter(
-        delivery_method="email", status="success", sent_at__date=today
-    ).count()
+    return DeliveryLog.objects.filter(delivery_method="email", status="success", sent_at__date=today).count()
 
 
 def check_email_limit():
@@ -196,8 +194,6 @@ Sistema de Certificados
                 results["sent"] += 1
             else:
                 results["failed"] += 1
-                results["errors"].append(
-                    {"certificate_id": str(cert.id), "error": result["message"]}
-                )
+                results["errors"].append({"certificate_id": str(cert.id), "error": result["message"]})
 
         return results

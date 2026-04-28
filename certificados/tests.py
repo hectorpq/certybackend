@@ -13,14 +13,10 @@ from users.models import User
 
 class TemplateModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
 
     def test_str_with_category(self):
-        t = Template.objects.create(
-            name="Clasico", category="Cursos", created_by=self.user
-        )
+        t = Template.objects.create(name="Clasico", category="Cursos", created_by=self.user)
         self.assertIn("Clasico", str(t))
         self.assertIn("Cursos", str(t))
 
@@ -41,9 +37,7 @@ class TemplateModelTest(TestCase):
 
 class CertificateModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="11111",
             first_name="Luis",
@@ -52,9 +46,7 @@ class CertificateModelTest(TestCase):
             phone="999000111",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Taller Test", event_date=date(2026, 1, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Taller Test", event_date=date(2026, 1, 1), created_by=self.user)
         self.template = Template.objects.create(name="Base", created_by=self.user)
 
     def _make_cert(self, status="pending"):
@@ -221,9 +213,7 @@ class CertificateModelTest(TestCase):
     def test_deliver_via_email(self, mock_send):
         mock_send.return_value = {"success": True, "message": "sent"}
         cert = self._make_cert()
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
         log = cert.deliver(method="email", sent_by=self.user)
         self.assertEqual(log.status, "success")
@@ -299,9 +289,7 @@ class AttendanceBusinessRuleTest(TestCase):
     """TC-010/011 — attendance=True es requisito para generar certificado."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin2@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin2@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="ATT001",
             first_name="Ana",
@@ -310,9 +298,7 @@ class AttendanceBusinessRuleTest(TestCase):
             phone="111222333",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Evento Att", event_date=date(2026, 3, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Evento Att", event_date=date(2026, 3, 1), created_by=self.user)
 
     def test_tc011_generate_blocked_when_attendance_false(self):
         """TC-011: attendance=False debe bloquear la generación."""
@@ -322,9 +308,7 @@ class AttendanceBusinessRuleTest(TestCase):
             attendance=False,
             created_by=self.user,
         )
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         with self.assertRaises(ValidationError) as ctx:
             cert.generate()
         self.assertIn("attend", str(ctx.exception).lower())
@@ -339,17 +323,13 @@ class AttendanceBusinessRuleTest(TestCase):
             attendance=True,
             created_by=self.user,
         )
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         result = cert.generate(generated_by=self.user)
         self.assertEqual(result.status, "generated")
 
     def test_generate_blocked_when_not_enrolled_at_all(self):
         """Sin matrícula no hay certificado."""
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         with self.assertRaises(ValidationError):
             cert.generate()
 
@@ -358,12 +338,8 @@ class WhatsAppPhoneRequirementTest(TestCase):
     """TC-019/020 — WhatsApp requiere teléfono; no usa email como fallback."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin3@test.com", full_name="Admin", password="pass"
-        )
-        self.event = Event.objects.create(
-            name="WA Evento", event_date=date(2026, 4, 1), created_by=self.user
-        )
+        self.user = User.objects.create_user(email="admin3@test.com", full_name="Admin", password="pass")
+        self.event = Event.objects.create(name="WA Evento", event_date=date(2026, 4, 1), created_by=self.user)
 
     def _make_cert(self, phone=""):
         participant = Participant.objects.create(
@@ -374,16 +350,12 @@ class WhatsAppPhoneRequirementTest(TestCase):
             phone=phone,
             created_by=self.user,
         )
-        return Certificate.objects.create(
-            participant=participant, event=self.event, generated_by=self.user
-        )
+        return Certificate.objects.create(participant=participant, event=self.event, generated_by=self.user)
 
     def test_tc020_whatsapp_without_phone_raises_validation_error(self):
         """TC-020: sin teléfono, deliver vía WhatsApp debe fallar con ValidationError."""
         cert = self._make_cert(phone="")
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
         with self.assertRaises(ValidationError) as ctx:
             cert.deliver(method="whatsapp")
@@ -400,9 +372,7 @@ class WhatsAppPhoneRequirementTest(TestCase):
         }
         mock_get.return_value = mock_ws
         cert = self._make_cert(phone="999111222")
-        Certificate.objects.filter(pk=cert.pk).update(
-            status="generated", pdf_url="/media/c.pdf"
-        )
+        Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
         log = cert.deliver(method="whatsapp")
         self.assertEqual(log.status, "success")
@@ -421,9 +391,7 @@ class DeliveryRetryTest(TestCase):
     """TC-017/021 — reintento de entrega NO regenera el PDF; crea nuevo DeliveryLog."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin4@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin4@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="RET001",
             first_name="Lucia",
@@ -432,15 +400,9 @@ class DeliveryRetryTest(TestCase):
             phone="777888999",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Retry Evento", event_date=date(2026, 5, 1), created_by=self.user
-        )
-        self.cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
-        Certificate.objects.filter(pk=self.cert.pk).update(
-            status="failed", pdf_url="/media/original.pdf"
-        )
+        self.event = Event.objects.create(name="Retry Evento", event_date=date(2026, 5, 1), created_by=self.user)
+        self.cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
+        Certificate.objects.filter(pk=self.cert.pk).update(status="failed", pdf_url="/media/original.pdf")
         self.cert.refresh_from_db()
 
     @patch("services.email_service.EmailService.send_certificate")
@@ -500,9 +462,7 @@ class CertificateUniqueConstraintTest(TestCase):
     """RN-03/04 — unique_together garantiza un solo certificado por par estudiante+evento."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin5@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin5@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="UNIQ001",
             first_name="Pedro",
@@ -511,19 +471,13 @@ class CertificateUniqueConstraintTest(TestCase):
             phone="",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Unique Evento", event_date=date(2026, 6, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Unique Evento", event_date=date(2026, 6, 1), created_by=self.user)
 
     def test_rn04_cannot_create_duplicate_certificate(self):
         """RN-04: un solo certificado por par estudiante+evento."""
-        Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         with self.assertRaises(Exception):
-            Certificate.objects.create(
-                participant=self.participant, event=self.event, generated_by=self.user
-            )
+            Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
 
     def test_get_or_create_returns_existing_not_new(self):
         """get_or_create respeta la restricción unique_together."""
@@ -546,9 +500,7 @@ class CertificateExpiryTest(TestCase):
     """RN-05 — los certificados vencen a 365 días."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin6@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin6@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="EXP001",
             first_name="Sara",
@@ -557,9 +509,7 @@ class CertificateExpiryTest(TestCase):
             phone="111222333",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Expiry Evento", event_date=date(2026, 7, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Expiry Evento", event_date=date(2026, 7, 1), created_by=self.user)
 
     @patch("services.pdf_service.PDFService.generate_certificate_pdf")
     def test_rn05_expires_at_set_to_365_days_on_generate(self, mock_pdf):
@@ -571,9 +521,7 @@ class CertificateExpiryTest(TestCase):
             attendance=True,
             created_by=self.user,
         )
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         from datetime import timedelta
 
         from django.utils import timezone
@@ -587,9 +535,7 @@ class CertificateExpiryTest(TestCase):
 
     def test_is_not_expired_when_no_expires_at(self):
         """Certificado sin expires_at nunca expira."""
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         self.assertFalse(cert.is_expired())
 
 
@@ -597,9 +543,7 @@ class NoPDFRegenerationGuardTest(TestCase):
     """RN-06 — PDF no se regenera si ya está en generated/sent/failed."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin7@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin7@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="NOREG001",
             first_name="Tomas",
@@ -608,14 +552,10 @@ class NoPDFRegenerationGuardTest(TestCase):
             phone="",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="NoRegen Evento", event_date=date(2026, 8, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="NoRegen Evento", event_date=date(2026, 8, 1), created_by=self.user)
 
     def test_rn06_generate_raises_if_status_generated(self):
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         Certificate.objects.filter(pk=cert.pk).update(status="generated")
         cert.refresh_from_db()
         with self.assertRaises(ValidationError) as ctx:
@@ -623,9 +563,7 @@ class NoPDFRegenerationGuardTest(TestCase):
         self.assertIn("generated", str(ctx.exception))
 
     def test_rn06_generate_raises_if_status_sent(self):
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         Certificate.objects.filter(pk=cert.pk).update(status="sent")
         cert.refresh_from_db()
         with self.assertRaises(ValidationError) as ctx:
@@ -633,9 +571,7 @@ class NoPDFRegenerationGuardTest(TestCase):
         self.assertIn("sent", str(ctx.exception))
 
     def test_rn06_generate_raises_if_status_failed(self):
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.user
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         Certificate.objects.filter(pk=cert.pk).update(status="failed")
         cert.refresh_from_db()
         with self.assertRaises(ValidationError) as ctx:

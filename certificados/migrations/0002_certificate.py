@@ -75,9 +75,7 @@ class Migration(migrations.Migration):
                 "ordering": ["-issued_at"],
                 "indexes": [
                     models.Index(fields=["status"], name="cert_status_idx"),
-                    models.Index(
-                        fields=["verification_code"], name="cert_verif_code_idx"
-                    ),
+                    models.Index(fields=["verification_code"], name="cert_verif_code_idx"),
                     models.Index(
                         fields=["participant", "event"],
                         name="cert_participant_event_idx",
@@ -87,8 +85,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="certificate",
-            constraint=models.UniqueConstraint(
-                fields=["participant", "event"], name="unique_participant_event_cert"
-            ),
+            constraint=models.UniqueConstraint(fields=["participant", "event"], name="unique_participant_event_cert"),
         ),
     ]

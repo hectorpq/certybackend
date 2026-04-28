@@ -26,12 +26,8 @@ class Migration(migrations.Migration):
             options={
                 "ordering": ["first_name", "last_name"],
                 "indexes": [
-                    models.Index(
-                        fields=["is_active"], name="students_st_is_acti_c00e81_idx"
-                    ),
-                    models.Index(
-                        fields=["document_id"], name="students_st_documen_9d97ee_idx"
-                    ),
+                    models.Index(fields=["is_active"], name="students_st_is_acti_c00e81_idx"),
+                    models.Index(fields=["document_id"], name="students_st_documen_9d97ee_idx"),
                     models.Index(fields=["email"], name="students_st_email_e271bc_idx"),
                 ],
             },

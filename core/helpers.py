@@ -287,9 +287,7 @@ def get_recent_deliveries(certificate, days: int = 30):
 
     cutoff_date = timezone.now() - timedelta(days=days)
 
-    return DeliveryLog.objects.filter(
-        certificate=certificate, sent_at__gte=cutoff_date
-    ).order_by("-sent_at")
+    return DeliveryLog.objects.filter(certificate=certificate, sent_at__gte=cutoff_date).order_by("-sent_at")
 
 
 def get_successful_deliveries(certificate):
@@ -304,9 +302,7 @@ def get_successful_deliveries(certificate):
     """
     from deliveries.models import DeliveryLog
 
-    return DeliveryLog.objects.filter(
-        certificate=certificate, status="success"
-    ).order_by("-sent_at")
+    return DeliveryLog.objects.filter(certificate=certificate, status="success").order_by("-sent_at")
 
 
 def get_failed_deliveries(certificate):
@@ -321,6 +317,4 @@ def get_failed_deliveries(certificate):
     """
     from deliveries.models import DeliveryLog
 
-    return DeliveryLog.objects.filter(certificate=certificate, status="error").order_by(
-        "-sent_at"
-    )
+    return DeliveryLog.objects.filter(certificate=certificate, status="error").order_by("-sent_at")

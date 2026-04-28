@@ -16,9 +16,7 @@ def send_certificate_email_task(self, certificate_id, recipient_email):
         from certificados.models import Certificate
         from services.email_service import EmailService
 
-        cert = Certificate.objects.select_related("participant", "event").get(
-            pk=certificate_id
-        )
+        cert = Certificate.objects.select_related("participant", "event").get(pk=certificate_id)
         result = EmailService.send_certificate(cert, recipient_email)
         if not result["success"]:
             raise ValueError(result["message"])
@@ -36,9 +34,7 @@ def generate_certificate_pdf_task(self, certificate_id):
         from certificados.models import Certificate
         from services.pdf_service import PDFService
 
-        cert = Certificate.objects.select_related(
-            "participant", "event", "template"
-        ).get(pk=certificate_id)
+        cert = Certificate.objects.select_related("participant", "event", "template").get(pk=certificate_id)
         template = cert.template if cert.template_id else None
         result = PDFService.generate_certificate_pdf(cert, template=template)
         if result["success"]:
@@ -57,9 +53,7 @@ def send_bulk_certificates_task(event_id, method="email"):
     from certificados.models import Certificate
     from services.email_service import EmailService
 
-    certificates = Certificate.objects.filter(event_id=event_id).select_related(
-        "participant", "event"
-    )
+    certificates = Certificate.objects.filter(event_id=event_id).select_related("participant", "event")
 
     if method == "email":
         result = EmailService.send_bulk_certificates(list(certificates))

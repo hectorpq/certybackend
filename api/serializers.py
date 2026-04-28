@@ -368,9 +368,7 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
     event_name = serializers.CharField(source="event.name", read_only=True)
     event_date = DateField(source="event.event_date", read_only=True)
     event_location = serializers.CharField(source="event.location", read_only=True)
-    event_description = serializers.CharField(
-        source="event.description", read_only=True
-    )
+    event_description = serializers.CharField(source="event.description", read_only=True)
     status_display = serializers.SerializerMethodField()
     student_exists = serializers.SerializerMethodField()
     student = serializers.SerializerMethodField()
@@ -436,9 +434,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     """
 
     password = serializers.CharField(write_only=True, min_length=8, required=True)
-    password_confirm = serializers.CharField(
-        write_only=True, min_length=8, required=True
-    )
+    password_confirm = serializers.CharField(write_only=True, min_length=8, required=True)
 
     class Meta:
         model = User
@@ -479,9 +475,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
     user_email = serializers.SerializerMethodField()
     action_display = serializers.SerializerMethodField()
     # Override to avoid DRF's GenericIPAddressField Django-5 incompatibility
-    ip_address = serializers.CharField(
-        allow_null=True, allow_blank=True, required=False
-    )
+    ip_address = serializers.CharField(allow_null=True, allow_blank=True, required=False)
 
     class Meta:
         model = AuditLog

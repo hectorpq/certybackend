@@ -160,9 +160,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="eventinstructor",
-            constraint=models.UniqueConstraint(
-                fields=["event", "instructor"], name="unique_event_instructor"
-            ),
+            constraint=models.UniqueConstraint(fields=["event", "instructor"], name="unique_event_instructor"),
         ),
         migrations.CreateModel(
             name="EventInvitation",
@@ -224,9 +222,7 @@ class Migration(migrations.Migration):
                 "indexes": [
                     models.Index(fields=["token"], name="invitation_token_idx"),
                     models.Index(fields=["status"], name="invitation_status_idx"),
-                    models.Index(
-                        fields=["email", "event"], name="invitation_email_event_idx"
-                    ),
+                    models.Index(fields=["email", "event"], name="invitation_email_event_idx"),
                 ],
             },
         ),
@@ -265,9 +261,7 @@ class Migration(migrations.Migration):
                 ("attendance", models.BooleanField(default=False)),
                 (
                     "grade",
-                    models.DecimalField(
-                        blank=True, decimal_places=2, max_digits=5, null=True
-                    ),
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True),
                 ),
                 ("notes", models.TextField(blank=True)),
                 (
@@ -313,16 +307,12 @@ class Migration(migrations.Migration):
                         fields=["participant", "event"],
                         name="enrollment_participant_event_idx",
                     ),
-                    models.Index(
-                        fields=["attendance"], name="enrollment_attendance_idx"
-                    ),
+                    models.Index(fields=["attendance"], name="enrollment_attendance_idx"),
                 ],
             },
         ),
         migrations.AddConstraint(
             model_name="enrollment",
-            constraint=models.UniqueConstraint(
-                fields=["participant", "event"], name="unique_participant_event"
-            ),
+            constraint=models.UniqueConstraint(fields=["participant", "event"], name="unique_participant_event"),
         ),
     ]

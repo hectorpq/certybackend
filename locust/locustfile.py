@@ -82,16 +82,12 @@ class CoordinatorUser(HttpUser):
     @task(5)
     @tag("coordinator", "participants")
     def list_participants(self):
-        self.client.get(
-            "/api/participants/", headers=self.headers, name="/api/participants/"
-        )
+        self.client.get("/api/participants/", headers=self.headers, name="/api/participants/")
 
     @task(4)
     @tag("coordinator", "certificates")
     def list_certificates(self):
-        self.client.get(
-            "/api/certificates/", headers=self.headers, name="/api/certificates/"
-        )
+        self.client.get("/api/certificates/", headers=self.headers, name="/api/certificates/")
 
     @task(2)
     @tag("coordinator", "certificates")
@@ -105,9 +101,7 @@ class CoordinatorUser(HttpUser):
     @task(1)
     @tag("coordinator", "deliveries")
     def list_deliveries(self):
-        self.client.get(
-            "/api/deliveries/", headers=self.headers, name="/api/deliveries/"
-        )
+        self.client.get("/api/deliveries/", headers=self.headers, name="/api/deliveries/")
 
     @task(1)
     @tag("coordinator", "audit")
@@ -142,9 +136,7 @@ class AdminUser(HttpUser):
     @task(2)
     @tag("admin", "certificates")
     def list_certificates(self):
-        self.client.get(
-            "/api/certificates/", headers=self.headers, name="/api/certificates/"
-        )
+        self.client.get("/api/certificates/", headers=self.headers, name="/api/certificates/")
 
     @task(1)
     @tag("admin", "export")
@@ -163,6 +155,4 @@ class AdminUser(HttpUser):
     @task(1)
     @tag("admin", "instructors")
     def list_instructors(self):
-        self.client.get(
-            "/api/instructors/", headers=self.headers, name="/api/instructors/"
-        )
+        self.client.get("/api/instructors/", headers=self.headers, name="/api/instructors/")

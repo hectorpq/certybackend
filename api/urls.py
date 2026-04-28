@@ -5,11 +5,22 @@ URL Configuration for API endpoints
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views import (AuditLogViewSet, CertificateViewSet, CurrentUserView,
-                    DeliveryLogViewSet, EnrollmentViewSet, EventsViewSet,
-                    GoogleAuthView, InstructorsViewSet, InvitationPublicView,
-                    InvitationRegisterView, LoginView, ParticipantsViewSet,
-                    RegisterView, TemplateViewSet)
+from .views import (
+    AuditLogViewSet,
+    CertificateViewSet,
+    CurrentUserView,
+    DeliveryLogViewSet,
+    EnrollmentViewSet,
+    EventsViewSet,
+    GoogleAuthView,
+    InstructorsViewSet,
+    InvitationPublicView,
+    InvitationRegisterView,
+    LoginView,
+    ParticipantsViewSet,
+    RegisterView,
+    TemplateViewSet,
+)
 
 router = SimpleRouter()
 router.register(r"certificates", CertificateViewSet, basename="certificate")

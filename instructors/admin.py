@@ -49,11 +49,6 @@ class InstructorAdmin(admin.ModelAdmin):
         events = obj.events.all()
         if not events:
             return "No assigned events"
-        return "\n".join(
-            [
-                f"• {e.event.name} ({e.event.event_date.strftime('%d/%m/%Y')}) - {e.role}"
-                for e in events
-            ]
-        )
+        return "\n".join([f"• {e.event.name} ({e.event.event_date.strftime('%d/%m/%Y')}) - {e.role}" for e in events])
 
     events_info.short_description = "Assigned Events"

@@ -61,11 +61,6 @@ class ParticipantAdmin(admin.ModelAdmin):
         enrollments = obj.enrollments.all()
         if not enrollments:
             return "Sin matrículas"
-        return "\n".join(
-            [
-                f"• {e.event.name} ({e.event.event_date.strftime('%d/%m/%Y')})"
-                for e in enrollments
-            ]
-        )
+        return "\n".join([f"• {e.event.name} ({e.event.event_date.strftime('%d/%m/%Y')})" for e in enrollments])
 
     enrollment_info.short_description = "Matrículas del Participante"

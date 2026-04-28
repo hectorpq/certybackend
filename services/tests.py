@@ -17,9 +17,7 @@ def make_admin(email="admin@test.com"):
     return User.objects.create_user(email=email, full_name="Admin", password="pass")
 
 
-def make_cert(
-    user=None, with_instructor=False, doc_id="11111", p_email="luis@test.com"
-):
+def make_cert(user=None, with_instructor=False, doc_id="11111", p_email="luis@test.com"):
     user = user or make_admin()
     participant = Participant.objects.create(
         document_id=doc_id,
@@ -104,9 +102,7 @@ class EmailServiceTest(TestCase):
         mock_msg = MagicMock()
         mock_msg.send.return_value = 1
         mock_email.return_value = mock_msg
-        result = EmailService.send_bulk_certificates(
-            [self.cert], recipient_map={self.cert.id: "custom@test.com"}
-        )
+        result = EmailService.send_bulk_certificates([self.cert], recipient_map={self.cert.id: "custom@test.com"})
         self.assertEqual(result["sent"], 1)
 
     @patch("services.email_service.EmailMessage")
@@ -210,9 +206,7 @@ class PDFServiceTest(TestCase):
     @patch("services.pdf_service.canvas.Canvas")
     @patch("pathlib.Path.mkdir")
     @patch("services.pdf_service.ImageReader")
-    def test_generate_pdf_template_bg_image_load_exception_uses_default(
-        self, mock_reader, mock_mkdir, mock_canvas
-    ):
+    def test_generate_pdf_template_bg_image_load_exception_uses_default(self, mock_reader, mock_mkdir, mock_canvas):
         mock_canvas.return_value = MagicMock()
         mock_reader.side_effect = Exception("image load error")
         template = MagicMock()
@@ -224,9 +218,7 @@ class PDFServiceTest(TestCase):
 
     @patch("services.pdf_service.canvas.Canvas")
     @patch("pathlib.Path.mkdir")
-    def test_generate_pdf_draw_text_centered_when_large_x(
-        self, mock_mkdir, mock_canvas
-    ):
+    def test_generate_pdf_draw_text_centered_when_large_x(self, mock_mkdir, mock_canvas):
         mock_c = MagicMock()
         mock_canvas.return_value = mock_c
         template = MagicMock()
@@ -382,9 +374,7 @@ class QRCodeGenerationTest(TestCase):
             if x > PDFService.BASE_WIDTH / 2:
                 break  # found a right-side drawImage — QR is there
         else:
-            self.fail(
-                "No drawImage call found in right half of certificate (QR missing)"
-            )
+            self.fail("No drawImage call found in right half of certificate (QR missing)")
 
 
 # ─────────────────────────────────────────────
@@ -472,9 +462,7 @@ class InstructorSignatureTest(TestCase):
     def test_generate_pdf_without_instructor_succeeds(self, mock_mkdir, mock_canvas):
         mock_canvas.return_value = MagicMock()
         cert_no_instr, _ = make_cert(
-            user=User.objects.create_user(
-                email="noinstr@test.com", full_name="NoInstr", password="p"
-            ),
+            user=User.objects.create_user(email="noinstr@test.com", full_name="NoInstr", password="p"),
             doc_id="99999",
             p_email="noinstr_p@test.com",
         )
@@ -512,15 +500,11 @@ class InstructorSignatureFieldTest(TestCase):
         self.user = make_admin("sig_admin@test.com")
 
     def test_instructor_has_signature_image_field(self):
-        inst = Instructor.objects.create(
-            full_name="Prof. Ramirez", email="ramirez@test.com", created_by=self.user
-        )
+        inst = Instructor.objects.create(full_name="Prof. Ramirez", email="ramirez@test.com", created_by=self.user)
         self.assertTrue(hasattr(inst, "signature_image"))
 
     def test_signature_image_defaults_to_none(self):
-        inst = Instructor.objects.create(
-            full_name="Prof. Soto", email="soto@test.com", created_by=self.user
-        )
+        inst = Instructor.objects.create(full_name="Prof. Soto", email="soto@test.com", created_by=self.user)
         self.assertFalse(bool(inst.signature_image))
 
     def test_signature_url_field_still_exists(self):

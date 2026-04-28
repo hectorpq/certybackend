@@ -6,13 +6,9 @@ from users.models import User
 
 class ParticipantModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
 
-    def _make_participant(
-        self, doc="12345678", email="participant@test.com", first="Juan", last="Perez"
-    ):
+    def _make_participant(self, doc="12345678", email="participant@test.com", first="Juan", last="Perez"):
         return Participant.objects.create(
             document_id=doc,
             first_name=first,

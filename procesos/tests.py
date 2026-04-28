@@ -8,15 +8,12 @@ from django.test import TestCase
 from certificados.models import Certificate, Template
 from events.models import Enrollment, Event
 from participants.models import Participant
-from procesos.services import (BulkCertificateGeneratorService,
-                               ExcelProcessingResult, ExcelProcessingService)
+from procesos.services import BulkCertificateGeneratorService, ExcelProcessingResult, ExcelProcessingService
 from users.models import User
 
 
 def make_admin():
-    return User.objects.create_user(
-        email="admin@test.com", full_name="Admin", password="pass", is_staff=True
-    )
+    return User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass", is_staff=True)
 
 
 def make_excel(rows):
@@ -67,9 +64,7 @@ class ExcelProcessingResultTest(TestCase):
 class ExcelProcessingServiceTest(TestCase):
     def setUp(self):
         self.user = make_admin()
-        self.event = Event.objects.create(
-            name="Taller Excel", event_date=date(2026, 5, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Taller Excel", event_date=date(2026, 5, 1), created_by=self.user)
 
     def _make_valid_excel(self):
         return make_excel(
@@ -154,9 +149,7 @@ class BulkCertificateGeneratorServiceTest(TestCase):
             email="luis@test.com",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Bulk Event", event_date=date(2026, 4, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Bulk Event", event_date=date(2026, 4, 1), created_by=self.user)
         self.template = Template.objects.create(name="T", created_by=self.user)
         Enrollment.objects.create(
             participant=self.participant,
@@ -186,9 +179,7 @@ class BulkCertificateGeneratorServiceTest(TestCase):
 class ExcelProcessingServiceExceptionTest(TestCase):
     def setUp(self):
         self.user = make_admin()
-        self.event = Event.objects.create(
-            name="Taller Excel", event_date=date(2026, 5, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Taller Excel", event_date=date(2026, 5, 1), created_by=self.user)
 
     def _make_valid_excel(self):
         return make_excel(
@@ -207,9 +198,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
 
         buf = self._make_valid_excel()
         svc = ExcelProcessingService(buf, created_by_user=self.user)
-        with patch.object(
-            svc, "_validate_columns", side_effect=RuntimeError("unexpected")
-        ):
+        with patch.object(svc, "_validate_columns", side_effect=RuntimeError("unexpected")):
             with self.assertRaises(ExcelImportError):
                 svc.read_and_validate_structure()
 
@@ -226,9 +215,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
 
         buf = self._make_valid_excel()
         svc = ExcelProcessingService(buf, created_by_user=self.user)
-        with patch.object(
-            svc, "read_and_validate_structure", side_effect=RuntimeError("boom")
-        ):
+        with patch.object(svc, "read_and_validate_structure", side_effect=RuntimeError("boom")):
             with self.assertRaises(ExcelImportError):
                 svc.process()
 
@@ -236,9 +223,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         from procesos.services import ExcelImportError
 
         empty_buf = BytesIO()
-        pd.DataFrame(
-            columns=["full_name", "email", "document_id", "event_name"]
-        ).to_excel(empty_buf, index=False)
+        pd.DataFrame(columns=["full_name", "email", "document_id", "event_name"]).to_excel(empty_buf, index=False)
         empty_buf.seek(0)
         svc = ExcelProcessingService(empty_buf, created_by_user=self.user)
         with self.assertRaises(ExcelImportError):
@@ -247,9 +232,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
     def test_read_excel_file_generic_exception_raises(self):
         from procesos.services import ExcelImportError
 
-        svc = ExcelProcessingService(
-            BytesIO(b"not-valid-excel"), created_by_user=self.user
-        )
+        svc = ExcelProcessingService(BytesIO(b"not-valid-excel"), created_by_user=self.user)
         with self.assertRaises(ExcelImportError):
             svc._read_excel_file()
 
@@ -343,9 +326,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
 
         buf = self._make_valid_excel()
         svc = ExcelProcessingService(buf, created_by_user=self.user)
-        with patch(
-            "procesos.services.pd.read_excel", side_effect=pd.errors.EmptyDataError()
-        ):
+        with patch("procesos.services.pd.read_excel", side_effect=pd.errors.EmptyDataError()):
             with self.assertRaises(ExcelImportError):
                 svc._read_excel_file()
 
@@ -416,9 +397,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
 
     def test_validate_file_empty_excel_returns_false(self):
         buf = BytesIO()
-        pd.DataFrame(
-            columns=["full_name", "email", "document_id", "event_name"]
-        ).to_excel(buf, index=False)
+        pd.DataFrame(columns=["full_name", "email", "document_id", "event_name"]).to_excel(buf, index=False)
         buf.seek(0)
         valid, msg = ExcelProcessingService.validate_file(buf)
         self.assertFalse(valid)

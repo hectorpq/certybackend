@@ -16,14 +16,10 @@ class EventCategoryTest(TestCase):
 
 class EventModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
 
     def _make_event(self, name="Taller Python", status="active"):
-        return Event.objects.create(
-            name=name, event_date=date(2026, 6, 15), status=status, created_by=self.user
-        )
+        return Event.objects.create(name=name, event_date=date(2026, 6, 15), status=status, created_by=self.user)
 
     def test_str_includes_name_and_date(self):
         event = self._make_event()
@@ -55,12 +51,8 @@ class EventModelTest(TestCase):
 
 class EventInvitationTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
-        self.event = Event.objects.create(
-            name="Evento Test", event_date=date(2026, 6, 1), created_by=self.user
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
+        self.event = Event.objects.create(name="Evento Test", event_date=date(2026, 6, 1), created_by=self.user)
 
     def test_is_expired_when_past(self):
         inv = EventInvitation.objects.create(
@@ -81,32 +73,22 @@ class EventInvitationTest(TestCase):
         self.assertFalse(inv.is_expired())
 
     def test_is_not_expired_when_no_expiry(self):
-        inv = EventInvitation.objects.create(
-            event=self.event, email="noexp@test.com", created_by=self.user
-        )
+        inv = EventInvitation.objects.create(event=self.event, email="noexp@test.com", created_by=self.user)
         self.assertFalse(inv.is_expired())
 
     def test_default_status_is_pending(self):
-        inv = EventInvitation.objects.create(
-            event=self.event, email="p@p.com", created_by=self.user
-        )
+        inv = EventInvitation.objects.create(event=self.event, email="p@p.com", created_by=self.user)
         self.assertEqual(inv.status, "pending")
 
     def test_tokens_are_unique(self):
-        inv1 = EventInvitation.objects.create(
-            event=self.event, email="a@a.com", created_by=self.user
-        )
-        inv2 = EventInvitation.objects.create(
-            event=self.event, email="b@b.com", created_by=self.user
-        )
+        inv1 = EventInvitation.objects.create(event=self.event, email="a@a.com", created_by=self.user)
+        inv2 = EventInvitation.objects.create(event=self.event, email="b@b.com", created_by=self.user)
         self.assertNotEqual(inv1.token, inv2.token)
 
 
 class EnrollmentTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="99999",
             first_name="Ana",
@@ -114,9 +96,7 @@ class EnrollmentTest(TestCase):
             email="ana@test.com",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Curso Test", event_date=date(2026, 5, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Curso Test", event_date=date(2026, 5, 1), created_by=self.user)
 
     def test_str_shows_attendance_check(self):
         enr = Enrollment.objects.create(
@@ -137,26 +117,18 @@ class EnrollmentTest(TestCase):
         self.assertIn("✗", str(enr))
 
     def test_unique_participant_event_pair(self):
-        Enrollment.objects.create(
-            participant=self.participant, event=self.event, created_by=self.user
-        )
+        Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
         with self.assertRaises(Exception):
-            Enrollment.objects.create(
-                participant=self.participant, event=self.event, created_by=self.user
-            )
+            Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
 
     def test_attendance_default_false(self):
-        enr = Enrollment.objects.create(
-            participant=self.participant, event=self.event, created_by=self.user
-        )
+        enr = Enrollment.objects.create(participant=self.participant, event=self.event, created_by=self.user)
         self.assertFalse(enr.attendance)
 
 
 class EventInstructorStrTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
         from instructors.models import Instructor
 
         self.instructor = Instructor.objects.create(
@@ -165,24 +137,18 @@ class EventInstructorStrTest(TestCase):
             email="rosa@test.com",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="React Workshop", event_date=date(2026, 7, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="React Workshop", event_date=date(2026, 7, 1), created_by=self.user)
 
     def test_event_instructor_str(self):
         from events.models import EventInstructor
 
-        ei = EventInstructor.objects.create(
-            event=self.event, instructor=self.instructor, created_by=self.user
-        )
+        ei = EventInstructor.objects.create(event=self.event, instructor=self.instructor, created_by=self.user)
         s = str(ei)
         self.assertIn("React Workshop", s)
         self.assertIn("Rosa Diaz", s)
 
     def test_event_invitation_str(self):
-        inv = EventInvitation.objects.create(
-            event=self.event, email="test@x.com", created_by=self.user
-        )
+        inv = EventInvitation.objects.create(event=self.event, email="test@x.com", created_by=self.user)
         s = str(inv)
         self.assertIn("test@x.com", s)
         self.assertIn("React Workshop", s)

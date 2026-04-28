@@ -68,9 +68,7 @@ class Migration(migrations.Migration):
                 "ordering": ["-sent_at"],
                 "indexes": [
                     models.Index(fields=["status"], name="delivery_status_idx"),
-                    models.Index(
-                        fields=["delivery_method"], name="delivery_method_idx"
-                    ),
+                    models.Index(fields=["delivery_method"], name="delivery_method_idx"),
                     models.Index(fields=["certificate"], name="delivery_cert_idx"),
                 ],
             },

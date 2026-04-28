@@ -77,11 +77,7 @@ class ExcelProcessingResult:
             "total_rows": self.total_rows,
             "successful": self.successful,
             "failed": self.failed,
-            "success_rate": (
-                f"{(self.successful/self.total_rows*100):.1f}%"
-                if self.total_rows > 0
-                else "0%"
-            ),
+            "success_rate": (f"{(self.successful/self.total_rows*100):.1f}%" if self.total_rows > 0 else "0%"),
             "errors": self.errors,
             "created_certificates": self.created_certificates,
             "data_preview": self.data_preview,
@@ -149,9 +145,7 @@ class ExcelProcessingService:
         self.file_object = file_object
         self.created_by_user = created_by_user
         self.event = event  # Event object: si se pasa, se usa para todas las filas
-        self.template = (
-            template  # Template object: si se pasa, sobrescribe la del evento
-        )
+        self.template = template  # Template object: si se pasa, sobrescribe la del evento
         self.result = ExcelProcessingResult()
         self.dataframe = None
 
@@ -205,9 +199,7 @@ class ExcelProcessingService:
         try:
             self.result.total_rows = len(records)
 
-            logger.info(
-                "Iniciando procesamiento de %s registros", self.result.total_rows
-            )
+            logger.info("Iniciando procesamiento de %s registros", self.result.total_rows)
 
             # Procesar cada registro
             for index, record in enumerate(records):
@@ -285,11 +277,7 @@ class ExcelProcessingService:
 
     def _validate_columns(self):
         """Valida que existan todas las columnas requeridas"""
-        missing_columns = [
-            col
-            for col in self.REQUIRED_COLUMNS.keys()
-            if col not in self.dataframe.columns
-        ]
+        missing_columns = [col for col in self.REQUIRED_COLUMNS.keys() if col not in self.dataframe.columns]
 
         if missing_columns:
             raise ExcelImportError(
@@ -349,14 +337,10 @@ class ExcelProcessingService:
         # Procesar en transacción atómica
         with transaction.atomic():
             # 1. Obtener o crear Participant
-            participant = self._get_or_create_participant(
-                full_name, email, document_id, phone
-            )
+            participant = self._get_or_create_participant(full_name, email, document_id, phone)
 
             # 2. Obtener Event
-            event_name = (
-                str(row.get("event_name", "")).strip() if not self.event else None
-            )
+            event_name = str(row.get("event_name", "")).strip() if not self.event else None
             event = self._get_event(event_name)
 
             # 3. Obtener o crear Enrollment
@@ -367,18 +351,12 @@ class ExcelProcessingService:
 
             # 5. Generar PDF si está en pending
             if certificate.status == "pending":
-                certificate.generate(
-                    generated_by=self.created_by_user, skip_attendance_check=True
-                )
+                certificate.generate(generated_by=self.created_by_user, skip_attendance_check=True)
 
             # 6. Enviar por correo
-            delivery_log = certificate.deliver(
-                method="email", sent_by=self.created_by_user
-            )
+            delivery_log = certificate.deliver(method="email", sent_by=self.created_by_user)
             if delivery_log.status != "success":
-                raise ValueError(
-                    f"Error al enviar correo a {participant.email}: {delivery_log.error_message}"
-                )
+                raise ValueError(f"Error al enviar correo a {participant.email}: {delivery_log.error_message}")
 
             # Registrar éxito
             self.result.add_success(certificate.id)
@@ -465,9 +443,7 @@ class ExcelProcessingService:
             enrollment.save()
         return enrollment
 
-    def _create_certificate(
-        self, participant: Participant, event: Event
-    ) -> Certificate:
+    def _create_certificate(self, participant: Participant, event: Event) -> Certificate:
         """
         Crea o obtiene un Certificate.
         Si ya existe y se provee una plantilla nueva (bulk), siempre la actualiza
@@ -482,9 +458,7 @@ class ExcelProcessingService:
                 "status": "pending",
                 "template": new_template,
                 "generated_by": self.created_by_user,
-                "verification_code": self._generate_verification_code(
-                    participant.id, event.id
-                ),
+                "verification_code": self._generate_verification_code(participant.id, event.id),
             },
         )
 

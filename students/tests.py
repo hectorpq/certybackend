@@ -6,13 +6,9 @@ from users.models import User
 
 class StudentModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
 
-    def _make_student(
-        self, doc="12345678", email="student@test.com", first="Juan", last="Perez"
-    ):
+    def _make_student(self, doc="12345678", email="student@test.com", first="Juan", last="Perez"):
         return Student.objects.create(
             document_id=doc,
             first_name=first,

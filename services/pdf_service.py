@@ -37,9 +37,7 @@ class PDFService:
             PDFService.PDF_PATH.mkdir(parents=True, exist_ok=True)
 
             filename = (
-                f"{certificate.participant.id}_"
-                f"{certificate.event.id}_"
-                f"{certificate.verification_code}.pdf"
+                f"{certificate.participant.id}_" f"{certificate.event.id}_" f"{certificate.verification_code}.pdf"
             )
             filepath = PDFService.PDF_PATH / filename
 
@@ -52,17 +50,10 @@ class PDFService:
             layout = template.layout_config if template else {}
 
             # Text fields
-            student_name = (
-                f"{certificate.participant.first_name} "
-                f"{certificate.participant.last_name}"
-            ).upper()
+            student_name = (f"{certificate.participant.first_name} " f"{certificate.participant.last_name}").upper()
             event_name = certificate.event.name.upper()
             event_date = certificate.event.event_date.strftime("%d de %B de %Y")
-            expires_at = (
-                certificate.expires_at.strftime("%d/%m/%Y")
-                if certificate.expires_at
-                else "N/A"
-            )
+            expires_at = certificate.expires_at.strftime("%d/%m/%Y") if certificate.expires_at else "N/A"
 
             PDFService._draw_text(
                 c,
@@ -184,9 +175,7 @@ class PDFService:
         """Return a BytesIO PNG of the QR code pointing to the verify URL."""
         import qrcode
 
-        base_url = getattr(
-            settings, "CERTIFICATE_VERIFY_BASE_URL", "http://localhost:8000"
-        )
+        base_url = getattr(settings, "CERTIFICATE_VERIFY_BASE_URL", "http://localhost:8000")
         verify_url = f"{base_url}/api/certificates/verify/?code={verification_code}"
 
         qr = qrcode.QRCode(
@@ -215,16 +204,12 @@ class PDFService:
             x = config.get("x", (PDFService.BASE_WIDTH - qr_size - 0.4 * inch))
             y = config.get("y", 0.35 * inch)
 
-            c.drawImage(
-                ImageReader(buf), x, y, width=qr_size, height=qr_size, mask="auto"
-            )
+            c.drawImage(ImageReader(buf), x, y, width=qr_size, height=qr_size, mask="auto")
 
             # Label below QR
             c.setFont("Helvetica", 6)
             c.setFillColor(HexColor("#94a3b8"))
-            c.drawCentredString(
-                x + qr_size / 2, y - 0.13 * inch, "Escanea para verificar"
-            )
+            c.drawCentredString(x + qr_size / 2, y - 0.13 * inch, "Escanea para verificar")
 
         except Exception as exc:
             logger.warning("Could not draw QR code: %s", exc)
@@ -285,18 +270,14 @@ class PDFService:
         # Instructor name
         c.setFont("Helvetica-Bold", 9)
         c.setFillColor(HexColor("#1e3a8a"))
-        name_text = PDFService._fit_text(
-            instructor.full_name, "Helvetica-Bold", 9, 2.5 * inch
-        )
+        name_text = PDFService._fit_text(instructor.full_name, "Helvetica-Bold", 9, 2.5 * inch)
         c.drawCentredString(sig_cx, name_y, name_text)
 
         # Specialty / role
         if instructor.specialty:
             c.setFont("Helvetica", 8)
             c.setFillColor(HexColor("#64748b"))
-            spec_text = PDFService._fit_text(
-                instructor.specialty, "Helvetica", 8, 2.5 * inch
-            )
+            spec_text = PDFService._fit_text(instructor.specialty, "Helvetica", 8, 2.5 * inch)
             c.drawCentredString(sig_cx, spec_y, spec_text)
 
     @staticmethod
@@ -334,9 +315,7 @@ class PDFService:
         if instructor_name:
             c.setFont("Helvetica-Bold", 9)
             c.setFillColor(HexColor("#1e3a8a"))
-            name_text = PDFService._fit_text(
-                instructor_name, "Helvetica-Bold", 9, 2.5 * inch
-            )
+            name_text = PDFService._fit_text(instructor_name, "Helvetica-Bold", 9, 2.5 * inch)
             c.drawCentredString(sig_cx, name_y, name_text)
 
         specialty = config.get("instructor_specialty", "")
@@ -373,9 +352,7 @@ class PDFService:
         color_secondary = HexColor("#94a3b8")
 
         c.setFillColor(HexColor("#f8fafc"))
-        c.rect(
-            0, 0, PDFService.BASE_WIDTH, PDFService.BASE_HEIGHT, fill=True, stroke=False
-        )
+        c.rect(0, 0, PDFService.BASE_WIDTH, PDFService.BASE_HEIGHT, fill=True, stroke=False)
 
         c.setLineWidth(3)
         c.setStrokeColor(color_primary)
@@ -418,19 +395,9 @@ class PDFService:
         return text + "..."
 
     @staticmethod
-    def _draw_text(
-        c, text, config, default_x, default_y, default_size, color_primary=None
-    ):
-        x = (
-            config.get("x", default_x / inch) * inch
-            if isinstance(config.get("x"), (int, float))
-            else default_x
-        )
-        y = (
-            config.get("y", default_y / inch) * inch
-            if isinstance(config.get("y"), (int, float))
-            else default_y
-        )
+    def _draw_text(c, text, config, default_x, default_y, default_size, color_primary=None):
+        x = config.get("x", default_x / inch) * inch if isinstance(config.get("x"), (int, float)) else default_x
+        y = config.get("y", default_y / inch) * inch if isinstance(config.get("y"), (int, float)) else default_y
         font_size = config.get("font_size", default_size)
         font_family = config.get("font_family", "Helvetica")
         color = config.get("color", "#000000")

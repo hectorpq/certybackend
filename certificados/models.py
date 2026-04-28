@@ -21,9 +21,7 @@ class Template(models.Model):
 
     id = models.BigAutoField(primary_key=True)
 
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="templates"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="templates")
 
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=100, blank=True)
@@ -35,9 +33,7 @@ class Template(models.Model):
         help_text="Imagen de fondo del certificado (PNG/JPG)",
     )
 
-    background_url = models.TextField(
-        blank=True, help_text="URL de la imagen de fondo (legacy)"
-    )
+    background_url = models.TextField(blank=True, help_text="URL de la imagen de fondo (legacy)")
     preview_url = models.TextField(blank=True)
 
     layout_config = models.JSONField(
@@ -83,13 +79,9 @@ class Certificate(models.Model):
 
     id = models.BigAutoField(primary_key=True)
 
-    participant = models.ForeignKey(
-        Participant, on_delete=models.CASCADE, related_name="certificates"
-    )
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="certificates")
 
-    event = models.ForeignKey(
-        Event, on_delete=models.CASCADE, related_name="certificates"
-    )
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="certificates")
 
     template = models.ForeignKey(
         Template,
@@ -144,9 +136,7 @@ class Certificate(models.Model):
     def save(self, *args, **kwargs):
         """Auto-generate verification code if not set"""
         if not self.verification_code:
-            self.verification_code = self.generate_verification_code(
-                str(self.participant.id), str(self.event.id)
-            )
+            self.verification_code = self.generate_verification_code(str(self.participant.id), str(self.event.id))
         super().save(*args, **kwargs)
 
     def generate(self, template=None, generated_by=None, skip_attendance_check=False):
@@ -158,9 +148,7 @@ class Certificate(models.Model):
             from events.models import Enrollment
 
             try:
-                enrollment = Enrollment.objects.get(
-                    participant=self.participant, event=self.event
-                )
+                enrollment = Enrollment.objects.get(participant=self.participant, event=self.event)
                 if not enrollment.attendance:
                     raise ValidationError("Participant did not attend the event")
             except Enrollment.DoesNotExist:
@@ -168,9 +156,7 @@ class Certificate(models.Model):
 
         # Generate code if not set
         if not self.verification_code:
-            self.verification_code = self.generate_verification_code(
-                str(self.participant.id), str(self.event.id)
-            )
+            self.verification_code = self.generate_verification_code(str(self.participant.id), str(self.event.id))
 
         # Set template if provided
         if template:
@@ -186,9 +172,7 @@ class Certificate(models.Model):
         # Generate real PDF
         from services.pdf_service import PDFService
 
-        pdf_result = PDFService.generate_certificate_pdf(
-            self, template or self.template
-        )
+        pdf_result = PDFService.generate_certificate_pdf(self, template or self.template)
         if pdf_result["success"]:
             self.pdf_url = pdf_result["path"]
         else:

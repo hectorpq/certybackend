@@ -3,14 +3,21 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
-from core.helpers import (calculate_expiration_date, days_until_expiration,
-                          format_certificate_status, format_date,
-                          format_delivery_method, format_delivery_status,
-                          format_error_message,
-                          get_delivery_method_display_icon,
-                          get_delivery_status_symbol, is_certificate_expired,
-                          validate_certificate_status,
-                          validate_delivery_method, validate_verification_code)
+from core.helpers import (
+    calculate_expiration_date,
+    days_until_expiration,
+    format_certificate_status,
+    format_date,
+    format_delivery_method,
+    format_delivery_status,
+    format_error_message,
+    get_delivery_method_display_icon,
+    get_delivery_status_symbol,
+    is_certificate_expired,
+    validate_certificate_status,
+    validate_delivery_method,
+    validate_verification_code,
+)
 
 
 class ValidateVerificationCodeTest(TestCase):
@@ -93,9 +100,7 @@ class ExpirationTest(TestCase):
         self.assertFalse(is_certificate_expired(timezone.now() + timedelta(days=1)))
 
     def test_days_until_expiration_positive(self):
-        self.assertGreater(
-            days_until_expiration(timezone.now() + timedelta(days=30)), 0
-        )
+        self.assertGreater(days_until_expiration(timezone.now() + timedelta(days=30)), 0)
 
     def test_days_until_expiration_negative_when_expired(self):
         self.assertLess(days_until_expiration(timezone.now() - timedelta(days=5)), 0)
@@ -141,9 +146,7 @@ class DeliveryQueryHelpersTest(TestCase):
         from participants.models import Participant
         from users.models import User
 
-        self.user = User.objects.create_user(
-            email="h@test.com", full_name="Helper", password="pass"
-        )
+        self.user = User.objects.create_user(email="h@test.com", full_name="Helper", password="pass")
         self.participant = Participant.objects.create(
             document_id="77777",
             first_name="Pia",
@@ -153,9 +156,7 @@ class DeliveryQueryHelpersTest(TestCase):
         )
         import datetime
 
-        self.event = Event.objects.create(
-            name="Q Event", event_date=datetime.date(2026, 3, 1), created_by=self.user
-        )
+        self.event = Event.objects.create(name="Q Event", event_date=datetime.date(2026, 3, 1), created_by=self.user)
         self.template = Template.objects.create(name="T", created_by=self.user)
         self.cert = Certificate.objects.create(
             participant=self.participant,

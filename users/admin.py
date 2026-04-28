@@ -47,9 +47,7 @@ class UserAdmin(admin.ModelAdmin):
 
     def password_info(self, obj):
         return (
-            "Use 'Change Password' link below to update password"
-            if obj.id
-            else "Password will be set after creation"
+            "Use 'Change Password' link below to update password" if obj.id else "Password will be set after creation"
         )
 
     password_info.short_description = "Password Change"

@@ -57,9 +57,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="template",
             name="background_url",
-            field=models.TextField(
-                blank=True, help_text="URL de la imagen de fondo (legacy)"
-            ),
+            field=models.TextField(blank=True, help_text="URL de la imagen de fondo (legacy)"),
         ),
         migrations.AlterField(
             model_name="template",

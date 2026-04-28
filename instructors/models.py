@@ -18,9 +18,7 @@ class Instructor(models.Model):
         help_text="Imagen de firma del instructor (PNG/JPG con fondo transparente recomendado)",
     )
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="created_instructors"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_instructors")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,6 +32,4 @@ class Instructor(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"{self.full_name} ({self.specialty})" if self.specialty else self.full_name
-        )
+        return f"{self.full_name} ({self.specialty})" if self.specialty else self.full_name

@@ -18,12 +18,8 @@ class DeliveryLog(models.Model):
     )
 
     id = models.BigAutoField(primary_key=True)
-    certificate = models.ForeignKey(
-        Certificate, on_delete=models.CASCADE, related_name="deliveries"
-    )
-    sent_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="delivery_logs"
-    )
+    certificate = models.ForeignKey(Certificate, on_delete=models.CASCADE, related_name="deliveries")
+    sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="delivery_logs")
     delivery_method = models.CharField(max_length=20, choices=METHOD_CHOICES)
     recipient = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")

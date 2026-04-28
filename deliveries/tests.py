@@ -11,9 +11,7 @@ from users.models import User
 
 class DeliveryLogTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            email="admin@test.com", full_name="Admin", password="pass"
-        )
+        self.user = User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass")
         self.participant = Participant.objects.create(
             document_id="11111",
             first_name="Luis",
@@ -21,12 +19,8 @@ class DeliveryLogTest(TestCase):
             email="luis@test.com",
             created_by=self.user,
         )
-        self.event = Event.objects.create(
-            name="Evento", event_date=date(2026, 1, 1), created_by=self.user
-        )
-        self.template = Template.objects.create(
-            name="Plantilla Base", created_by=self.user
-        )
+        self.event = Event.objects.create(name="Evento", event_date=date(2026, 1, 1), created_by=self.user)
+        self.template = Template.objects.create(name="Plantilla Base", created_by=self.user)
         self.certificate = Certificate.objects.create(
             participant=self.participant,
             event=self.event,

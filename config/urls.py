@@ -19,13 +19,17 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
-from drf_spectacular.views import (SpectacularAPIView, SpectacularRedocView,
-                                   SpectacularSwaggerView)
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from api.views import (BulkCertificateGenerationView,
-                       BulkCertificatePreviewView, BulkCertificateProcessView,
-                       CurrentUserView, LoginView, RegisterView)
+from api.views import (
+    BulkCertificateGenerationView,
+    BulkCertificatePreviewView,
+    BulkCertificateProcessView,
+    CurrentUserView,
+    LoginView,
+    RegisterView,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

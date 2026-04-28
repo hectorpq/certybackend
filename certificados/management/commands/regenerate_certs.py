@@ -33,9 +33,7 @@ class Command(BaseCommand):
         count = 0
         for cert in bad_certs:
             count += 1
-            self.stdout.write(
-                f"[{count}] {cert.participant.first_name} - {cert.event.name}"
-            )
+            self.stdout.write(f"[{count}] {cert.participant.first_name} - {cert.event.name}")
 
             # Resetear
             cert.status = "pending"
@@ -47,22 +45,14 @@ class Command(BaseCommand):
                 cert = cert.generate(generated_by=admin)
 
                 # Enviar email CON PDF ADJUNTADO
-                delivery_log = cert.deliver(
-                    method="email", recipient=cert.participant.email, sent_by=admin
-                )
+                delivery_log = cert.deliver(method="email", recipient=cert.participant.email, sent_by=admin)
 
                 if delivery_log.status == "success":
                     self.stdout.write(
-                        self.style.SUCCESS(
-                            f"    ✅ Email enviado a {cert.participant.email} - PDF ADJUNTADO"
-                        )
+                        self.style.SUCCESS(f"    ✅ Email enviado a {cert.participant.email} - PDF ADJUNTADO")
                     )
                 else:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"    ⚠️  Error: {delivery_log.error_message}"
-                        )
-                    )
+                    self.stdout.write(self.style.WARNING(f"    ⚠️  Error: {delivery_log.error_message}"))
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"    ❌ Error: {e}"))
 
