@@ -21,7 +21,7 @@ from deliveries.models import DeliveryLog
 from events.models import Event
 from instructors.models import Instructor
 from participants.models import Participant
-from procesos.services import ExcelImportError, ExcelProcessingService
+from procesos.services import BulkCertificateGeneratorService, ExcelImportError, ExcelProcessingService
 from users.models import User
 
 from .serializers import (
@@ -1422,7 +1422,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        url_path="import",
+        url_path="import_students",
         permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
     )
     def import_students(self, request):

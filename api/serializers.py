@@ -371,6 +371,7 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
     event_description = serializers.CharField(source="event.description", read_only=True)
     status_display = serializers.SerializerMethodField()
     student_exists = serializers.SerializerMethodField()
+    participant_exists = serializers.SerializerMethodField()
     student = serializers.SerializerMethodField()
 
     class Meta:
@@ -387,6 +388,7 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
             "status_display",
             "expires_at",
             "student_exists",
+            "participant_exists",
             "student",
             "participant",
         ]
@@ -395,6 +397,11 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
         return obj.get_status_display()
 
     def get_student_exists(self, obj):
+        if obj.participant:
+            return True
+        return Participant.objects.filter(email__iexact=obj.email).exists()
+
+    def get_participant_exists(self, obj):
         if obj.participant:
             return True
         return Participant.objects.filter(email__iexact=obj.email).exists()
