@@ -7,26 +7,33 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Student',
+            name="Student",
             fields=[
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('document_id', models.CharField(max_length=20, unique=True)),
-                ('first_name', models.CharField(max_length=100)),
-                ('last_name', models.CharField(max_length=100)),
-                ('email', models.EmailField(max_length=254, unique=True)),
-                ('phone', models.CharField(blank=True, max_length=20, null=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("document_id", models.CharField(max_length=20, unique=True)),
+                ("first_name", models.CharField(max_length=100)),
+                ("last_name", models.CharField(max_length=100)),
+                ("email", models.EmailField(max_length=254, unique=True)),
+                ("phone", models.CharField(blank=True, max_length=20, null=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['first_name', 'last_name'],
-                'indexes': [models.Index(fields=['is_active'], name='students_st_is_acti_c00e81_idx'), models.Index(fields=['document_id'], name='students_st_documen_9d97ee_idx'), models.Index(fields=['email'], name='students_st_email_e271bc_idx')],
+                "ordering": ["first_name", "last_name"],
+                "indexes": [
+                    models.Index(
+                        fields=["is_active"], name="students_st_is_acti_c00e81_idx"
+                    ),
+                    models.Index(
+                        fields=["document_id"], name="students_st_documen_9d97ee_idx"
+                    ),
+                    models.Index(fields=["email"], name="students_st_email_e271bc_idx"),
+                ],
             },
         ),
     ]

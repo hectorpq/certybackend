@@ -1,4 +1,5 @@
 from django.db import models
+
 from users.models import User
 
 
@@ -11,24 +12,28 @@ class Instructor(models.Model):
     bio = models.TextField(blank=True)
     signature_url = models.TextField(blank=True)
     signature_image = models.ImageField(
-        upload_to='instructors/signatures/',
+        upload_to="instructors/signatures/",
         blank=True,
         null=True,
-        help_text='Imagen de firma del instructor (PNG/JPG con fondo transparente recomendado)',
+        help_text="Imagen de firma del instructor (PNG/JPG con fondo transparente recomendado)",
     )
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_instructors')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="created_instructors"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['full_name']
-        verbose_name = 'Instructor'
-        verbose_name_plural = 'Instructors'
+        ordering = ["full_name"]
+        verbose_name = "Instructor"
+        verbose_name_plural = "Instructors"
         indexes = [
-            models.Index(fields=['is_active']),
-            models.Index(fields=['email']),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["email"]),
         ]
 
     def __str__(self):
-        return f"{self.full_name} ({self.specialty})" if self.specialty else self.full_name
+        return (
+            f"{self.full_name} ({self.specialty})" if self.specialty else self.full_name
+        )

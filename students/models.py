@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.exceptions import ValidationError
+
 from users.models import User
 
 
@@ -11,16 +11,18 @@ class Student(models.Model):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True, default="")
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_students')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="created_students"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['first_name', 'last_name']
+        ordering = ["first_name", "last_name"]
         indexes = [
-            models.Index(fields=['is_active']),
-            models.Index(fields=['document_id']),
-            models.Index(fields=['email']),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["document_id"]),
+            models.Index(fields=["email"]),
         ]
 
     def __str__(self):

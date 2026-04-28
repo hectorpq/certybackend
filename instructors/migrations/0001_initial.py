@@ -7,29 +7,38 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Instructor',
+            name="Instructor",
             fields=[
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('full_name', models.CharField(max_length=150)),
-                ('email', models.EmailField(blank=True, max_length=254, null=True, unique=True)),
-                ('phone', models.CharField(blank=True, max_length=20, null=True)),
-                ('specialty', models.CharField(blank=True, max_length=200)),
-                ('bio', models.TextField(blank=True)),
-                ('signature_url', models.TextField(blank=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("full_name", models.CharField(max_length=150)),
+                (
+                    "email",
+                    models.EmailField(
+                        blank=True, max_length=254, null=True, unique=True
+                    ),
+                ),
+                ("phone", models.CharField(blank=True, max_length=20, null=True)),
+                ("specialty", models.CharField(blank=True, max_length=200)),
+                ("bio", models.TextField(blank=True)),
+                ("signature_url", models.TextField(blank=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Instructor',
-                'verbose_name_plural': 'Instructors',
-                'ordering': ['full_name'],
-                'indexes': [models.Index(fields=['is_active'], name='instructors_is_acti_a5a7f7_idx'), models.Index(fields=['email'], name='instructors_email_b143f5_idx')],
+                "verbose_name": "Instructor",
+                "verbose_name_plural": "Instructors",
+                "ordering": ["full_name"],
+                "indexes": [
+                    models.Index(
+                        fields=["is_active"], name="instructors_is_acti_a5a7f7_idx"
+                    ),
+                    models.Index(fields=["email"], name="instructors_email_b143f5_idx"),
+                ],
             },
         ),
     ]
