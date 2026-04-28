@@ -21,7 +21,7 @@ from deliveries.models import DeliveryLog
 from events.models import Event
 from instructors.models import Instructor
 from participants.models import Participant
-from procesos.services import BulkCertificateGeneratorService, ExcelImportError, ExcelProcessingService
+from procesos.services import BulkCertificateGeneratorService, ExcelImportError, ExcelProcessingService  # noqa: F401
 from users.models import User
 
 from .serializers import (
