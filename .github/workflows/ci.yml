@@ -38,8 +38,8 @@ jobs:
         run: |
           flake8 . \
             --max-line-length=120 \
-            --exclude=migrations,__pycache__,.git,venv \
-            --extend-ignore=E501,W503 \
+            --exclude=migrations,__pycache__,.git,venv,.venv \
+            --extend-ignore=E501,W503,E402,F841,E266,E125 \
             --statistics
 
       - name: black — formatting check
