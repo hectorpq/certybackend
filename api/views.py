@@ -930,7 +930,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                 )
 
                 if not created and cert.status == "pending":
-                    cert.generate(generated_by=request.user, skip_attendance_check=True)
+                    cert.generate(template=event.template, generated_by=request.user, skip_attendance_check=True)
                     results["created"].append(
                         {
                             "participant_id": enrollment.participant.id,
@@ -940,7 +940,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                         }
                     )
                 elif created:
-                    cert.generate(generated_by=request.user, skip_attendance_check=True)
+                    cert.generate(template=event.template, generated_by=request.user, skip_attendance_check=True)
                     results["created"].append(
                         {
                             "participant_id": enrollment.participant.id,
@@ -1613,7 +1613,27 @@ class TemplateViewSet(viewsets.ModelViewSet):
         return TemplateSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user)
+        self._sync_layout_config(instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self._sync_layout_config(instance)
+
+    def _sync_layout_config(self, template):
+        """Keep layout_config.student_name in sync with the flat coord/font fields."""
+        layout = dict(template.layout_config or {})
+        student_name = dict(layout.get("student_name", {}))
+        student_name.update({
+            "x": template.x_coord,
+            "y": template.y_coord,
+            "font_size": template.font_size,
+            "font_family": template.font_family,
+            "color": template.font_color,
+        })
+        layout["student_name"] = student_name
+        template.layout_config = layout
+        template.save(update_fields=["layout_config"])
 
     @action(detail=True, methods=["post"], url_path="upload-image")
     def upload_image(self, request, pk=None):
