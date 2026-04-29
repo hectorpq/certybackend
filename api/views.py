@@ -1624,13 +1624,15 @@ class TemplateViewSet(viewsets.ModelViewSet):
         """Keep layout_config.student_name in sync with the flat coord/font fields."""
         layout = dict(template.layout_config or {})
         student_name = dict(layout.get("student_name", {}))
-        student_name.update({
-            "x": template.x_coord,
-            "y": template.y_coord,
-            "font_size": template.font_size,
-            "font_family": template.font_family,
-            "color": template.font_color,
-        })
+        student_name.update(
+            {
+                "x": template.x_coord,
+                "y": template.y_coord,
+                "font_size": template.font_size,
+                "font_family": template.font_family,
+                "color": template.font_color,
+            }
+        )
         layout["student_name"] = student_name
         template.layout_config = layout
         template.save(update_fields=["layout_config"])
