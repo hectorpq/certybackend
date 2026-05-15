@@ -10,7 +10,7 @@ pipeline {
         stage('Limpieza y Entorno') {
             steps {
                 script {
-                    // Generamos el .env necesario para Django y Docker Compose
+                    
                     sh '''
                         echo "DB_NAME=postgres" > .env
                         echo "DB_USER=postgres" >> .env
