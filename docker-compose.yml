@@ -26,6 +26,11 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    # --- CAMBIO CRÍTICO AQUÍ ---
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    # ---------------------------
     environment:
       DB_HOST: db
       DB_PORT: "5432"
@@ -44,7 +49,7 @@ services:
     ports:
       - "9080:8080"
     volumes:
-      - .:/app
+      - jenkins_data:/var/jenkins_home # Cambiado '.' por volumen para persistencia
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - certy_network
@@ -58,6 +63,7 @@ services:
 
 volumes:
   db_data:
+  jenkins_data: # Definido para que no pierdas tus configuraciones al reiniciar
 
 networks:
   certy_network:
