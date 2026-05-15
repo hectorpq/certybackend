@@ -19,7 +19,15 @@ pipeline {
         stage('Limpieza') {
             steps {
                 script{
-                    sh '[ -f .env.example ] && cp .env.example .env || touch .env'
+                    sh '''
+                        echo "DB_NAME=postgres" > .env
+                        echo "DB_USER=postgres" >> .env
+                        echo "DB_PASSWORD=postgres" >> .env
+                        echo "DB_HOST=db" >> .env
+                        echo "DB_PORT=5432" >> .env
+                        echo "SECRET_KEY=secret_key_de_test_123" >> .env
+                        echo "DEBUG=True" >> .env
+                    '''
                 }
                 sh 'docker compose down --remove-orphans || true'
                 
