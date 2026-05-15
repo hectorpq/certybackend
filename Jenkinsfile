@@ -4,43 +4,59 @@ pipeline {
     environment {
         // Nombre de la herramienta configurada en "Global Tool Configuration"
         SCANNER_HOME = tool 'SonarScanner'
+        // ID de la credencial de GitHub guardada en Jenkins
+        GITHUB_TOKEN_ID = 'github-token' 
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                // Usamos las credenciales para clonar o actualizar el código
+                checkout scm
+            }
+        }
+
         stage('Limpieza') {
             steps {
-                // Elimina contenedores previos para evitar conflictos de puertos o datos
-                sh 'docker compose down'
+                // Elimina contenedores previos para evitar conflictos
+                sh 'cp .env.example .env'
+                sh "echo 'DB_PASSWORD=mi_password_seguro' >> .env"
+                sh 'docker-compose down || true'
             }
         }
 
         stage('Build') {
             steps {
-                // Construye la imagen usando el Dockerfile que instalara GDAL y dependencias
-                sh 'docker compose build web'
+                // Construye la imagen con las dependencias del sistema (GDAL, libpq, etc.)
+                sh 'docker-compose build web'
             }
         }
 
         stage('Test & Coverage') {
             steps {
-                // Ejecuta pytest y genera el reporte de cobertura para SonarQube
-                // Se usa --cov para que Sonar pueda mostrar qué porcentaje del código está probado
+                // Ejecuta pytest y genera el reporte XML para SonarQube
                 sh 'docker compose run --rm web pytest --cov=. --cov-report=xml'
             }
         }
 
         stage('Linting (Estilo)') {
             steps {
-                // Ejecuta flake8 para asegurar que el código sigue las reglas de estilo
+                // Asegura la calidad de estilo con flake8
                 sh 'docker compose run --rm web flake8 .'
             }
         }
 
         stage('Static Analysis (SonarQube)') {
             steps {
-                // El bloque withSonarQubeEnv se encarga de inyectar el Token y la URL del servidor
+                // El bloque withSonarQubeEnv inyecta la URL y el Token de SonarQube
                 withSonarQubeEnv('SonarQubeServer') {
-                    sh "${SCANNER_HOME}/bin/sonar-scanner"
+                    // Usamos el token de GitHub para la decoración de Pull Requests
+                    withCredentials([string(credentialsId: "${GITHUB_TOKEN_ID}", variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        -Dsonar.analysis.github.token=${GITHUB_TOKEN}
+                        """
+                    }
                 }
             }
         }
@@ -48,7 +64,7 @@ pipeline {
 
     post {
         always {
-            // Limpia el entorno al finalizar, gane o pierda el pipeline
+            // Limpia los contenedores de db (PostgreSQL) y redis al finalizar
             sh 'docker compose down'
         }
     }
