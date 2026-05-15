@@ -18,10 +18,11 @@ pipeline {
 
         stage('Limpieza') {
             steps {
-                // Elimina contenedores previos para evitar conflictos
-                sh 'cp .env.example .env'
-                sh "echo 'DB_PASSWORD=mi_password_seguro' >> .env"
-                sh 'docker-compose down || true'
+                script{
+                    sh '[ -f .env.example ] && cp .env.example .env || touch .env'
+                }
+                sh 'docker compose down || true'
+                
             }
         }
 
