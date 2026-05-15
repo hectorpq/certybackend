@@ -28,7 +28,7 @@ services:
       - .env
     # --- CAMBIO CRÍTICO AQUÍ ---
     volumes:
-      - .:/app
+      
       - /var/run/docker.sock:/var/run/docker.sock
     # ---------------------------
     environment:
