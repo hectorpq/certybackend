@@ -21,7 +21,7 @@ pipeline {
                 script{
                     sh '[ -f .env.example ] && cp .env.example .env || touch .env'
                 }
-                sh 'docker compose down || true'
+                sh 'docker compose down --remove-orphans || true'
                 
             }
         }
