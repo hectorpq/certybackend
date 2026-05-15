@@ -28,6 +28,7 @@ pipeline {
                         echo "SECRET_KEY=secret_key_de_test_123" >> .env
                         echo "DEBUG=True" >> .env
                     '''
+                    sh 'chmod 666 /var/run/docker.sock || true'
                 }
                 sh 'docker compose down --remove-orphans || true'
                 

@@ -44,6 +44,7 @@ services:
     ports:
       - "9080:8080"
     volumes:
+      - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - certy_network
