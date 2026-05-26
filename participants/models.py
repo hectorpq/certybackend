@@ -1,9 +1,11 @@
 from django.db import models
+from simple_history.models import HistoricalRecords
 
+from core.mixins import SoftDeleteMixin
 from users.models import User
 
 
-class Participant(models.Model):
+class Participant(SoftDeleteMixin):
     id = models.BigAutoField(primary_key=True)
     document_id = models.CharField(max_length=20, unique=True)
     first_name = models.CharField(max_length=100)
@@ -14,6 +16,7 @@ class Participant(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_participants")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["first_name", "last_name"]
@@ -21,6 +24,7 @@ class Participant(models.Model):
             models.Index(fields=["is_active"]),
             models.Index(fields=["document_id"]),
             models.Index(fields=["email"]),
+            models.Index(fields=["is_deleted"]),
         ]
 
     def __str__(self):

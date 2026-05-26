@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class UserManager(BaseUserManager):
@@ -42,6 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = UserManager()
+    history = HistoricalRecords()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name"]

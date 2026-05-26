@@ -222,11 +222,19 @@ class CertificateDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_event(self, obj):
+        event = obj.event
+        instructor_name = None
+        if event.instructor:
+            instructor_name = event.instructor.full_name
         return {
-            "id": obj.event.id,
-            "name": obj.event.name,
-            "event_date": str(obj.event.event_date) if obj.event.event_date else None,
-            "category": obj.event.category,
+            "id": event.id,
+            "name": event.name,
+            "event_date": str(event.event_date) if event.event_date else None,
+            "end_date": str(event.end_date) if event.end_date else None,
+            "description": event.description or "",
+            "location": event.location or "",
+            "duration_hours": event.duration_hours,
+            "instructor_name": instructor_name,
         }
 
     def get_status_display(self, obj):
@@ -463,11 +471,73 @@ class ExcelBulkImportSerializer(serializers.Serializer):
     excel_file = serializers.FileField()
 
 
+class BulkProcessDataSerializer(serializers.Serializer):
+    data = serializers.ListField(
+        child=serializers.DictField(child=serializers.CharField()),
+        help_text="Array de registros. Cada registro debe tener: full_name, email, document_id, event_name.",
+    )
+
+
 class EnrollmentCreateSerializer(serializers.Serializer):
     participant_id = serializers.IntegerField()
     attendance = serializers.BooleanField(required=False, default=False)
     grade = serializers.FloatField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, default="", allow_blank=True)
+
+
+class EventEnrollSerializer(serializers.Serializer):
+    participant_id = serializers.IntegerField(required=False, help_text="ID del participante a inscribir.")
+    student_id = serializers.IntegerField(required=False, help_text="Alias de participant_id (backward compat).")
+    participant_email = serializers.EmailField(required=False, help_text="Email del participante. Si no existe, se crea automáticamente.")
+    student_email = serializers.EmailField(required=False, help_text="Alias de participant_email (backward compat).")
+
+
+class EventGenerateCertificatesSerializer(serializers.Serializer):
+    participant_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False,
+        help_text="Lista opcional de IDs de participantes. Si se omite, genera para todos los que asistieron."
+    )
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False,
+        help_text="Alias de participant_ids (backward compat)."
+    )
+
+
+class EventSendCertificatesSerializer(serializers.Serializer):
+    method = serializers.ChoiceField(
+        choices=["email", "whatsapp", "link"], default="email", required=False,
+        help_text="Método de entrega del certificado."
+    )
+    participant_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False,
+        help_text="Lista opcional de IDs de participantes. Si se omite, envía a todos los que tienen certificado."
+    )
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False,
+        help_text="Alias de participant_ids (backward compat)."
+    )
+
+
+class EventSendInvitationsSerializer(serializers.Serializer):
+    file = serializers.FileField(required=False, help_text="Archivo CSV o Excel con columna de emails.")
+    emails = serializers.ListField(
+        child=serializers.EmailField(), required=False,
+        help_text="Lista JSON de emails (alternativa o complemento al archivo)."
+    )
+
+
+class EventFinalizeSerializer(serializers.Serializer):
+    send_certificates = serializers.BooleanField(
+        default=False, required=False,
+        help_text="Si es `true`, genera y envía los certificados por email automáticamente al finalizar."
+    )
+
+
+class CertificateRetrySerializer(serializers.Serializer):
+    method = serializers.ChoiceField(
+        choices=["email", "whatsapp", "link"], required=False,
+        help_text="Método de entrega. Si se omite, usa el mismo método del último intento fallido."
+    )
 
 
 # Legacy aliases
@@ -476,6 +546,64 @@ EventCertificateSerializer = EventSimpleSerializer
 EventParticipantWithCertificateSerializer = EventSimpleSerializer
 BulkImportResultSerializer = EventSimpleSerializer
 StudentSerializer = ParticipantSerializer  # backward compat alias
+
+
+_SOFT_DELETE_FIELDS = {"is_deleted", "deleted_at", "deleted_by_id", "deleted_by"}
+
+
+class ChangelogSerializer(serializers.Serializer):
+    """Serializer para el historial de cambios de cualquier modelo con HistoricalRecords."""
+
+    history_id = serializers.IntegerField()
+    history_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S")
+    history_type = serializers.CharField()
+    history_type_display = serializers.SerializerMethodField()
+    changed_by = serializers.SerializerMethodField()
+    fields_changed = serializers.SerializerMethodField()
+
+    def get_history_type_display(self, obj):
+        if obj.history_type == "~":
+            try:
+                if obj.is_deleted:
+                    prev = obj.prev_record
+                    if prev is None or not prev.is_deleted:
+                        return "Eliminado (baja lógica)"
+                else:
+                    prev = obj.prev_record
+                    if prev and prev.is_deleted:
+                        return "Restaurado"
+            except Exception:
+                pass
+            return "Editado"
+        return {"+": "Creado", "-": "Eliminado"}.get(obj.history_type, obj.history_type)
+
+    def get_changed_by(self, obj):
+        if obj.history_user:
+            return {
+                "id": obj.history_user.id,
+                "email": obj.history_user.email,
+                "full_name": obj.history_user.full_name,
+            }
+        return None
+
+    def get_fields_changed(self, obj):
+        if obj.history_type != "~":
+            return {}
+        try:
+            prev = obj.prev_record
+            if not prev:
+                return {}
+            delta = obj.diff_against(prev)
+            return {
+                change.field: {
+                    "before": str(change.old) if change.old is not None else None,
+                    "after": str(change.new) if change.new is not None else None,
+                }
+                for change in delta.changes
+                if change.field not in _SOFT_DELETE_FIELDS
+            }
+        except Exception:
+            return {}
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

@@ -524,3 +524,190 @@ class InstructorSignatureFieldTest(TestCase):
             created_by=self.user,
         )
         self.assertIn("Perez", str(inst))
+
+
+# ─────────────────────────────────────────────
+# Email limit coverage
+# ─────────────────────────────────────────────
+
+
+class EmailLimitTest(TestCase):
+    """Cover the email daily-limit branches in check_email_limit()."""
+
+    def test_blocked_when_at_daily_limit(self):
+        from services.email_service import GMAIL_DAILY_LIMIT, check_email_limit
+
+        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_DAILY_LIMIT):
+            result = check_email_limit()
+        self.assertTrue(result["blocked"])
+        self.assertTrue(result["warning"])
+
+    def test_warning_but_not_blocked_at_threshold(self):
+        from services.email_service import GMAIL_DAILY_LIMIT, GMAIL_WARNING_THRESHOLD, check_email_limit
+
+        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_WARNING_THRESHOLD):
+            result = check_email_limit()
+        self.assertTrue(result["warning"])
+        self.assertFalse(result["blocked"])
+        self.assertIsNotNone(result["message"])  # Warning message is set
+
+    def test_send_certificate_blocked_when_limit_reached(self):
+        cert, _ = make_cert(doc_id="LMT01", p_email="lmt01@test.com")
+        with patch(
+            "services.email_service.check_email_limit",
+            return_value={"blocked": True, "warning": True, "message": "Limit reached"},
+        ):
+            result = EmailService.send_certificate(cert, "lmt01@test.com")
+        self.assertFalse(result["success"])
+        self.assertTrue(result.get("email_limit_reached"))
+
+    def test_send_bulk_returns_early_when_blocked(self):
+        cert, _ = make_cert(doc_id="LMT02", p_email="lmt02@test.com")
+        with patch(
+            "services.email_service.check_email_limit",
+            return_value={"blocked": True, "warning": True, "message": "Blocked"},
+        ):
+            result = EmailService.send_bulk_certificates([cert])
+        self.assertEqual(result["sent"], 0)
+        self.assertEqual(result["failed"], 0)
+
+
+# ─────────────────────────────────────────────
+# PDF service: _draw_custom_signature coverage
+# ─────────────────────────────────────────────
+
+
+class PDFCustomSignatureTest(TestCase):
+    """Cover PDFService._draw_custom_signature and edge cases."""
+
+    def test_draw_custom_signature_with_image_and_text(self):
+        mock_c = MagicMock()
+        config = {
+            "image_path": "/fake/sig.png",
+            "instructor_name": "Dr. Custom",
+            "instructor_specialty": "Testing Engineering",
+        }
+        with patch("services.pdf_service.ImageReader", side_effect=Exception("no file")):
+            PDFService._draw_custom_signature(mock_c, config)
+        mock_c.line.assert_called_once()
+        self.assertTrue(mock_c.drawCentredString.called)
+
+    def test_draw_custom_signature_without_image(self):
+        mock_c = MagicMock()
+        config = {"instructor_name": "Prof. Ghost"}
+        PDFService._draw_custom_signature(mock_c, config)
+        mock_c.line.assert_called_once()
+
+    def test_draw_custom_signature_empty_config(self):
+        mock_c = MagicMock()
+        PDFService._draw_custom_signature(mock_c, {})
+        mock_c.line.assert_called_once()
+        mock_c.drawCentredString.assert_not_called()
+
+    @patch("services.pdf_service.canvas.Canvas")
+    @patch("pathlib.Path.mkdir")
+    def test_generate_pdf_uses_custom_signature_when_no_instructor(self, mock_mkdir, mock_canvas):
+        mock_canvas.return_value = MagicMock()
+        cert, user = make_cert(doc_id="CS01", p_email="cs01@test.com")
+        template = MagicMock()
+        template.background_image = None
+        template.background_url = ""
+        template.layout_config = {
+            "signature": {"instructor_name": "Ad-Hoc Instructor", "instructor_specialty": "QA"}
+        }
+        with patch.object(PDFService, "_draw_custom_signature") as mock_custom:
+            result = PDFService.generate_certificate_pdf(cert, template=template)
+        self.assertTrue(result["success"])
+        mock_custom.assert_called_once()
+
+    @patch("services.pdf_service.ImageReader")
+    @patch("services.pdf_service.canvas.Canvas")
+    @patch("pathlib.Path.mkdir")
+    def test_background_image_loads_successfully(self, mock_mkdir, mock_canvas, mock_reader):
+        mock_canvas.return_value = MagicMock()
+        mock_reader.return_value = MagicMock()
+        cert, user = make_cert(doc_id="BG01", p_email="bg01@test.com")
+        template = MagicMock()
+        template.background_image = MagicMock()
+        template.background_image.path = "/fake/bg.png"
+        template.background_url = ""
+        template.layout_config = {}
+        result = PDFService.generate_certificate_pdf(cert, template=template)
+        self.assertTrue(result["success"])
+
+    def test_draw_instructor_signature_path_exception_sets_none(self):
+        from unittest.mock import PropertyMock
+
+        mock_c = MagicMock()
+        mock_instructor = MagicMock()
+        type(mock_instructor.signature_image).path = PropertyMock(side_effect=ValueError("no path"))
+        PDFService._draw_instructor_signature(mock_c, mock_instructor, {})
+        mock_c.line.assert_called_once()
+
+
+# ─────────────────────────────────────────────
+# Celery tasks exception coverage
+# ─────────────────────────────────────────────
+
+
+class CeleryTasksExceptionTest(TestCase):
+    """Cover exception/retry paths in services/tasks.py."""
+
+    def test_email_task_retries_on_certificate_not_found(self):
+        from services.tasks import send_certificate_email_task
+
+        with self.assertRaises(Exception):
+            result = send_certificate_email_task.apply(args=[99999, "test@test.com"])
+            result.get()
+
+    def test_pdf_task_retries_on_certificate_not_found(self):
+        from services.tasks import generate_certificate_pdf_task
+
+        with self.assertRaises(Exception):
+            result = generate_certificate_pdf_task.apply(args=[99999])
+            result.get()
+
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP error"})
+    def test_email_task_retries_on_send_failure(self, mock_send):
+        from services.tasks import send_certificate_email_task
+
+        cert, _ = make_cert(doc_id="TASK01", p_email="task01@test.com")
+        with self.assertRaises(Exception):
+            result = send_certificate_email_task.apply(args=[cert.id, "task01@test.com"])
+            result.get()
+
+    @patch("services.email_service.EmailService.send_bulk_certificates", return_value={"sent": 0, "failed": 0, "errors": []})
+    def test_bulk_certificates_task_email_method(self, mock_bulk):
+        from services.tasks import send_bulk_certificates_task
+
+        cert, _ = make_cert(doc_id="BULK01", p_email="bulk01@test.com")
+        result = send_bulk_certificates_task.apply(args=[cert.event.id, "email"])
+        data = result.get()
+        self.assertEqual(data["sent"], 0)
+
+    def test_bulk_certificates_task_unsupported_method(self):
+        from services.tasks import send_bulk_certificates_task
+
+        cert, _ = make_cert(doc_id="BULK02", p_email="bulk02@test.com")
+        result = send_bulk_certificates_task.apply(args=[cert.event.id, "whatsapp"])
+        data = result.get()
+        self.assertEqual(data["sent"], 0)
+        self.assertGreater(len(data["errors"]), 0)
+
+    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    def test_pdf_task_success_path(self, mock_gen):
+        from services.tasks import generate_certificate_pdf_task
+
+        cert, _ = make_cert(doc_id="PDFTASK01", p_email="pdftask01@test.com")
+        result = generate_certificate_pdf_task.apply(args=[cert.id])
+        data = result.get()
+        self.assertTrue(data["success"])
+
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": True, "message": "sent"})
+    def test_email_task_success_path(self, mock_send):
+        from services.tasks import send_certificate_email_task
+
+        cert, _ = make_cert(doc_id="EMLTASK01", p_email="emltask01@test.com")
+        result = send_certificate_email_task.apply(args=[cert.id, "emltask01@test.com"])
+        data = result.get()
+        self.assertTrue(data["success"])

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "django_filters",
     "drf_spectacular",
+    "simple_history",
     "django_celery_results",
     "certificados",
     "users",
@@ -70,6 +71,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -209,6 +211,7 @@ REST_FRAMEWORK = {
         "user": "1000/day",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
 }
 
 # ========== DRF SPECTACULAR (OpenAPI/Swagger) ==========
@@ -217,17 +220,54 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": (
         "API REST para gestión de certificados académicos digitales. "
         "Permite la generación, entrega y verificación de certificados "
-        "para eventos académicos."
+        "para eventos académicos.\n\n"
+        "---\n\n"
+        "### Roles del sistema\n\n"
+        "- **admin**: Acceso total a todos los recursos del sistema.\n"
+        "- **coordinador**: Usuario operativo — gestiona certificados, eventos, participantes e instructores.\n"
+        "- **participante**: Usuario final — ve solo sus propios certificados y eventos.\n\n"
+        "### Autenticación\n\n"
+        "La mayoría de endpoints requieren autenticación via **JWT Bearer Token**.\n"
+        "1. Obtén un token usando `POST /api/login/` con email y contraseña.\n"
+        "2. Incluye el token en el header `Authorization: Bearer <token>` en cada petición.\n"
+        "3. Cuando el token expire, usa `POST /api/token/refresh/` para renovarlo.\n\n"
+        "### Paginación\n\n"
+        "Las listas están paginadas con 20 ítems por página. "
+        "Usa el parámetro `?page=` para navegar entre páginas."
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "CONTACT": {"email": "pacompiahectorrobert@gmail.com"},
-    "LICENSE": {"name": "Proprietary"},
+    "LICENSE": {"name": "Propietaria", "url": "https://certypro.app/license"},
     "SERVERS": [
-        {"url": "http://localhost:8000", "description": "Local development"},
+        {"url": "http://localhost:8000", "description": "Desarrollo local"},
+        {"url": "https://api.certypro.app", "description": "Producción"},
     ],
     "COMPONENT_SPLIT_REQUEST": True,
-    "SORT_OPERATIONS": False,
+    "SORT_OPERATIONS": True,
+    "COMPONENT_SECURITY_SCHEMES": [
+        {
+            "name": "BearerAuth",
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Ingresa tu token JWT en el formato: `Bearer <token>`. Obténlo en `POST /api/login/`.",
+        }
+    ],
+    "SECURITY": [{"BearerAuth": []}],
+    "TAGS": [
+        {"name": "Autenticación", "description": "Registro, inicio de sesión, Google OAuth y renovación de tokens."},
+        {"name": "Certificados", "description": "CRUD de certificados, generación de PDF, entrega, verificación pública, exportación y reintentos."},
+        {"name": "Certificados - Masivo", "description": "Generación masiva de certificados desde archivos Excel con previsualización y procesamiento."},
+        {"name": "Eventos", "description": "CRUD de eventos académicos, inscripción de participantes, generación/envío de certificados, invitaciones y estadísticas."},
+        {"name": "Participantes", "description": "CRUD de participantes/estudiantes e importación masiva desde Excel/CSV."},
+        {"name": "Instructores", "description": "CRUD de instructores que firman los certificados."},
+        {"name": "Plantillas", "description": "CRUD de plantillas PDF para certificados, carga de imagen de fondo y firma."},
+        {"name": "Inscripciones", "description": "Inscripción de participantes a eventos, marcado de asistencia y notas."},
+        {"name": "Invitaciones", "description": "Invitaciones públicas con token para que participantes se registren y acepten eventos."},
+        {"name": "Registros de Entrega", "description": "Historial de todos los intentos de entrega de certificados."},
+        {"name": "Auditoría", "description": "Log completo de acciones del sistema (solo administradores)."},
+    ],
 }
 
 # ========== JWT CONFIGURATION ==========

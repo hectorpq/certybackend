@@ -2,7 +2,9 @@ import uuid
 
 from django.db import models
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
+from core.mixins import SoftDeleteMixin
 from instructors.models import Instructor
 from participants.models import Participant
 from users.models import User
@@ -21,7 +23,7 @@ class EventCategory(models.Model):
         return self.name
 
 
-class Event(models.Model):
+class Event(SoftDeleteMixin):
     STATUS_CHOICES = (
         ("draft", "Draft"),
         ("active", "Active"),
@@ -70,12 +72,14 @@ class Event(models.Model):
     template_image = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-event_date"]
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["event_date"]),
+            models.Index(fields=["is_deleted"]),
         ]
 
     def __str__(self):

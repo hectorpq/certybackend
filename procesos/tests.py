@@ -408,3 +408,79 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         valid, msg = ExcelProcessingService.validate_file(buf)
         self.assertFalse(valid)
         self.assertIn("faltantes", msg.lower())
+
+
+class ExcelProcessingServiceCoverageTest(TestCase):
+    """Cover specific uncovered lines in procesos/services.py."""
+
+    def setUp(self):
+        self.user = make_admin()
+        self.event = Event.objects.create(name="Proc Coverage Event", event_date=date(2026, 6, 1), created_by=self.user)
+        self.participant = Participant.objects.create(
+            document_id="PROC01",
+            first_name="Cover",
+            last_name="Test",
+            email="cover@test.com",
+            created_by=self.user,
+        )
+
+    def test_get_event_returns_self_event_when_set(self):
+        """Line 420: return self.event when self.event is set."""
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user, event=self.event)
+        result = svc._get_event(None)
+        self.assertEqual(result.id, self.event.id)
+
+    def test_get_event_raises_when_no_event_and_no_name(self):
+        """Line 422: raise ValueError when self.event=None and event_name=None."""
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
+        with self.assertRaises(ValueError):
+            svc._get_event(None)
+
+    def test_get_or_create_participant_found_by_email(self):
+        """Lines 398-399: participant found by email when document_id differs."""
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
+        result = svc._get_or_create_participant("Cover Test", "cover@test.com", "DIFFERENT_DOC")
+        self.assertEqual(result.id, self.participant.id)
+
+    def test_get_or_create_enrollment_updates_attendance(self):
+        """Lines 442-443: update attendance on existing enrollment that has attendance=False."""
+        from events.models import Enrollment
+
+        enrollment = Enrollment.objects.create(
+            participant=self.participant,
+            event=self.event,
+            attendance=False,
+            created_by=self.user,
+        )
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
+        svc._get_or_create_enrollment(self.participant, self.event)
+        enrollment.refresh_from_db()
+        self.assertTrue(enrollment.attendance)
+
+    def test_create_certificate_updates_template_when_bulk_has_template(self):
+        """Lines 467-470: update template on existing certificate when self.template is set."""
+        new_template = Template.objects.create(name="New Bulk Template", created_by=self.user)
+        cert = Certificate.objects.create(
+            participant=self.participant,
+            event=self.event,
+            generated_by=self.user,
+        )
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user, template=new_template)
+        result = svc._create_certificate(self.participant, self.event)
+        cert.refresh_from_db()
+        self.assertEqual(cert.template.id, new_template.id)
+        self.assertEqual(cert.status, "pending")
+
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP fail"})
+    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    def test_delivery_failure_raises_value_error_in_process_row(self, mock_pdf, mock_email):
+        """Line 359: raise ValueError when delivery fails."""
+        buf = make_excel([{
+            "full_name": "Cover Test",
+            "email": "cover@test.com",
+            "document_id": "PROC01",
+            "event_name": "Proc Coverage Event",
+        }])
+        svc = ExcelProcessingService(buf, created_by_user=self.user, event=self.event)
+        result = svc.process()
+        self.assertGreater(result.failed, 0)
