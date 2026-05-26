@@ -1,9 +1,11 @@
 from django.db import models
+from simple_history.models import HistoricalRecords
 
+from core.mixins import SoftDeleteMixin
 from users.models import User
 
 
-class Instructor(models.Model):
+class Instructor(SoftDeleteMixin):
     id = models.BigAutoField(primary_key=True)
     full_name = models.CharField(max_length=150)
     email = models.EmailField(unique=True, blank=True, default="")
@@ -21,6 +23,7 @@ class Instructor(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_instructors")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["full_name"]
@@ -29,6 +32,7 @@ class Instructor(models.Model):
         indexes = [
             models.Index(fields=["is_active"]),
             models.Index(fields=["email"]),
+            models.Index(fields=["is_deleted"]),
         ]
 
     def __str__(self):

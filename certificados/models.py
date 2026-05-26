@@ -4,13 +4,15 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
+from core.mixins import SoftDeleteMixin
 from events.models import Event
 from participants.models import Participant
 from users.models import User
 
 
-class Template(models.Model):
+class Template(SoftDeleteMixin):
     """
     Modelo para plantillas de certificados
 
@@ -57,19 +59,21 @@ class Template(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["is_active"]),
             models.Index(fields=["category"]),
+            models.Index(fields=["is_deleted"]),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.category})" if self.category else self.name
 
 
-class Certificate(models.Model):
+class Certificate(SoftDeleteMixin):
     STATUS_CHOICES = (
         ("pending", "Pending"),
         ("generated", "Generated"),
@@ -108,6 +112,7 @@ class Certificate(models.Model):
 
     issued_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     class Meta:
         unique_together = ("participant", "event")
@@ -116,6 +121,7 @@ class Certificate(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["verification_code"]),
             models.Index(fields=["participant", "event"]),
+            models.Index(fields=["is_deleted"]),
         ]
 
     def __str__(self):

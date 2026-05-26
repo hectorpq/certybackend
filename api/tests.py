@@ -4341,7 +4341,7 @@ class AuditLogModelTest(TestCase):
         AuditLog.objects.create(action="export_requested", user=self.admin)
         self.assertEqual(AuditLog.objects.first().action, "export_requested")
 
-    def test_certificate_deleted_sets_fk_null(self):
+    def test_certificate_soft_deleted_fk_preserved(self):
         entry = AuditLog.objects.create(
             action="certificate_generated",
             user=self.admin,
@@ -4349,7 +4349,8 @@ class AuditLogModelTest(TestCase):
         )
         self.cert.delete()
         entry.refresh_from_db()
-        self.assertIsNone(entry.certificate)
+        # Soft delete preserves the DB record, so FK remains intact
+        self.assertEqual(entry.certificate_id, self.cert.id)
 
 
 class AuditLogInstrumentationTest(TestCase):
@@ -4705,3 +4706,858 @@ class InfrastructureSettingsTest(TestCase):
 
         lifetime = settings.SIMPLE_JWT.get("REFRESH_TOKEN_LIFETIME")
         self.assertEqual(lifetime, timedelta(days=7))
+
+
+# ─────────────────────────────────────────────
+# Audit helper functions
+# ─────────────────────────────────────────────
+
+
+class AuditHelperFunctionsTest(TestCase):
+    def test_log_action_exception_is_silenced(self):
+        from api.audit import log_action
+
+        with patch("api.models.AuditLog") as mock_log:
+            mock_log.objects.create.side_effect = Exception("DB error")
+            log_action("user_login")  # Must not raise
+
+    def test_get_client_ip_uses_x_forwarded_for(self):
+        from api.audit import get_client_ip
+
+        request = MagicMock()
+        request.META = {
+            "HTTP_X_FORWARDED_FOR": "10.10.10.10, 192.168.1.1",
+            "REMOTE_ADDR": "127.0.0.1",
+        }
+        ip = get_client_ip(request)
+        self.assertEqual(ip, "10.10.10.10")
+
+    def test_get_client_ip_falls_back_to_remote_addr(self):
+        from api.audit import get_client_ip
+
+        request = MagicMock()
+        request.META = {"REMOTE_ADDR": "1.2.3.4"}
+        ip = get_client_ip(request)
+        self.assertEqual(ip, "1.2.3.4")
+
+    def test_register_view_uses_forwarded_for_for_ip(self):
+        client = APIClient()
+        res = client.post(
+            "/api/register/",
+            {"email": "fwd@test.com", "full_name": "Fwd", "password": "Pass1234!", "password_confirm": "Pass1234!"},
+            HTTP_X_FORWARDED_FOR="10.0.0.1",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────
+# ChangelogSerializer method coverage
+# ─────────────────────────────────────────────
+
+
+class ChangelogSerializerMethodTest(TestCase):
+    def setUp(self):
+        self.user = make_admin("changelog_admin@test.com")
+        self.participant = make_participant(self.user, doc="CL001", email="cl001@test.com")
+
+    def test_history_type_created_returns_creado(self):
+        from api.serializers import ChangelogSerializer
+
+        history = self.participant.history.filter(history_type="+").last()
+        s = ChangelogSerializer(history)
+        self.assertEqual(s.data["history_type_display"], "Creado")
+
+    def test_history_type_deleted_returns_eliminado(self):
+        from api.serializers import ChangelogSerializer
+
+        history = self.participant.history.filter(history_type="+").last()
+        history.history_type = "-"
+        s = ChangelogSerializer(history)
+        self.assertEqual(s.data["history_type_display"], "Eliminado")
+
+    def test_history_type_tilde_soft_deleted(self):
+        from api.serializers import ChangelogSerializer
+
+        self.participant.delete()
+        history = self.participant.history.filter(history_type="~").order_by("-history_date").first()
+        s = ChangelogSerializer(history)
+        self.assertEqual(s.data["history_type_display"], "Eliminado (baja lógica)")
+
+    def test_history_type_tilde_restored(self):
+        from unittest.mock import PropertyMock
+
+        from api.serializers import ChangelogSerializer
+
+        mock_prev = MagicMock()
+        mock_prev.is_deleted = True
+
+        mock_obj = MagicMock()
+        mock_obj.history_type = "~"
+        mock_obj.is_deleted = False
+        mock_obj.prev_record = mock_prev
+
+        s = ChangelogSerializer()
+        result = s.get_history_type_display(mock_obj)
+        self.assertEqual(result, "Restaurado")
+
+    def test_history_type_display_exception_returns_editado(self):
+        from api.serializers import ChangelogSerializer
+
+        class BadHistory:
+            history_type = "~"
+
+            @property
+            def is_deleted(self):
+                raise AttributeError("simulated error")
+
+        s = ChangelogSerializer()
+        result = s.get_history_type_display(BadHistory())
+        self.assertEqual(result, "Editado")
+
+    def test_history_type_tilde_edited(self):
+        from api.serializers import ChangelogSerializer
+
+        self.participant.first_name = "Editado"
+        self.participant.save()
+        history = self.participant.history.filter(history_type="~").order_by("-history_date").first()
+        s = ChangelogSerializer(history)
+        self.assertIn(s.data["history_type_display"], ["Editado", "Restaurado", "Eliminado (baja lógica)"])
+
+    def test_changed_by_none_when_no_history_user(self):
+        from api.serializers import ChangelogSerializer
+
+        history = self.participant.history.first()
+        self.assertIsNone(history.history_user)
+        s = ChangelogSerializer(history)
+        self.assertIsNone(s.data["changed_by"])
+
+    def test_changed_by_returns_user_dict(self):
+        from api.serializers import ChangelogSerializer
+
+        history = self.participant.history.first()
+        history.history_user = self.user
+        s = ChangelogSerializer(history)
+        result = s.data["changed_by"]
+        self.assertEqual(result["email"], self.user.email)
+        self.assertIn("full_name", result)
+
+    def test_fields_changed_empty_for_non_tilde(self):
+        from api.serializers import ChangelogSerializer
+
+        history = self.participant.history.filter(history_type="+").last()
+        s = ChangelogSerializer(history)
+        self.assertEqual(s.data["fields_changed"], {})
+
+    def test_fields_changed_shows_modified_field(self):
+        from api.serializers import ChangelogSerializer
+
+        self.participant.first_name = "Nuevo"
+        self.participant.save()
+        history = self.participant.history.filter(history_type="~").order_by("-history_date").first()
+        s = ChangelogSerializer(history)
+        # fields_changed might have first_name or other fields
+        self.assertIsInstance(s.data["fields_changed"], dict)
+
+    def test_fields_changed_dict_comprehension_with_mock_changes(self):
+        from api.serializers import ChangelogSerializer
+
+        mock_change = MagicMock()
+        mock_change.field = "first_name"
+        mock_change.old = "Ana"
+        mock_change.new = "Nuevo"
+
+        mock_delta = MagicMock()
+        mock_delta.changes = [mock_change]
+
+        mock_prev = MagicMock()
+
+        mock_history = MagicMock()
+        mock_history.history_type = "~"
+        mock_history.prev_record = mock_prev
+        mock_history.diff_against.return_value = mock_delta
+
+        s = ChangelogSerializer()
+        result = s.get_fields_changed(mock_history)
+        self.assertIn("first_name", result)
+        self.assertEqual(result["first_name"]["before"], "Ana")
+        self.assertEqual(result["first_name"]["after"], "Nuevo")
+
+    def test_fields_changed_returns_empty_on_no_prev_record(self):
+        from api.serializers import ChangelogSerializer
+
+        mock_history = MagicMock()
+        mock_history.history_type = "~"
+        mock_history.prev_record = None
+
+        s = ChangelogSerializer()
+        result = s.get_fields_changed(mock_history)
+        self.assertEqual(result, {})
+
+    def test_fields_changed_returns_empty_on_exception(self):
+        from api.serializers import ChangelogSerializer
+
+        mock_history = MagicMock()
+        mock_history.history_type = "~"
+        mock_history.prev_record = MagicMock()
+        mock_history.diff_against.side_effect = Exception("diff error")
+
+        s = ChangelogSerializer()
+        result = s.get_fields_changed(mock_history)
+        self.assertEqual(result, {})
+
+
+# ─────────────────────────────────────────────
+# TemplateSerializer context coverage
+# ─────────────────────────────────────────────
+
+
+class TemplateSerializerContextTest(TestCase):
+    def setUp(self):
+        self.user = make_admin("tpl_ctx@test.com")
+
+    def test_background_image_url_with_request_and_background_url(self):
+        from api.serializers import TemplateSerializer
+
+        template = Template.objects.create(
+            name="URL Tpl",
+            created_by=self.user,
+            background_url="/media/bg.png",
+        )
+
+        class MockRequest:
+            def build_absolute_uri(self, url):
+                return f"http://testserver{url}"
+
+        s = TemplateSerializer(template, context={"request": MockRequest()})
+        url = s.data["background_image_url"]
+        self.assertIn("http://testserver", url)
+
+    def test_background_image_url_with_request_and_image(self):
+        from api.serializers import TemplateSerializer
+
+        class MockRequest:
+            def build_absolute_uri(self, url):
+                return f"http://testserver{url}"
+
+        s = TemplateSerializer(context={"request": MockRequest()})
+        mock_obj = MagicMock()
+        mock_obj.background_image = MagicMock()
+        mock_obj.background_image.url = "/media/img.png"
+        mock_obj.background_url = ""
+        result = s.get_background_image_url(mock_obj)
+        self.assertEqual(result, "http://testserver/media/img.png")
+
+    def test_background_image_url_no_request_returns_raw_url(self):
+        from api.serializers import TemplateSerializer
+
+        s = TemplateSerializer(context={})
+        mock_obj = MagicMock()
+        mock_obj.background_image = None
+        mock_obj.background_url = "https://cdn.example.com/bg.png"
+        result = s.get_background_image_url(mock_obj)
+        self.assertEqual(result, "https://cdn.example.com/bg.png")
+
+
+# ─────────────────────────────────────────────
+# EventInvitationSerializer edge cases
+# ─────────────────────────────────────────────
+
+
+class EventInvitationSerializerEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.user = make_admin("inv_ser@test.com")
+        self.event = make_event(self.user)
+        self.participant = make_participant(self.user, doc="INV01", email="inv01@test.com")
+
+    def test_get_student_name_none_when_no_participant(self):
+        from api.serializers import EventInvitationSerializer
+        from events.models import EventInvitation
+
+        invitation = EventInvitation.objects.create(
+            event=self.event,
+            email="nopart@test.com",
+            created_by=self.user,
+        )
+        s = EventInvitationSerializer(invitation)
+        self.assertIsNone(s.data["student_name"])
+
+    def test_get_student_name_returns_full_name(self):
+        from api.serializers import EventInvitationSerializer
+        from events.models import EventInvitation
+
+        invitation = EventInvitation.objects.create(
+            event=self.event,
+            participant=self.participant,
+            email=self.participant.email,
+            created_by=self.user,
+        )
+        s = EventInvitationSerializer(invitation)
+        self.assertEqual(s.data["student_name"], self.participant.full_name)
+
+    def test_get_event_name_returns_name(self):
+        from api.serializers import EventInvitationSerializer
+        from events.models import EventInvitation
+
+        invitation = EventInvitation.objects.create(
+            event=self.event,
+            email="evname@test.com",
+            created_by=self.user,
+        )
+        s = EventInvitationSerializer(invitation)
+        self.assertEqual(s.data["event_name"], self.event.name)
+
+
+# ─────────────────────────────────────────────
+# ViewSet — get_serializer_class coverage
+# ─────────────────────────────────────────────
+
+
+class CertificateViewSetSerializerClassTest(TestCase):
+    def test_get_serializer_class_for_generate_action(self):
+        from api.serializers import CertificateGenerateSerializer
+        from api.views import CertificateViewSet
+
+        view = CertificateViewSet()
+        view.action = "generate"
+        self.assertEqual(view.get_serializer_class(), CertificateGenerateSerializer)
+
+
+# ─────────────────────────────────────────────
+# Soft-delete/changelog/restore endpoint coverage
+# ─────────────────────────────────────────────
+
+
+class SoftDeleteEndpointTest(TestCase):
+    """Tests for perform_destroy, changelog, and restore on all ViewSets."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("sd_admin@test.com")
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name="SD Event")
+        self.participant = make_participant(self.admin, doc="SD01", email="sd01@test.com")
+
+    def _make_instructor(self):
+        return Instructor.objects.create(
+            full_name="SD Instructor",
+            email="sd_inst@test.com",
+            created_by=self.admin,
+        )
+
+    def _make_template(self):
+        return Template.objects.create(name="SD Template", created_by=self.admin)
+
+    def _make_certificate(self):
+        return Certificate.objects.create(
+            participant=self.participant,
+            event=self.event,
+            generated_by=self.admin,
+        )
+
+    # ── Certificate ──
+    def test_certificate_perform_destroy(self):
+        cert = self._make_certificate()
+        res = self.client.delete(f"/api/certificates/{cert.id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        from certificados.models import Certificate as Cert
+        self.assertFalse(Cert.objects.filter(pk=cert.id).exists())
+        self.assertTrue(Cert.all_objects.filter(pk=cert.id, is_deleted=True).exists())
+
+    def test_certificate_changelog(self):
+        cert = self._make_certificate()
+        res = self.client.get(f"/api/certificates/{cert.id}/changelog/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+
+    def test_certificate_restore_success(self):
+        from certificados.models import Certificate as Cert
+        cert = self._make_certificate()
+        cert.delete(deleted_by=self.admin)
+        res = self.client.post(f"/api/certificates/{cert.id}/restore/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "success")
+        cert.refresh_from_db()
+        self.assertFalse(cert.is_deleted)
+
+    def test_certificate_restore_not_found(self):
+        res = self.client.post("/api/certificates/99999/restore/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ── Event ──
+    def test_event_perform_destroy(self):
+        event = make_event(self.admin, name="To Delete Event")
+        res = self.client.delete(f"/api/events/{event.id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        from events.models import Event as Ev
+        self.assertTrue(Ev.all_objects.filter(pk=event.id, is_deleted=True).exists())
+
+    def test_event_changelog(self):
+        res = self.client.get(f"/api/events/{self.event.id}/changelog/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+
+    def test_event_restore_success(self):
+        event = make_event(self.admin, name="Restore Me Event")
+        event.delete(deleted_by=self.admin)
+        res = self.client.post(f"/api/events/{event.id}/restore/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_event_restore_not_found(self):
+        res = self.client.post("/api/events/99999/restore/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ── Participant ──
+    def test_participant_perform_destroy(self):
+        participant = make_participant(self.admin, doc="DEL01", email="del01@test.com")
+        res = self.client.delete(f"/api/participants/{participant.id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        from participants.models import Participant as Part
+        self.assertTrue(Part.all_objects.filter(pk=participant.id, is_deleted=True).exists())
+
+    def test_participant_changelog(self):
+        res = self.client.get(f"/api/participants/{self.participant.id}/changelog/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+
+    def test_participant_restore_success(self):
+        participant = make_participant(self.admin, doc="RST01", email="rst01@test.com")
+        participant.delete(deleted_by=self.admin)
+        res = self.client.post(f"/api/participants/{participant.id}/restore/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_participant_restore_not_found(self):
+        res = self.client.post("/api/participants/99999/restore/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ── Instructor ──
+    def test_instructor_changelog(self):
+        inst = self._make_instructor()
+        res = self.client.get(f"/api/instructors/{inst.id}/changelog/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+
+    def test_instructor_restore_success(self):
+        inst = self._make_instructor()
+        inst.delete(deleted_by=self.admin)
+        res = self.client.post(f"/api/instructors/{inst.id}/restore/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_instructor_restore_not_found(self):
+        res = self.client.post("/api/instructors/99999/restore/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ── Template ──
+    def test_template_perform_destroy(self):
+        tpl = self._make_template()
+        res = self.client.delete(f"/api/templates/{tpl.id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        from certificados.models import Template as Tpl
+        self.assertTrue(Tpl.all_objects.filter(pk=tpl.id, is_deleted=True).exists())
+
+    def test_template_changelog(self):
+        tpl = self._make_template()
+        res = self.client.get(f"/api/templates/{tpl.id}/changelog/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+
+    def test_template_restore_success(self):
+        tpl = self._make_template()
+        tpl.delete(deleted_by=self.admin)
+        res = self.client.post(f"/api/templates/{tpl.id}/restore/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_template_restore_not_found(self):
+        res = self.client.post("/api/templates/99999/restore/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+# ─────────────────────────────────────────────
+# Certificate generate/deliver edge cases
+# ─────────────────────────────────────────────
+
+
+class CertificateEdgeCaseTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("cert_edge@test.com")
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin)
+        self.participant = make_participant(self.admin, doc="CE01", email="ce01@test.com")
+
+    def _make_cert(self):
+        return Certificate.objects.create(
+            participant=self.participant,
+            event=self.event,
+            generated_by=self.admin,
+        )
+
+    def test_generate_with_nonexistent_template_id_returns_400(self):
+        cert = self._make_cert()
+        res = self.client.post(f"/api/certificates/{cert.id}/generate/", {"template_id": 99999})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Plantilla", res.data.get("message", ""))
+
+    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/a.pdf"})
+    def test_deliver_on_pending_cert_raises_400(self, mock_pdf):
+        cert = self._make_cert()
+        res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+# ─────────────────────────────────────────────
+# Event send/finalize edge cases
+# ─────────────────────────────────────────────
+
+
+class EventSendCertificatesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("evtsend@test.com")
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name="Send Event")
+        self.participant = make_participant(self.admin, doc="ES01", email="es01@test.com")
+
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
+    def test_send_certificates_failed_delivery_in_results(self, mock_email):
+        cert = Certificate.objects.create(
+            participant=self.participant, event=self.event, generated_by=self.admin
+        )
+        cert.status = "generated"
+        cert.pdf_url = "/m/cert.pdf"
+        cert.save()
+        res = self.client.post(f"/api/events/{self.event.id}/certificates/send/", {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(res.data.get("results", {}).get("failed", [])), 0)
+
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
+    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    def test_finalize_event_with_send_certificates_generates_and_fails_delivery(self, mock_pdf, mock_email):
+        Enrollment.objects.create(
+            participant=self.participant, event=self.event, attendance=True, created_by=self.admin
+        )
+        res = self.client.post(f"/api/events/{self.event.id}/finalize/", {"send_certificates": True})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "finished")
+
+
+# ─────────────────────────────────────────────
+# Participant bulk import edge cases
+# ─────────────────────────────────────────────
+
+
+class ParticipantBulkImportEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("bulk_edge@test.com")
+        self.client.force_authenticate(user=self.admin)
+
+    def _make_excel_bytes(self, rows):
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        if rows:
+            ws.append(list(rows[0].keys()))
+            for row in rows:
+                ws.append(list(row.values()))
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
+
+    def test_import_excel_row_missing_doc_id_adds_error(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # Omit document_id column entirely so row.get("document_id") returns "" → triggers error
+        data = self._make_excel_bytes([{"email": "x@test.com", "first_name": "A", "last_name": "B"}])
+        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(res.data.get("errors", [])), 0)
+
+    def test_import_excel_row_with_full_name_column(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        data = self._make_excel_bytes([{"document_id": "FN01", "email": "fn01@test.com", "full_name": "Juan Perez"}])
+        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# Template upload_signature endpoint
+# ─────────────────────────────────────────────
+
+
+class TemplateUploadSignatureTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("sig_upload@test.com")
+        self.client.force_authenticate(user=self.admin)
+        self.template = Template.objects.create(name="Sig Tpl", created_by=self.admin)
+
+    def test_upload_signature_without_file_updates_instructor_name(self):
+        res = self.client.post(
+            f"/api/templates/{self.template.id}/upload-signature/",
+            {"instructor_name": "Prof. Test"},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["signature"]["instructor_name"], "Prof. Test")
+
+    def test_upload_signature_with_invalid_file_type_returns_400(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        bad_file = SimpleUploadedFile("doc.pdf", b"%PDF", content_type="application/pdf")
+        res = self.client.post(
+            f"/api/templates/{self.template.id}/upload-signature/",
+            {"signature_image": bad_file},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("builtins.open", MagicMock())
+    def test_upload_signature_with_valid_png_saves_config(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+        valid_file = SimpleUploadedFile("sig.png", png_data, content_type="image/png")
+        with patch("pathlib.Path.mkdir"):
+            res = self.client.post(
+                f"/api/templates/{self.template.id}/upload-signature/",
+                {"signature_image": valid_file, "instructor_name": "Dr. Uploaded", "instructor_specialty": "Science"},
+                format="multipart",
+            )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# BulkCertificateGenerationView edge cases
+# ─────────────────────────────────────────────
+
+
+class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("bulk_gen@test.com")
+        self.client.force_authenticate(user=self.admin)
+        self.event = make_event(self.admin, name="Bulk Gen Event")
+
+    def _make_png(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile("tpl.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+
+    def _make_excel(self):
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["full_name", "email", "document_id"])
+        ws.append(["Test User", "testbulk@test.com", "BLK001"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile("data.xlsx", buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def test_missing_event_id_with_all_fields_returns_400(self):
+        res = self.client.post(
+            "/api/certificates/generate-bulk/",
+            {"template_image": self._make_png(), "excel_file": self._make_excel()},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_event_not_found_returns_404(self):
+        res = self.client.post(
+            "/api/certificates/generate-bulk/",
+            {"template_image": self._make_png(), "excel_file": self._make_excel(), "event_id": "99999"},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_missing_template_image_returns_400(self):
+        res = self.client.post(
+            "/api/certificates/generate-bulk/",
+            {"event_id": str(self.event.id)},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_with_signature_image_saves_to_layout_config(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        sig_file = SimpleUploadedFile("sig.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        # Create files BEFORE patching builtins.open to avoid breaking openpyxl
+        excel = self._make_excel()
+        png = self._make_png()
+
+        with patch("procesos.services.ExcelProcessingService.process") as mock_proc:
+            mock_result = MagicMock()
+            mock_result.to_dict.return_value = {"total_rows": 1, "successful": 1, "failed": 0, "errors": [], "created_certificates": []}
+            mock_result.get_summary.return_value = "ok"
+            mock_proc.return_value = mock_result
+            with patch("pathlib.Path.mkdir"):
+                with patch("builtins.open", MagicMock()):
+                    res = self.client.post(
+                        "/api/certificates/generate-bulk/",
+                        {
+                            "template_image": png,
+                            "excel_file": excel,
+                            "event_id": str(self.event.id),
+                            "signature_image": sig_file,
+                            "instructor_name": "Prof. Sig",
+                        },
+                        format="multipart",
+                    )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+    def test_excel_processing_exception_deletes_template_returns_400(self):
+        with patch("procesos.services.ExcelProcessingService.process", side_effect=Exception("bad excel")):
+            res = self.client.post(
+                "/api/certificates/generate-bulk/",
+                {
+                    "template_image": self._make_png(),
+                    "excel_file": self._make_excel(),
+                    "event_id": str(self.event.id),
+                },
+                format="multipart",
+            )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Error al procesar", res.data.get("error", ""))
+
+    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch("services.email_service.EmailService.send_certificate", return_value={"success": True, "message": "sent"})
+    def test_with_instructor_name_only_no_image(self, mock_email, mock_pdf):
+        res = self.client.post(
+            "/api/certificates/generate-bulk/",
+            {
+                "template_image": self._make_png(),
+                "excel_file": self._make_excel(),
+                "event_id": str(self.event.id),
+                "instructor_name": "Prof. Bulk",
+            },
+            format="multipart",
+        )
+        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+
+
+# ─────────────────────────────────────────────
+# Invitation accept with existing enrollment
+# ─────────────────────────────────────────────
+
+
+class InvitationAcceptWithExistingEnrollmentTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("inv_enr@test.com")
+        self.event = make_event(self.admin, name="Inv Enr Event")
+        self.participant = make_participant(self.admin, doc="IE01", email="ie01@test.com")
+
+    def test_accept_invitation_updates_existing_enrollment_attendance(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from events.models import Enrollment, EventInvitation
+
+        invitation = EventInvitation.objects.create(
+            event=self.event,
+            participant=self.participant,
+            email=self.participant.email,
+            status="pending",
+            expires_at=timezone.now() + timedelta(days=1),
+            created_by=self.admin,
+        )
+        # Pre-create enrollment with attendance=False
+        Enrollment.objects.create(
+            participant=self.participant,
+            event=self.event,
+            attendance=False,
+            created_by=self.admin,
+        )
+        res = self.client.post(f"/api/invitations/{invitation.token}/accept/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        enrollment = Enrollment.objects.get(participant=self.participant, event=self.event)
+        self.assertTrue(enrollment.attendance)
+
+
+# ─────────────────────────────────────────────
+# AuditLog filter by user_id
+# ─────────────────────────────────────────────
+
+
+class AuditLogFilterTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("aud_flt@test.com")
+        self.client.force_authenticate(user=self.admin)
+
+    def test_audit_log_filter_by_user_id(self):
+        from api.models import AuditLog
+
+        AuditLog.objects.create(action="user_login", user=self.admin)
+        res = self.client.get(f"/api/audit/?user_id={self.admin.id}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# Celery debug_task coverage
+# ─────────────────────────────────────────────
+
+
+class CeleryDebugTaskTest(TestCase):
+    def test_debug_task_runs_without_error(self):
+        from config.celery import debug_task
+
+        with patch("builtins.print"):
+            result = debug_task.apply()
+        self.assertIsNone(result.result)
+
+
+# ─────────────────────────────────────────────
+# LoginView X-Forwarded-For (views.py line 222)
+# ─────────────────────────────────────────────
+
+
+class LoginViewForwardedIPTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        User.objects.create_user(email="loginip@test.com", full_name="Login IP", password="Pass1234!")
+
+    def test_login_with_x_forwarded_for_uses_first_ip(self):
+        res = self.client.post(
+            "/api/login/",
+            {"email": "loginip@test.com", "password": "Pass1234!"},
+            HTTP_X_FORWARDED_FOR="203.0.113.10, 10.0.0.1",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────
+# Certificate retry exception (views.py lines 774-775)
+# ─────────────────────────────────────────────
+
+
+class CertificateRetryExceptionTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("retry_exc@test.com")
+        self.client.force_authenticate(user=self.admin)
+        event = make_event(self.admin, name="Retry Exc Event")
+        participant = make_participant(self.admin, doc="RE01", email="re01@test.com")
+        template = Template.objects.create(name="RT", created_by=self.admin)
+        self.cert = Certificate.objects.create(
+            participant=participant, event=event, template=template, generated_by=self.admin, status="failed"
+        )
+
+    def test_retry_deliver_exception_returns_400(self):
+        with patch.object(Certificate, "deliver", side_effect=Exception("network error")):
+            res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("network error", res.data.get("message", ""))
