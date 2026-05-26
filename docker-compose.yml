@@ -1,0 +1,72 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - certy_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - certy_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    # --- CAMBIO CRÍTICO AQUÍ ---
+    volumes:
+      
+      - /var/run/docker.sock:/var/run/docker.sock
+    # ---------------------------
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://redis:6379/0
+
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    networks:
+      - certy_network
+
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    ports:
+      - "9080:8080"
+    volumes:
+      - jenkins_data:/var/jenkins_home # Cambiado '.' por volumen para persistencia
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - certy_network
+
+  sonarqube:
+    image: sonarqube:lts-community
+    ports:
+      - "9001:9000"
+    networks:
+      - certy_network
+
+volumes:
+  db_data:
+  jenkins_data: # Definido para que no pierdas tus configuraciones al reiniciar
+
+networks:
+  certy_network:
+    name: certy_network
