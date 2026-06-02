@@ -10,7 +10,6 @@ pipeline {
         stage('Limpieza y Entorno') {
             steps {
                 script {
-                    // Creación segura de credenciales de prueba en disco efímero
                     sh 'echo DB_NAME=postgres > .env'
                     sh 'echo DB_USER=postgres >> .env'
                     sh 'echo DB_PASSWORD=postgres >> .env'
@@ -19,7 +18,7 @@ pipeline {
                     sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
-                    // Invocación explícita mediante ruta absoluta
+                    // Invocación explícita por ruta absoluta
                     sh '/usr/bin/docker compose down --remove-orphans || true'
                 }
             }
@@ -31,7 +30,7 @@ pipeline {
             }
         }
 
-        stage('Execute Pytest & Coverage') {
+        stage('Test & Coverage') {
             steps {
                 sh '/usr/bin/docker compose run --rm web pytest --cov=. --cov-report=xml'
             }
