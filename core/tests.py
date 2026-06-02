@@ -63,9 +63,7 @@ class SoftDeleteMixinTest(TestCase):
     def setUp(self):
         from users.models import User
 
-        self.user = User.objects.create_user(
-            email="softdelete@test.com", full_name="Soft", password="pass"
-        )
+        self.user = User.objects.create_user(email="softdelete@test.com", full_name="Soft", password="pass")
 
     def _make_participant(self, doc="SD001", email="sd@test.com"):
         from participants.models import Participant

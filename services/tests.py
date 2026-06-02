@@ -549,9 +549,7 @@ class PDFServiceIntegrationTest(TestCase):
         template = MagicMock()
         template.background_image = None
         template.background_url = ""
-        template.layout_config = {
-            "signature": {"instructor_name": "Ad-Hoc Instructor", "instructor_specialty": "QA"}
-        }
+        template.layout_config = {"signature": {"instructor_name": "Ad-Hoc Instructor", "instructor_specialty": "QA"}}
         with patch.object(PDFService, "_draw_custom_signature") as mock_custom:
             result = PDFService.generate_certificate_pdf(cert, template=template)
         self.assertTrue(result["success"])
@@ -591,7 +589,9 @@ class CeleryTasksExceptionTest(TestCase):
             result = generate_certificate_pdf_task.apply(args=[99999])
             result.get()
 
-    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP error"})
+    @patch(
+        "services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP error"}
+    )
     def test_email_task_retries_on_send_failure(self, mock_send):
         from services.tasks import send_certificate_email_task
 
@@ -600,7 +600,10 @@ class CeleryTasksExceptionTest(TestCase):
             result = send_certificate_email_task.apply(args=[cert.id, "task01@test.com"])
             result.get()
 
-    @patch("services.email_service.EmailService.send_bulk_certificates", return_value={"sent": 0, "failed": 0, "errors": []})
+    @patch(
+        "services.email_service.EmailService.send_bulk_certificates",
+        return_value={"sent": 0, "failed": 0, "errors": []},
+    )
     def test_bulk_certificates_task_email_method(self, mock_bulk):
         from services.tasks import send_bulk_certificates_task
 
@@ -618,7 +621,10 @@ class CeleryTasksExceptionTest(TestCase):
         self.assertEqual(data["sent"], 0)
         self.assertGreater(len(data["errors"]), 0)
 
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     def test_pdf_task_success_path(self, mock_gen):
         from services.tasks import generate_certificate_pdf_task
 

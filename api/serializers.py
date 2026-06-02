@@ -494,55 +494,62 @@ class EnrollmentCreateSerializer(serializers.Serializer):
 class EventEnrollSerializer(serializers.Serializer):
     participant_id = serializers.IntegerField(required=False, help_text="ID del participante a inscribir.")
     student_id = serializers.IntegerField(required=False, help_text="Alias de participant_id (backward compat).")
-    participant_email = serializers.EmailField(required=False, help_text="Email del participante. Si no existe, se crea automáticamente.")
+    participant_email = serializers.EmailField(
+        required=False, help_text="Email del participante. Si no existe, se crea automáticamente."
+    )
     student_email = serializers.EmailField(required=False, help_text="Alias de participant_email (backward compat).")
 
 
 class EventGenerateCertificatesSerializer(serializers.Serializer):
     participant_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False,
-        help_text="Lista opcional de IDs de participantes. Si se omite, genera para todos los que asistieron."
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Lista opcional de IDs de participantes. Si se omite, genera para todos los que asistieron.",
     )
     student_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False,
-        help_text="Alias de participant_ids (backward compat)."
+        child=serializers.IntegerField(), required=False, help_text="Alias de participant_ids (backward compat)."
     )
 
 
 class EventSendCertificatesSerializer(serializers.Serializer):
     method = serializers.ChoiceField(
-        choices=["email", "whatsapp", "link"], default="email", required=False,
-        help_text="Método de entrega del certificado."
+        choices=["email", "whatsapp", "link"],
+        default="email",
+        required=False,
+        help_text="Método de entrega del certificado.",
     )
     participant_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False,
-        help_text="Lista opcional de IDs de participantes. Si se omite, envía a todos los que tienen certificado."
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Lista opcional de IDs de participantes. Si se omite, envía a todos los que tienen certificado.",
     )
     student_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False,
-        help_text="Alias de participant_ids (backward compat)."
+        child=serializers.IntegerField(), required=False, help_text="Alias de participant_ids (backward compat)."
     )
 
 
 class EventSendInvitationsSerializer(serializers.Serializer):
     file = serializers.FileField(required=False, help_text="Archivo CSV o Excel con columna de emails.")
     emails = serializers.ListField(
-        child=serializers.EmailField(), required=False,
-        help_text="Lista JSON de emails (alternativa o complemento al archivo)."
+        child=serializers.EmailField(),
+        required=False,
+        help_text="Lista JSON de emails (alternativa o complemento al archivo).",
     )
 
 
 class EventFinalizeSerializer(serializers.Serializer):
     send_certificates = serializers.BooleanField(
-        default=False, required=False,
-        help_text="Si es `true`, genera y envía los certificados por email automáticamente al finalizar."
+        default=False,
+        required=False,
+        help_text="Si es `true`, genera y envía los certificados por email automáticamente al finalizar.",
     )
 
 
 class CertificateRetrySerializer(serializers.Serializer):
     method = serializers.ChoiceField(
-        choices=["email", "whatsapp", "link"], required=False,
-        help_text="Método de entrega. Si se omite, usa el mismo método del último intento fallido."
+        choices=["email", "whatsapp", "link"],
+        required=False,
+        help_text="Método de entrega. Si se omite, usa el mismo método del último intento fallido.",
     )
 
 
