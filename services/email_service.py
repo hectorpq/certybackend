@@ -34,7 +34,8 @@ def check_email_limit():
             "limit": GMAIL_DAILY_LIMIT,
             "warning": True,
             "blocked": True,
-            "message": f"Límite diario de Gmail alcanzado ({count}/{GMAIL_DAILY_LIMIT}). No se pueden enviar más emails hoy. Se reinicia mañana.",
+            "message": f"Límite diario de Gmail alcanzado ({count}/{GMAIL_DAILY_LIMIT}). "
+                       "No se pueden enviar más emails hoy. Se reinicia mañana.",
         }
     if count >= GMAIL_WARNING_THRESHOLD:
         remaining = GMAIL_DAILY_LIMIT - count

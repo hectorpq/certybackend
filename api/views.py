@@ -184,7 +184,8 @@ class LoginView(APIView):
         description=(
             "Autentica al usuario con email y contraseña. **No requiere autenticación previa.**\n\n"
             "Si las credenciales son válidas retorna un par de tokens JWT:\n"
-            "- `access`: token de corta duración para autenticar cada petición (enviar en header `Authorization: Bearer <access>`).\n"
+            "- `access`: token de corta duración para autenticar cada petición "
+            "(enviar en header `Authorization: Bearer <access>`).\n"
             "- `refresh`: token de larga duración para obtener un nuevo `access` sin volver a loguearse.\n\n"
             "También retorna los datos básicos del usuario: id, email, nombre completo, rol e is_staff."
         ),
@@ -274,8 +275,10 @@ class GoogleAuthView(APIView):
         tags=["Autenticación"],
         summary="Autenticación con Google OAuth2",
         description=(
-            "Autentica al usuario usando un **token de identidad de Google OAuth2**. **No requiere autenticación previa.**\n\n"
-            "Si el usuario no existe en el sistema, lo crea automáticamente usando el email y nombre de la cuenta de Google. "
+            "Autentica al usuario usando un **token de identidad de Google OAuth2**. "
+            "**No requiere autenticación previa.**\n\n"
+            "Si el usuario no existe en el sistema, lo crea automáticamente usando "
+            "el email y nombre de la cuenta de Google. "
             "El campo `is_new_user` en la respuesta indica si la cuenta fue creada en esta solicitud.\n\n"
             "Requiere que `GOOGLE_CLIENT_ID` esté configurado en el servidor."
         ),
@@ -288,7 +291,8 @@ class GoogleAuthView(APIView):
         ],
         responses={
             200: OpenApiResponse(
-                description="Autenticación exitosa. Retorna access token, refresh token y datos del usuario (incluye is_new_user)."
+                description="Autenticación exitosa. Retorna access token, refresh token "
+                "y datos del usuario (incluye is_new_user)."
             ),
             400: OpenApiResponse(description="Token no proporcionado o email no incluido en el token de Google."),
             401: OpenApiResponse(description="Token de Google inválido o expirado."),
@@ -666,7 +670,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
         request=CertificateDeliverSerializer,
         responses={
             200: OpenApiResponse(
-                description="Certificado entregado exitosamente. Retorna datos del log de entrega y certificado actualizado."
+                description="Certificado entregado exitosamente. Retorna datos del log "
+                "de entrega y certificado actualizado."
             ),
             400: OpenApiResponse(description="Error al entregar, método inválido o certificado no generado."),
             403: OpenApiResponse(description="Sin permisos para entregar certificados."),
@@ -786,7 +791,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 description="Reintento exitoso. Retorna el nuevo log de entrega y datos actualizados del certificado."
             ),
             400: OpenApiResponse(
-                description="El certificado no está en estado failed, o no hay método disponible y no se proporcionó uno."
+                description="El certificado no está en estado failed, o no hay método "
+                "disponible y no se proporcionó uno."
             ),
             404: OpenApiResponse(description="Certificado no encontrado."),
         },
@@ -855,7 +861,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
             "Descarga todos los certificados en formato CSV o Excel para auditoría. "
             "**Solo administradores.**\n\n"
             "Columnas incluidas: id, nombre/email/documento del participante, nombre/fecha del evento, "
-            "estado del certificado, código de verificación, URL del PDF, fecha de emisión y último estado de entrega.\n\n"
+            "estado del certificado, código de verificación, URL del PDF, fecha de "
+            "emisión y último estado de entrega.\n\n"
             "Soporta filtros opcionales por evento y estado."
         ),
         parameters=[
@@ -869,7 +876,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
         ],
         responses={
             200: OpenApiResponse(
-                description="Archivo descargable en el formato solicitado (Content-Type: text/csv o application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)."
+                description="Archivo descargable en el formato solicitado "
+                "(Content-Type: text/csv o application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)."
             ),
             403: OpenApiResponse(description="Solo administradores pueden exportar certificados."),
         },
@@ -1191,7 +1199,8 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Crear evento",
         description=(
             "Crea un nuevo evento académico. El campo `created_by` se asigna automáticamente al usuario autenticado. "
-            "Se puede asociar una plantilla de certificado (`template`) y un instructor (`instructor`) al crear el evento."
+            "Se puede asociar una plantilla de certificado (`template`) y un instructor "
+            "(`instructor`) al crear el evento."
         ),
         request=EventSerializer,
         responses={
@@ -1204,7 +1213,8 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Detalle de evento",
         description=(
             "Retorna todos los campos de un evento incluyendo: fechas, ubicación, estado, capacidad máxima, "
-            "nombre legible del estado (`status_display`), nombre del instructor y nombre de la plantilla de certificados."
+            "nombre legible del estado (`status_display`), nombre del instructor y nombre "
+            "de la plantilla de certificados."
         ),
         responses={
             200: EventSerializer,
@@ -1221,13 +1231,15 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
     partial_update=extend_schema(
         tags=["Eventos"],
         summary="Actualizar evento (parcial)",
-        description="Actualiza uno o más campos de un evento sin necesidad de enviar todos los datos. Útil para cambiar solo el estado o la plantilla.",
+        description="Actualiza uno o más campos de un evento sin necesidad de enviar "
+                    "todos los datos. Útil para cambiar solo el estado o la plantilla.",
         responses={200: EventSerializer, 400: OpenApiResponse(description="Datos inválidos.")},
     ),
     destroy=extend_schema(
         tags=["Eventos"],
         summary="Eliminar evento",
-        description="Elimina permanentemente un evento y sus registros asociados. **Acción irreversible.** Solo administradores.",
+        description="Elimina permanentemente un evento y sus registros asociados. "
+                    "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Evento eliminado correctamente."),
             404: OpenApiResponse(description="Evento no encontrado."),
@@ -1293,7 +1305,10 @@ class EventsViewSet(viewsets.ModelViewSet):
         ),
         responses={
             200: OpenApiResponse(
-                description="Lista de objetos con: enrollment_id, participant_id, participant_name, participant_email, participant_phone, attendance, certificate_id, certificate_status, certificate_status_display, verification_code, has_certificate."
+                description="Lista de objetos con: enrollment_id, participant_id, "
+                "participant_name, participant_email, participant_phone, attendance, "
+                "certificate_id, certificate_status, certificate_status_display, "
+                "verification_code, has_certificate."
             ),
         },
         examples=[
@@ -1452,7 +1467,8 @@ class EventsViewSet(viewsets.ModelViewSet):
         tags=["Eventos"],
         summary="Generar certificados del evento",
         description=(
-            "Genera certificados PDF para los participantes del evento que tienen asistencia marcada (`attendance=True`). "
+            "Genera certificados PDF para los participantes del evento que tienen "
+            "asistencia marcada (`attendance=True`). "
             "**Solo administradores y coordinadores.**\n\n"
             "Si se envía `participant_ids` (lista de IDs), genera solo para esos participantes; "
             "de lo contrario genera para todos los que asistieron.\n\n"
@@ -1475,7 +1491,8 @@ class EventsViewSet(viewsets.ModelViewSet):
         ],
         responses={
             200: OpenApiResponse(
-                description="Resumen del proceso: event_id, event_name, total_enrollments, created, already_exists, errors y detalle de resultados."
+                description="Resumen del proceso: event_id, event_name, "
+                "total_enrollments, created, already_exists, errors y detalle de resultados."
             ),
             403: OpenApiResponse(description="Solo administradores o coordinadores pueden generar certificados."),
             404: OpenApiResponse(description="Evento no encontrado."),
@@ -1838,7 +1855,8 @@ Equipo CertyPro
             "- **Lista JSON** (`emails`): array de strings con emails directamente en el body.\n"
             "Ambas fuentes se pueden combinar en una sola petición (multipart/form-data).\n\n"
             "Por cada email válido crea una invitación con token único y la envía. "
-            "La invitación expira en **7 días**. Si ya existe una invitación para ese email en el evento, la omite y lo reporta en `errors`."
+            "La invitación expira en **7 días**. Si ya existe una invitación para ese "
+            "email en el evento, la omite y lo reporta en `errors`."
         ),
         request=EventSendInvitationsSerializer,
         examples=[
@@ -2018,7 +2036,8 @@ Equipo CertyPro
         ],
         responses={
             200: OpenApiResponse(
-                description="Evento finalizado. Retorna event_id, status y certificates_sent (cantidad de certificados enviados)."
+                description="Evento finalizado. Retorna event_id, status y "
+                "certificates_sent (cantidad de certificados enviados)."
             ),
             400: OpenApiResponse(description="El evento ya está finalizado."),
             404: OpenApiResponse(description="Evento no encontrado."),
@@ -2178,7 +2197,8 @@ Equipo CertyPro
     retrieve=extend_schema(
         tags=["Participantes"],
         summary="Detalle de participante",
-        description="Retorna todos los datos de un participante: documento de identidad, nombre completo, email, teléfono, estado activo y fechas de creación.",
+        description="Retorna todos los datos de un participante: documento de identidad, "
+                    "nombre completo, email, teléfono, estado activo y fechas de creación.",
         responses={
             200: ParticipantSerializer,
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2200,7 +2220,8 @@ Equipo CertyPro
     destroy=extend_schema(
         tags=["Participantes"],
         summary="Eliminar participante",
-        description="Elimina permanentemente un participante del sistema. **Acción irreversible.** Solo administradores.",
+        description="Elimina permanentemente un participante del sistema. "
+                    "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Participante eliminado correctamente."),
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2462,7 +2483,8 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     retrieve=extend_schema(
         tags=["Instructores"],
         summary="Detalle de instructor",
-        description="Retorna todos los campos de un instructor: nombre completo, email, especialidad y datos de auditoría.",
+        description="Retorna todos los campos de un instructor: nombre completo, email, "
+                    "especialidad y datos de auditoría.",
         responses={200: InstructorSerializer, 404: OpenApiResponse(description="Instructor no encontrado.")},
     ),
     update=extend_schema(
@@ -2635,7 +2657,8 @@ class InstructorsViewSet(viewsets.ModelViewSet):
     destroy=extend_schema(
         tags=["Plantillas"],
         summary="Eliminar plantilla",
-        description="Elimina permanentemente una plantilla y su imagen de fondo asociada. **Acción irreversible.** Solo administradores.",
+        description="Elimina permanentemente una plantilla y su imagen de fondo asociada. "
+                    "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Plantilla eliminada correctamente."),
             404: OpenApiResponse(description="Plantilla no encontrada."),
@@ -2866,7 +2889,8 @@ class TemplateViewSet(viewsets.ModelViewSet):
         ),
         responses={
             200: OpenApiResponse(
-                description="Retorna preview_url (URL de la imagen) y layout_config (configuración completa del diseño)."
+                description="Retorna preview_url (URL de la imagen) y layout_config "
+                "(configuración completa del diseño)."
             ),
             404: OpenApiResponse(description="Plantilla no encontrada."),
         },
@@ -2891,7 +2915,8 @@ class TemplateViewSet(viewsets.ModelViewSet):
         tags=["Plantillas"],
         summary="Historial de cambios de la plantilla",
         description=(
-            "Retorna el historial completo de cambios de la plantilla: nombre, configuración de fuente, coordenadas, etc. "
+            "Retorna el historial completo de cambios de la plantilla: nombre, configuración "
+            "de fuente, coordenadas, etc. "
             "Incluye quién hizo cada cambio y cuándo (fecha y hora exacta con segundos)."
         ),
         responses={200: ChangelogSerializer(many=True)},
@@ -2988,7 +3013,8 @@ class BulkCertificateGenerationView(APIView):
         ),
         responses={
             200: OpenApiResponse(
-                description="Resumen: processing_timestamp, total_rows, successful, failed, success_rate, errors (detallados por fila) y created_certificates (lista de IDs)."
+                description="Resumen: processing_timestamp, total_rows, successful, failed, "
+                "success_rate, errors (detallados por fila) y created_certificates (lista de IDs)."
             ),
             400: OpenApiResponse(
                 description="Falta excel_file, template_image o event_id; o error al procesar el archivo."
@@ -3065,7 +3091,8 @@ class BulkCertificateGenerationView(APIView):
         tags=["Certificados - Masivo"],
         summary="Información del formato Excel para generación masiva",
         description=(
-            "Retorna una guía completa sobre el formato requerido del archivo Excel para la generación masiva de certificados: "
+            "Retorna una guía completa sobre el formato requerido del archivo Excel para la "
+            "generación masiva de certificados: "
             "columnas obligatorias, columnas opcionales, ejemplo de fila y notas importantes sobre el procesamiento."
         ),
         responses={
@@ -3178,7 +3205,8 @@ class BulkCertificatePreviewView(APIView):
         ],
         responses={
             200: OpenApiResponse(
-                description="success, row_count (total de filas), columns (nombres de columnas) y data (lista de registros)."
+                description="success, row_count (total de filas), columns (nombres de "
+                "columnas) y data (lista de registros)."
             ),
             400: OpenApiResponse(
                 description="Archivo no proporcionado, formato inválido o columnas requeridas faltantes."
@@ -3316,7 +3344,8 @@ class BulkCertificateProcessView(APIView):
         ],
         responses={
             200: OpenApiResponse(
-                description="Resumen: processing_timestamp, total_rows, successful, failed, success_rate, errors y created_certificates."
+                description="Resumen: processing_timestamp, total_rows, successful, failed, "
+                "success_rate, errors y created_certificates."
             ),
             400: OpenApiResponse(description="El campo `data` está ausente, no es un array o está vacío."),
             500: OpenApiResponse(description="Error inesperado durante el procesamiento."),
@@ -3489,7 +3518,8 @@ class EnrollmentViewSet(viewsets.ViewSet):
         summary="Eliminar inscripción",
         description=(
             "Elimina la inscripción de un participante de un evento. "
-            "**Acción irreversible.** Si el participante tiene certificado generado, este no se elimina automáticamente."
+            "**Acción irreversible.** Si el participante tiene certificado generado, "
+            "este no se elimina automáticamente."
         ),
         responses={
             204: OpenApiResponse(description="Inscripción eliminada correctamente."),
@@ -3853,7 +3883,8 @@ class InvitationRegisterView(APIView):
             OpenApiParameter(
                 "action",
                 OpenApiTypes.STR,
-                description="Filtrar por tipo de acción (ej: `user_login`, `certificate_generated`, `certificate_delivered`).",
+                description="Filtrar por tipo de acción (ej: `user_login`, "
+                "`certificate_generated`, `certificate_delivered`).",
             ),
             OpenApiParameter(
                 "user_id",
