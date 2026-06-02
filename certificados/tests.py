@@ -585,6 +585,7 @@ class ExcelServiceLogicTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="service@test.com", full_name="S", password="p")
         self.event = Event.objects.create(name="Service Event", event_date=date(2026, 1, 1), created_by=self.user)
+        self.template = Template.objects.create(name="Original Template", created_by=self.user)
 
     def test_get_or_create_participant_updates_email_if_doc_exists(self):
         from participants.models import Participant
