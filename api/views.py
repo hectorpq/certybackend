@@ -2280,6 +2280,32 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         """Auto-assign created_by to current user"""
         serializer.save(created_by=self.request.user)
 
+    def _parse_import_file(self, file):
+        import pandas as pd
+
+        if file.name.endswith((".xlsx", ".xls")):
+            return pd.read_excel(file)
+        return pd.read_csv(file)
+
+    def _normalize_import_row(self, row):
+        doc_id = str(row.get("document_id", row.get("documento", ""))).strip()
+        email = str(row.get("email", "")).strip()
+        first_name = str(row.get("first_name", row.get("nombre", ""))).strip()
+        last_name = str(row.get("last_name", row.get("apellido", ""))).strip()
+
+        if not first_name and not last_name:
+            full = str(row.get("full_name", row.get("nombre_completo", ""))).strip()
+            if full:
+                parts = full.split(" ", 1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ""
+
+        phone = str(row.get("phone", row.get("telefono", ""))).strip()
+        if phone.lower() in ("nan", "none", ""):
+            phone = ""
+
+        return doc_id, email, first_name, last_name, phone
+
     @extend_schema(
         tags=["Participantes"],
         summary="Importar participantes desde Excel/CSV",
@@ -2310,49 +2336,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         url_path="import_students",
         permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
     )
-    def _parse_import_file(self, file):
-        import pandas as pd
-
-        if file.name.endswith((".xlsx", ".xls")):
-            return pd.read_excel(file)
-        return pd.read_csv(file)
-
-    def _normalize_import_row(self, row):
-        doc_id = str(row.get("document_id", row.get("documento", ""))).strip()
-        email = str(row.get("email", "")).strip()
-        first_name = str(row.get("first_name", row.get("nombre", ""))).strip()
-        last_name = str(row.get("last_name", row.get("apellido", ""))).strip()
-
-        if not first_name and not last_name:
-            full = str(row.get("full_name", row.get("nombre_completo", ""))).strip()
-            if full:
-                parts = full.split(" ", 1)
-                first_name = parts[0]
-                last_name = parts[1] if len(parts) > 1 else ""
-
-        phone = str(row.get("phone", row.get("telefono", ""))).strip()
-        if phone.lower() in ("nan", "none", ""):
-            phone = ""
-
-        return doc_id, email, first_name, last_name, phone
-
     def import_students(self, request):
-        """
-        Bulk import students from Excel/CSV file
-
-        Expected form data:
-        - file: Excel file (.xlsx) or CSV file with columns:
-          document_id, first_name, last_name, email, phone (optional)
-
-        Returns:
-        {
-            'total_rows': int,
-            'imported': int,
-            'errors': [
-                {'row': int, 'error': str}
-            ]
-        }
-        """
         from django.db import IntegrityError
 
         if "file" not in request.FILES:

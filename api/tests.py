@@ -5579,7 +5579,7 @@ class ImportHelpersTest(SimpleTestCase):
 
         row = {"document_id": "DOC02", "email": "c@d.com", "full_name": "Maria Lopez"}
         vs = ParticipantsViewSet()
-        *_, fn, ln = vs._normalize_import_row(row)
+        doc_id, email, fn, ln, phone = vs._normalize_import_row(row)
         self.assertEqual((fn, ln), ("Maria", "Lopez"))
 
     def test_normalize_row_phone_nan_becomes_empty(self):
