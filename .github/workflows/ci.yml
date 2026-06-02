@@ -32,7 +32,7 @@ jobs:
           cache: pip
 
       - name: Install lint tools
-        run: pip install --only-binary :all: flake8==7.0.0 black==24.1.1 isort==5.13.2
+        run: "pip install --only-binary :all: flake8==7.0.0 black==24.1.1 isort==5.13.2"
 
       - name: flake8 — style & syntax errors
         run: |
@@ -138,7 +138,7 @@ jobs:
           cache: pip
 
       - name: Install Bandit
-        run: pip install --only-binary :all: "bandit[toml]==1.7.9"
+        run: "pip install --only-binary :all: \"bandit[toml]==1.7.9\""
 
       - name: Run Bandit
         run: |
@@ -188,7 +188,7 @@ jobs:
           cache: pip
 
       - name: Install pip-audit
-        run: pip install --only-binary :all: pip-audit==2.7.3
+        run: "pip install --only-binary :all: pip-audit==2.7.3"
 
       - name: Audit dependencies
         run: |
@@ -252,7 +252,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install --only-binary :all: -r requirements.txt
+        run: "pip install --only-binary :all: -r requirements.txt"
 
       - name: Check for missing migrations
         env:
@@ -306,7 +306,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install --only-binary :all: -r requirements.txt
+        run: "pip install --only-binary :all: -r requirements.txt"
 
       - name: Django system check
         env:
@@ -376,7 +376,35 @@ jobs:
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
           DB_HOST: ${{ env.DB_HOST }}
           DB_PORT: ${{ env.DB_PORT }}
-        run: pytest --cov=. --cov-report=xml:coverage.xml -q
+          REDIS_URL: redis://localhost:6379/0
+          EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+        run: |
+          pytest \
+            --cov=api \
+            --cov=certificados \
+            --cov=config \
+            --cov=core \
+            --cov=deliveries \
+            --cov=emails \
+            --cov=events \
+            --cov=instructors \
+            --cov=participants \
+            --cov=procesos \
+            --cov=services \
+            --cov=students \
+            --cov=users \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term:skip-covered \
+            -q
+
+      - name: Check coverage report generated
+        run: |
+          if [ -f coverage.xml ]; then
+            echo "Coverage report generated successfully"
+          else
+            echo "Warning: coverage.xml not generated"
+          fi
+        continue-on-error: true
 
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarcloud-github-action@master
@@ -405,7 +433,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install --only-binary :all: -r requirements.txt
+        run: "pip install --only-binary :all: -r requirements.txt"
 
       - name: Deploy to staging
         run: |
@@ -439,7 +467,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install --only-binary :all: -r requirements.txt
+        run: "pip install --only-binary :all: -r requirements.txt"
 
       - name: Deploy to production
         run: |
