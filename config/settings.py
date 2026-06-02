@@ -259,15 +259,18 @@ SPECTACULAR_SETTINGS = {
         {"name": "Autenticación", "description": "Registro, inicio de sesión, Google OAuth y renovación de tokens."},
         {
             "name": "Certificados",
-            "description": "CRUD de certificados, generación de PDF, entrega, verificación pública, exportación y reintentos.",
+            "description": "CRUD de certificados, generación de PDF, entrega, "
+            "verificación pública, exportación y reintentos.",
         },
         {
             "name": "Certificados - Masivo",
-            "description": "Generación masiva de certificados desde archivos Excel con previsualización y procesamiento.",
+            "description": "Generación masiva de certificados desde archivos Excel "
+            "con previsualización y procesamiento.",
         },
         {
             "name": "Eventos",
-            "description": "CRUD de eventos académicos, inscripción de participantes, generación/envío de certificados, invitaciones y estadísticas.",
+            "description": "CRUD de eventos académicos, inscripción de participantes, "
+            "generación/envío de certificados, invitaciones y estadísticas.",
         },
         {
             "name": "Participantes",

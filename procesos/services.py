@@ -18,8 +18,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from django.db import transaction
 
-from certificados.models import Certificate
-from certificados.models import Template
+from certificados.models import Certificate, Template
 from events.models import Event
 from participants.models import Participant
 from users.models import User
@@ -164,7 +163,8 @@ class ExcelProcessingService:
 
         layout_config = {
             "student_name": {
-                "x": x_inch, "y": y_inch,
+                "x": x_inch,
+                "y": y_inch,
                 "font_size": int(config_data.get("font_size", 28)),
                 "font_family": config_data.get("font_family", "Helvetica"),
                 "color": config_data.get("font_color", "#000000"),

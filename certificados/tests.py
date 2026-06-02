@@ -585,10 +585,11 @@ class ExcelServiceLogicTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="service@test.com", full_name="S", password="p")
         self.event = Event.objects.create(name="Service Event", event_date=date(2026, 1, 1), created_by=self.user)
+        self.template = Template.objects.create(name="Original Template", created_by=self.user)
 
     def test_get_or_create_participant_updates_email_if_doc_exists(self):
-        from procesos.services import ExcelProcessingService
         from participants.models import Participant
+        from procesos.services import ExcelProcessingService
 
         p = Participant.objects.create(document_id="DOC1", first_name="A", last_name="B", email="old@test.com")
         service = ExcelProcessingService(file_object=None)
@@ -599,8 +600,8 @@ class ExcelServiceLogicTest(TestCase):
         self.assertEqual(p_res.email, "new@test.com")
 
     def test_get_or_create_participant_finds_by_email_if_doc_not_exists(self):
-        from procesos.services import ExcelProcessingService
         from participants.models import Participant
+        from procesos.services import ExcelProcessingService
 
         p = Participant.objects.create(document_id="DOC_OLD", first_name="A", last_name="B", email="existing@test.com")
         service = ExcelProcessingService(file_object=None)
@@ -611,15 +612,12 @@ class ExcelServiceLogicTest(TestCase):
         self.assertEqual(p_res.document_id, "DOC_OLD")
 
     def test_create_bulk_template_geometry_calculation(self):
-        from procesos.services import ExcelProcessingService
         from django.core.files.uploadedfile import SimpleUploadedFile
 
+        from procesos.services import ExcelProcessingService
+
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
-        config = {
-            "name_x": "50",  # Centro
-            "name_y": "50",  # Centro
-            "font_size": "30"
-        }
+        config = {"name_x": "50", "name_y": "50", "font_size": "30"}  # Centro  # Centro
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
 
         # A4 horizontal es ~11.69 x 8.27 pulgadas.
@@ -629,6 +627,7 @@ class ExcelServiceLogicTest(TestCase):
 
     def test_excel_result_summary_truncation(self):
         from procesos.services import ExcelProcessingResult
+
         result = ExcelProcessingResult()
         # Agregar 15 errores para probar el "y 5 errores más"
         for i in range(15):
@@ -641,15 +640,18 @@ class ExcelServiceLogicTest(TestCase):
 
     def test_excel_service_get_event_not_found_raises_error(self):
         from procesos.services import ExcelProcessingService
+
         service = ExcelProcessingService(file_object=None)
         with self.assertRaises(ValueError) as ctx:
             service._get_event("Non Existent Event")
         self.assertIn("Evento no encontrado", str(ctx.exception))
 
     def test_excel_service_validate_file_logic(self):
-        from procesos.services import ExcelProcessingService
         from io import BytesIO
+
         import pandas as pd
+
+        from procesos.services import ExcelProcessingService
 
         # Caso 1: Archivo válido
         df = pd.DataFrame([{"full_name": "A", "email": "a@t.com", "document_id": "1"}])
@@ -670,9 +672,11 @@ class ExcelServiceLogicTest(TestCase):
 
     def test_bulk_generator_service_wrapper(self):
         """Prueba el wrapper de alto nivel BulkCertificateGeneratorService"""
-        from procesos.services import BulkCertificateGeneratorService
         from io import BytesIO
+
         import pandas as pd
+
+        from procesos.services import BulkCertificateGeneratorService
 
         df = pd.DataFrame([{"full_name": "A", "email": "a@t.com", "document_id": "1"}])
         buf = BytesIO()
@@ -685,9 +689,9 @@ class ExcelServiceLogicTest(TestCase):
             mock_proc.assert_called_once()
 
     def test_get_or_create_enrollment_updates_attendance_if_exists(self):
-        from procesos.services import ExcelProcessingService
         from events.models import Enrollment
         from participants.models import Participant
+        from procesos.services import ExcelProcessingService
 
         p = Participant.objects.create(document_id="ENR01", first_name="A", last_name="B", email="a@test.com")
         # Inscripción previa con asistencia en False
@@ -700,8 +704,8 @@ class ExcelServiceLogicTest(TestCase):
         self.assertTrue(Enrollment.objects.get(participant=p, event=self.event).attendance)
 
     def test_create_certificate_updates_template_if_exists_in_bulk(self):
-        from procesos.services import ExcelProcessingService
         from participants.models import Participant
+        from procesos.services import ExcelProcessingService
 
         p = Participant.objects.create(document_id="CERT01", first_name="A", last_name="B", email="b@test.com")
         t2 = Template.objects.create(name="New Template", created_by=self.user)
