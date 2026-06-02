@@ -843,7 +843,68 @@ class GoogleAuthViewTest(TestCase):
         settings.GOOGLE_CLIENT_ID = "test-client-id"
         mock_verify.return_value = {"email": "newgoogle@test.com", "name": "New"}
         res = self.client.post("/api/auth/google/", {"token": "valid-token"})
-        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR])
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["user"]["is_new_user"])
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_google_auth_no_email_in_token_returns_400(self, mock_verify):
+        from django.conf import settings
+        settings.GOOGLE_CLIENT_ID = "test-client-id"
+        mock_verify.return_value = {"name": "No Email User"} # Falta el key 'email'
+        res = self.client.post("/api/auth/google/", {"token": "valid-token"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data["error"], "Email not provided by Google")
+
+    def test_google_auth_no_client_id_configured_returns_500(self):
+        from django.conf import settings
+        with patch.object(settings, "GOOGLE_CLIENT_ID", None):
+            res = self.client.post("/api/auth/google/", {"token": "any-token"})
+            self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            self.assertEqual(res.data["error"], "Google authentication not configured")
+
+
+# ─────────────────────────────────────────────
+# Excel Processing Helpers Coverage
+# ─────────────────────────────────────────────
+
+class ExcelParsingHelpersTest(TestCase):
+    def setUp(self):
+        self.admin = make_admin("parsing@test.com")
+
+    def test_parse_emails_from_json_string(self):
+        from api.views import EventsViewSet
+        import json
+        emails_json = json.dumps(["test1@test.com", "test2@test.com"])
+        result = EventsViewSet._parse_emails_from_json(emails_json)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], "test1@test.com")
+
+    def test_parse_emails_from_json_list_directly(self):
+        from api.views import EventsViewSet
+        emails_list = ["direct@test.com"]
+        result = EventsViewSet._parse_emails_from_json(emails_list)
+        self.assertEqual(result, ["direct@test.com"])
+
+    def test_parse_emails_from_invalid_json_returns_empty(self):
+        from api.views import EventsViewSet
+        result = EventsViewSet._parse_emails_from_json("not-a-json")
+        self.assertEqual(result, [])
+
+    def test_parse_emails_from_file_excel_missing_column(self):
+        from api.views import EventsViewSet
+        from io import BytesIO
+        import pandas as pd
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        df = pd.DataFrame([{"name": "No Email Col"}])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        f = SimpleUploadedFile("test.xlsx", buf.read(), content_type="application/vnd.ms-excel")
+        
+        emails, error = EventsViewSet._parse_emails_from_file(f)
+        self.assertEqual(emails, [])
+        self.assertIn("No se encontró columna de email", error)
 
 
 # ─────────────────────────────────────────────
@@ -5432,4 +5493,59 @@ class CertificateRetryExceptionTest(TestCase):
         with patch.object(Certificate, "deliver", side_effect=Exception("network error")):
             res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+class CoverageEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("coverage@test.com")
+        self.client.force_authenticate(user=self.admin)
+
+    def test_changelog_restored_display(self):
+        """Cubre la rama 'Restaurado' en ChangelogSerializer"""
+        from api.serializers import ChangelogSerializer
+        p = make_participant(self.admin, doc="COV01", email="cov01@test.com")
+        p.delete(deleted_by=self.admin)
+        p.restore()
+        # El último registro en el historial debería ser la restauración (tipo ~)
+        history = p.history.all().order_by("-history_date").first()
+        serializer = ChangelogSerializer(history)
+        self.assertEqual(serializer.data["history_type_display"], "Restaurado")
+
+    def test_parse_emails_invalid_json(self):
+        """Cubre error de parsing JSON en invitaciones"""
+        event = make_event(self.admin)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send/", {"emails": "invalid-json"})
+        self.assertEqual(res.status_code, 400)
+
+    @patch("procesos.services.ExcelProcessingService.read_and_validate_structure")
+    def test_bulk_preview_generic_exception(self, mock_read):
+        """Cubre el bloque except genérico en BulkCertificatePreviewView"""
+        mock_read.side_effect = Exception("Critical Error")
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile("test.xlsx", b"content", content_type="application/vnd.ms-excel")
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("detail", res.data)
+
+    def test_is_expired_logic(self):
+        """Cubre el método is_expired del modelo Certificate"""
+        p = make_participant(self.admin)
+        e = make_event(self.admin)
+        cert = Certificate.objects.create(participant=p, event=e)
+        self.assertFalse(cert.is_expired()) # Sin fecha de expiración
+        
+        from django.utils import timezone
+        from datetime import timedelta
+        cert.expires_at = timezone.now() - timedelta(days=1)
+        cert.save()
+        self.assertTrue(cert.is_expired())
         self.assertIn("network error", res.data.get("message", ""))
+
+    def test_google_auth_value_error_caught(self):
+        """Cubre el bloque except ValueError en GoogleAuthView"""
+        with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("Token error")):
+            from django.conf import settings
+            with patch.object(settings, "GOOGLE_CLIENT_ID", "test-id"):
+                res = self.client.post("/api/auth/google/", {"token": "bad-token"})
+                self.assertEqual(res.status_code, 401)
+                self.assertEqual(res.data["error"], "Invalid Google token")

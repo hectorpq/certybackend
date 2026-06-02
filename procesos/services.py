@@ -19,7 +19,7 @@ import pandas as pd
 from django.db import transaction
 
 from certificados.models import Certificate
-from events.models import Event
+from certificados.models import Template
 from participants.models import Participant
 from users.models import User
 
@@ -148,6 +148,44 @@ class ExcelProcessingService:
         self.template = template  # Template object: si se pasa, sobrescribe la del evento
         self.result = ExcelProcessingResult()
         self.dataframe = None
+
+    @staticmethod
+    def create_bulk_template(event, user, template_image, config_data):
+        """Helper para crear una plantilla ad-hoc para procesos masivos"""
+        from django.utils import timezone
+        
+        name_x = float(config_data.get("name_x", 50))
+        name_y = float(config_data.get("name_y", 40))
+        
+        # Conversión de porcentaje a pulgadas (A4 horizontal aprox)
+        x_inch = name_x / 100 * 841.89 / 72
+        y_inch = (1 - name_y / 100) * 595.28 / 72
+
+        layout_config = {
+            "student_name": {
+                "x": x_inch, "y": y_inch,
+                "font_size": int(config_data.get("font_size", 28)),
+                "font_family": config_data.get("font_family", "Helvetica"),
+                "color": config_data.get("font_color", "#000000"),
+                "centered": True,
+            }
+        }
+        
+        if config_data.get("instructor_name"):
+            layout_config["signature"] = {
+                "instructor_name": config_data.get("instructor_name"),
+                "instructor_specialty": config_data.get("instructor_specialty", ""),
+            }
+
+        return Template.objects.create(
+            name=f'Bulk - {event.name} - {timezone.now().strftime("%Y%m%d%H%M")}',
+            created_by=user,
+            background_image=template_image,
+            layout_config=layout_config,
+            x_coord=x_inch,
+            y_coord=y_inch,
+            is_active=False,
+        )
 
     def read_and_validate_structure(self) -> List[Dict]:
         """
