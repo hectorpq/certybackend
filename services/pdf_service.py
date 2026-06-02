@@ -36,9 +36,7 @@ class PDFService:
         try:
             PDFService.PDF_PATH.mkdir(parents=True, exist_ok=True)
 
-            filename = (
-                f"{certificate.participant.id}_" f"{certificate.event.id}_" f"{certificate.verification_code}.pdf"
-            )
+            filename = f"{certificate.participant.id}_{certificate.event.id}_{certificate.verification_code}.pdf"
             filepath = PDFService.PDF_PATH / filename
 
             c = canvas.Canvas(str(filepath), pagesize=landscape(A4))
@@ -50,7 +48,7 @@ class PDFService:
             layout = template.layout_config if template else {}
 
             # Text fields
-            student_name = (f"{certificate.participant.first_name} " f"{certificate.participant.last_name}").upper()
+            student_name = f"{certificate.participant.first_name} {certificate.participant.last_name}".upper()
             event_name = certificate.event.name.upper()
             event_date = certificate.event.event_date.strftime("%d de %B de %Y")
             expires_at = certificate.expires_at.strftime("%d/%m/%Y") if certificate.expires_at else "N/A"
@@ -238,7 +236,6 @@ class PDFService:
         sig_y = line_y + 0.08 * inch
 
         # Signature image (prefer uploaded file, fall back to signature_url path)
-        sig_drawn = False
         sig_path = None
 
         if getattr(instructor, "signature_image", None):
@@ -258,7 +255,6 @@ class PDFService:
                     mask="auto",
                     preserveAspectRatio=True,
                 )
-                sig_drawn = True
             except Exception as exc:
                 logger.warning("Could not load instructor signature image: %s", exc)
 

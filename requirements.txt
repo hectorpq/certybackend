@@ -36,7 +36,7 @@ flake8==7.0.0
 isort==5.13.2
 
 # Production (opcional)
-gunicorn==21.2.0
+gunicorn==26.0.0
 whitenoise==6.6.0
 
 # API Documentation
