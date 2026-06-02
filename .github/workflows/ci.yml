@@ -335,75 +335,15 @@ jobs:
     needs: [tests]
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: certydb
-          POSTGRES_USER: certyuser
-          POSTGRES_PASSWORD: certypass
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - name: Download coverage report from Stage 2
+        uses: actions/download-artifact@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-django
-
-      - name: Run tests with coverage (for Sonar)
-        continue-on-error: true
-        env:
-          SECRET_KEY: ${{ env.SECRET_KEY }}
-          DB_NAME: ${{ env.DB_NAME }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          REDIS_URL: redis://localhost:6379/0
-          EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
-        run: |
-          pytest \
-            --cov=api \
-            --cov=certificados \
-            --cov=config \
-            --cov=core \
-            --cov=deliveries \
-            --cov=emails \
-            --cov=events \
-            --cov=instructors \
-            --cov=participants \
-            --cov=procesos \
-            --cov=services \
-            --cov=students \
-            --cov=users \
-            --cov-report=xml:coverage.xml \
-            --cov-report=term:skip-covered \
-            -q
-
-      - name: Check coverage report generated
-        run: |
-          if [ -f coverage.xml ]; then
-            echo "Coverage report generated successfully"
-          else
-            echo "Warning: coverage.xml not generated"
-          fi
-        continue-on-error: true
+          name: coverage-xml
 
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarcloud-github-action@master
