@@ -18,8 +18,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from django.db import transaction
 
-from certificados.models import Certificate
-from certificados.models import Template
+from certificados.models import Certificate, Template
 from events.models import Event
 from participants.models import Participant
 from users.models import User

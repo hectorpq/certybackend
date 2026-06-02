@@ -875,8 +875,9 @@ class ExcelParsingHelpersTest(TestCase):
         self.admin = make_admin("parsing@test.com")
 
     def test_parse_emails_from_json_string(self):
-        from api.views import EventsViewSet
         import json
+
+        from api.views import EventsViewSet
 
         emails_json = json.dumps(["test1@test.com", "test2@test.com"])
         result = EventsViewSet._parse_emails_from_json(emails_json)
@@ -897,10 +898,12 @@ class ExcelParsingHelpersTest(TestCase):
         self.assertEqual(result, [])
 
     def test_parse_emails_from_file_excel_missing_column(self):
-        from api.views import EventsViewSet
         from io import BytesIO
+
         import pandas as pd
         from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import EventsViewSet
 
         df = pd.DataFrame([{"name": "No Email Col"}])
         buf = BytesIO()
@@ -5543,8 +5546,9 @@ class CoverageEdgeCasesTest(TestCase):
         cert = Certificate.objects.create(participant=p, event=e)
         self.assertFalse(cert.is_expired())  # Sin fecha de expiración
 
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cert.expires_at = timezone.now() - timedelta(days=1)
         cert.save()
