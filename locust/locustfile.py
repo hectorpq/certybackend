@@ -67,7 +67,10 @@ class CoordinatorUser(HttpUser):
     def on_start(self):
         resp = self.client.post(
             "/api/login/",
-            json={"email": os.environ.get("LOCUST_COORD_EMAIL", "perf_coordinator@test.local"), "password": os.environ.get("LOCUST_COORD_PASSWORD", "PerfPass123!")},
+            json={
+                "email": os.environ.get("LOCUST_COORD_EMAIL", "perf_coordinator@test.local"),
+                "password": os.environ.get("LOCUST_COORD_PASSWORD", "PerfPass123!"),
+            },
             name="[setup] login",
         )
         if resp.status_code == 200:
@@ -123,7 +126,10 @@ class AdminUser(HttpUser):
     def on_start(self):
         resp = self.client.post(
             "/api/login/",
-            json={"email": os.environ.get("LOCUST_ADMIN_EMAIL", "perf_admin@test.local"), "password": os.environ.get("LOCUST_ADMIN_PASSWORD", "PerfAdmin123!")},
+            json={
+                "email": os.environ.get("LOCUST_ADMIN_EMAIL", "perf_admin@test.local"),
+                "password": os.environ.get("LOCUST_ADMIN_PASSWORD", "PerfAdmin123!"),
+            },
             name="[setup] login",
         )
         if resp.status_code == 200:
