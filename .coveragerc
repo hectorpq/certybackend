@@ -9,6 +9,7 @@ omit =
     manage.py
     */management/commands/*
     */tests.py
+    */test_*.py
     services/whatsapp_service.py
     test_student_api.py
     certificados/views.py

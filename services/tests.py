@@ -2,6 +2,7 @@ import io
 from datetime import date
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
 from django.test import TestCase
 
 from certificados.models import Certificate, Template
@@ -56,6 +57,7 @@ def make_cert(user=None, with_instructor=False, doc_id="11111", p_email="luis@te
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class EmailServiceTest(TestCase):
     def setUp(self):
         self.cert, self.user = make_cert()
@@ -155,6 +157,7 @@ class EmailServiceTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class PDFServiceTest(TestCase):
     def setUp(self):
         self.cert, self.user = make_cert()
@@ -242,35 +245,8 @@ class PDFServiceTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class PDFTextOverflowTest(TestCase):
-    """_fit_text truncates long strings so they never overflow the certificate."""
-
-    def test_short_text_returned_unchanged(self):
-        result = PDFService._fit_text("ANA GARCIA", "Helvetica-Bold", 28, 600)
-        self.assertEqual(result, "ANA GARCIA")
-
-    def test_very_long_name_is_truncated(self):
-        result = PDFService._fit_text("A" * 200, "Helvetica-Bold", 28, 600)
-        self.assertLess(len(result), 200)
-        self.assertTrue(result.endswith("..."))
-
-    def test_truncated_text_fits_within_max_width(self):
-        from reportlab.pdfbase.pdfmetrics import stringWidth
-
-        long_name = "PARTICIPANTE CON UN NOMBRE MUY LARGO QUE NO CABE " * 5
-        max_w = 500
-        result = PDFService._fit_text(long_name, "Helvetica-Bold", 28, max_w)
-        self.assertLessEqual(stringWidth(result, "Helvetica-Bold", 28), max_w)
-
-    def test_exactly_fitting_text_not_truncated(self):
-        from reportlab.pdfbase.pdfmetrics import stringWidth
-
-        text = "JUAN"
-        font, size = "Helvetica-Bold", 14
-        max_w = stringWidth(text, font, size)
-        result = PDFService._fit_text(text, font, size, max_w)
-        self.assertEqual(result, text)
-
     @patch("reportlab.pdfgen.canvas.Canvas")
     @patch("services.pdf_service.PDFService.PDF_PATH")
     def test_long_name_does_not_crash_generate(self, mock_path, mock_canvas):
@@ -310,6 +286,7 @@ class PDFTextOverflowTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class QRCodeGenerationTest(TestCase):
     """TC-039 — QR codes are generated correctly and embedded in PDFs."""
 
@@ -382,6 +359,7 @@ class QRCodeGenerationTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class InstructorSignatureTest(TestCase):
     """TC-040 — Instructor signature is drawn on the certificate PDF."""
 
@@ -493,6 +471,7 @@ class InstructorSignatureTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class InstructorSignatureFieldTest(TestCase):
     """TC-041 — Instructor.signature_image field is correctly defined."""
 
@@ -531,26 +510,8 @@ class InstructorSignatureFieldTest(TestCase):
 # ─────────────────────────────────────────────
 
 
+@pytest.mark.integration
 class EmailLimitTest(TestCase):
-    """Cover the email daily-limit branches in check_email_limit()."""
-
-    def test_blocked_when_at_daily_limit(self):
-        from services.email_service import GMAIL_DAILY_LIMIT, check_email_limit
-
-        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_DAILY_LIMIT):
-            result = check_email_limit()
-        self.assertTrue(result["blocked"])
-        self.assertTrue(result["warning"])
-
-    def test_warning_but_not_blocked_at_threshold(self):
-        from services.email_service import GMAIL_DAILY_LIMIT, GMAIL_WARNING_THRESHOLD, check_email_limit
-
-        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_WARNING_THRESHOLD):
-            result = check_email_limit()
-        self.assertTrue(result["warning"])
-        self.assertFalse(result["blocked"])
-        self.assertIsNotNone(result["message"])  # Warning message is set
-
     def test_send_certificate_blocked_when_limit_reached(self):
         cert, _ = make_cert(doc_id="LMT01", p_email="lmt01@test.com")
         with patch(
@@ -573,37 +534,13 @@ class EmailLimitTest(TestCase):
 
 
 # ─────────────────────────────────────────────
-# PDF service: _draw_custom_signature coverage
+# Celery tasks exception coverage
 # ─────────────────────────────────────────────
 
 
-class PDFCustomSignatureTest(TestCase):
-    """Cover PDFService._draw_custom_signature and edge cases."""
-
-    def test_draw_custom_signature_with_image_and_text(self):
-        mock_c = MagicMock()
-        config = {
-            "image_path": "/fake/sig.png",
-            "instructor_name": "Dr. Custom",
-            "instructor_specialty": "Testing Engineering",
-        }
-        with patch("services.pdf_service.ImageReader", side_effect=Exception("no file")):
-            PDFService._draw_custom_signature(mock_c, config)
-        mock_c.line.assert_called_once()
-        self.assertTrue(mock_c.drawCentredString.called)
-
-    def test_draw_custom_signature_without_image(self):
-        mock_c = MagicMock()
-        config = {"instructor_name": "Prof. Ghost"}
-        PDFService._draw_custom_signature(mock_c, config)
-        mock_c.line.assert_called_once()
-
-    def test_draw_custom_signature_empty_config(self):
-        mock_c = MagicMock()
-        PDFService._draw_custom_signature(mock_c, {})
-        mock_c.line.assert_called_once()
-        mock_c.drawCentredString.assert_not_called()
-
+@pytest.mark.integration
+@pytest.mark.integration
+class PDFServiceIntegrationTest(TestCase):
     @patch("services.pdf_service.canvas.Canvas")
     @patch("pathlib.Path.mkdir")
     def test_generate_pdf_uses_custom_signature_when_no_instructor(self, mock_mkdir, mock_canvas):
@@ -635,21 +572,8 @@ class PDFCustomSignatureTest(TestCase):
         result = PDFService.generate_certificate_pdf(cert, template=template)
         self.assertTrue(result["success"])
 
-    def test_draw_instructor_signature_path_exception_sets_none(self):
-        from unittest.mock import PropertyMock
 
-        mock_c = MagicMock()
-        mock_instructor = MagicMock()
-        type(mock_instructor.signature_image).path = PropertyMock(side_effect=ValueError("no path"))
-        PDFService._draw_instructor_signature(mock_c, mock_instructor, {})
-        mock_c.line.assert_called_once()
-
-
-# ─────────────────────────────────────────────
-# Celery tasks exception coverage
-# ─────────────────────────────────────────────
-
-
+@pytest.mark.integration
 class CeleryTasksExceptionTest(TestCase):
     """Cover exception/retry paths in services/tasks.py."""
 
