@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+﻿from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import ValidationError
@@ -581,7 +581,7 @@ class NoPDFRegenerationGuardTest(TestCase):
 
 class ExcelServiceLogicTest(TestCase):
     """Pruebas de cobertura para ramas específicas de procesos/services.py"""
-    
+
     def setUp(self):
         self.user = User.objects.create_user(email="service@test.com", full_name="S", password="p")
         self.event = Event.objects.create(name="Service Event", event_date=date(2026, 1, 1), created_by=self.user)
@@ -589,10 +589,10 @@ class ExcelServiceLogicTest(TestCase):
     def test_get_or_create_participant_updates_email_if_doc_exists(self):
         from procesos.services import ExcelProcessingService
         from participants.models import Participant
-        
+
         p = Participant.objects.create(document_id="DOC1", first_name="A", last_name="B", email="old@test.com")
         service = ExcelProcessingService(file_object=None)
-        
+
         # Misma cedula, diferente email -> debe actualizar email
         p_res = service._get_or_create_participant("A B", "new@test.com", "DOC1")
         self.assertEqual(p_res.id, p.id)
@@ -601,10 +601,10 @@ class ExcelServiceLogicTest(TestCase):
     def test_get_or_create_participant_finds_by_email_if_doc_not_exists(self):
         from procesos.services import ExcelProcessingService
         from participants.models import Participant
-        
+
         p = Participant.objects.create(document_id="DOC_OLD", first_name="A", last_name="B", email="existing@test.com")
         service = ExcelProcessingService(file_object=None)
-        
+
         # Cedula nueva pero email ya existente
         p_res = service._get_or_create_participant("A B", "existing@test.com", "DOC_NEW")
         self.assertEqual(p_res.id, p.id)
@@ -613,16 +613,16 @@ class ExcelServiceLogicTest(TestCase):
     def test_create_bulk_template_geometry_calculation(self):
         from procesos.services import ExcelProcessingService
         from django.core.files.uploadedfile import SimpleUploadedFile
-        
+
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
         config = {
-            "name_x": "50", # Centro
-            "name_y": "50", # Centro
+            "name_x": "50",  # Centro
+            "name_y": "50",  # Centro
             "font_size": "30"
         }
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
-        
-        # A4 horizontal es ~11.69 x 8.27 pulgadas. 
+
+        # A4 horizontal es ~11.69 x 8.27 pulgadas.
         # 50% de X debe ser ~5.84
         self.assertAlmostEqual(tpl.x_coord, 5.84, places=1)
         self.assertEqual(tpl.layout_config["student_name"]["font_size"], 30)
@@ -633,7 +633,7 @@ class ExcelServiceLogicTest(TestCase):
         # Agregar 15 errores para probar el "y 5 errores más"
         for i in range(15):
             result.add_error(i, "field", f"error {i}")
-        
+
         summary = result.get_summary()
         self.assertIn("ERRORES ENCONTRADOS (15)", summary)
         self.assertIn("y 5 errores más", summary)
@@ -650,7 +650,7 @@ class ExcelServiceLogicTest(TestCase):
         from procesos.services import ExcelProcessingService
         from io import BytesIO
         import pandas as pd
-        
+
         # Caso 1: Archivo válido
         df = pd.DataFrame([{"full_name": "A", "email": "a@t.com", "document_id": "1"}])
         buf = BytesIO()
@@ -673,12 +673,12 @@ class ExcelServiceLogicTest(TestCase):
         from procesos.services import BulkCertificateGeneratorService
         from io import BytesIO
         import pandas as pd
-        
+
         df = pd.DataFrame([{"full_name": "A", "email": "a@t.com", "document_id": "1"}])
         buf = BytesIO()
         df.to_excel(buf, index=False)
         buf.seek(0)
-        
+
         # Mockeamos el procesamiento interno para no requerir todo el flujo
         with patch("procesos.services.ExcelProcessingService.process") as mock_proc:
             BulkCertificateGeneratorService.generate_from_excel(buf, self.user)
@@ -688,28 +688,28 @@ class ExcelServiceLogicTest(TestCase):
         from procesos.services import ExcelProcessingService
         from events.models import Enrollment
         from participants.models import Participant
-        
+
         p = Participant.objects.create(document_id="ENR01", first_name="A", last_name="B", email="a@test.com")
         # Inscripción previa con asistencia en False
         Enrollment.objects.create(participant=p, event=self.event, attendance=False)
-        
+
         service = ExcelProcessingService(file_object=None)
         service._get_or_create_enrollment(p, self.event)
-        
+
         # Debe actualizarse a True
         self.assertTrue(Enrollment.objects.get(participant=p, event=self.event).attendance)
 
     def test_create_certificate_updates_template_if_exists_in_bulk(self):
         from procesos.services import ExcelProcessingService
         from participants.models import Participant
-        
+
         p = Participant.objects.create(document_id="CERT01", first_name="A", last_name="B", email="b@test.com")
         t2 = Template.objects.create(name="New Template", created_by=self.user)
         # Certificado ya existente con otra plantilla
         Certificate.objects.create(participant=p, event=self.event, template=self.template)
-        
+
         service = ExcelProcessingService(file_object=None, template=t2)
         cert = service._create_certificate(p, self.event)
-        
+
         self.assertEqual(cert.template.id, t2.id)
         self.assertEqual(cert.status, "pending")

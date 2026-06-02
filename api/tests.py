@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -850,7 +850,7 @@ class GoogleAuthViewTest(TestCase):
     def test_google_auth_no_email_in_token_returns_400(self, mock_verify):
         from django.conf import settings
         settings.GOOGLE_CLIENT_ID = "test-client-id"
-        mock_verify.return_value = {"name": "No Email User"} # Falta el key 'email'
+        mock_verify.return_value = {"name": "No Email User"}  # Falta el key 'email'
         res = self.client.post("/api/auth/google/", {"token": "valid-token"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(res.data["error"], "Email not provided by Google")
@@ -895,13 +895,13 @@ class ExcelParsingHelpersTest(TestCase):
         from io import BytesIO
         import pandas as pd
         from django.core.files.uploadedfile import SimpleUploadedFile
-        
+
         df = pd.DataFrame([{"name": "No Email Col"}])
         buf = BytesIO()
         df.to_excel(buf, index=False)
         buf.seek(0)
         f = SimpleUploadedFile("test.xlsx", buf.read(), content_type="application/vnd.ms-excel")
-        
+
         emails, error = EventsViewSet._parse_emails_from_file(f)
         self.assertEqual(emails, [])
         self.assertIn("No se encontró columna de email", error)
@@ -5494,6 +5494,7 @@ class CertificateRetryExceptionTest(TestCase):
             res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+
 class CoverageEdgeCasesTest(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -5532,14 +5533,13 @@ class CoverageEdgeCasesTest(TestCase):
         p = make_participant(self.admin)
         e = make_event(self.admin)
         cert = Certificate.objects.create(participant=p, event=e)
-        self.assertFalse(cert.is_expired()) # Sin fecha de expiración
-        
+        self.assertFalse(cert.is_expired())  # Sin fecha de expiración
+
         from django.utils import timezone
         from datetime import timedelta
         cert.expires_at = timezone.now() - timedelta(days=1)
         cert.save()
         self.assertTrue(cert.is_expired())
-        self.assertIn("network error", res.data.get("message", ""))
 
     def test_google_auth_value_error_caught(self):
         """Cubre el bloque except ValueError en GoogleAuthView"""

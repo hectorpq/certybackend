@@ -1,4 +1,4 @@
-"""
+﻿"""
 Servicio para importación masiva desde Excel y generación de certificados
 
 Arquitectura limpia con:
@@ -20,6 +20,7 @@ from django.db import transaction
 
 from certificados.models import Certificate
 from certificados.models import Template
+from events.models import Event
 from participants.models import Participant
 from users.models import User
 
@@ -153,10 +154,10 @@ class ExcelProcessingService:
     def create_bulk_template(event, user, template_image, config_data):
         """Helper para crear una plantilla ad-hoc para procesos masivos"""
         from django.utils import timezone
-        
+
         name_x = float(config_data.get("name_x", 50))
         name_y = float(config_data.get("name_y", 40))
-        
+
         # Conversión de porcentaje a pulgadas (A4 horizontal aprox)
         x_inch = name_x / 100 * 841.89 / 72
         y_inch = (1 - name_y / 100) * 595.28 / 72
@@ -170,7 +171,7 @@ class ExcelProcessingService:
                 "centered": True,
             }
         }
-        
+
         if config_data.get("instructor_name"):
             layout_config["signature"] = {
                 "instructor_name": config_data.get("instructor_name"),

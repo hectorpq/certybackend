@@ -1,4 +1,4 @@
-"""
+﻿"""
 ViewSets (views) for Certificate and Delivery APIs
 """
 
@@ -2999,8 +2999,6 @@ class BulkCertificateGenerationView(APIView):
     )
     def post(self, request):
         """Procesa un archivo Excel para generar y enviar certificados masivamente"""
-        from django.utils import timezone as tz
-
         from api.permissions import is_operational_user
 
         if not is_operational_user(request):
@@ -3042,7 +3040,7 @@ class BulkCertificateGenerationView(APIView):
             template = ExcelProcessingService.create_bulk_template(
                 event, request.user, template_image, request.data
             )
-            
+
             file_bytes = BytesIO(excel_file.read())
             service = ExcelProcessingService(
                 file_object=file_bytes,
