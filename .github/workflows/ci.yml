@@ -32,7 +32,7 @@ jobs:
           cache: pip
 
       - name: Install lint tools
-        run: pip install flake8==7.0.0 black==24.1.1 isort==5.13.2
+        run: pip install --only-binary :all: flake8==7.0.0 black==24.1.1 isort==5.13.2
 
       - name: flake8 — style & syntax errors
         run: |
@@ -96,8 +96,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-django
+          pip install --only-binary :all: -r requirements.txt
+          pip install --only-binary :all: pytest pytest-cov pytest-django
 
       - name: Run tests with coverage
         env:
@@ -138,7 +138,7 @@ jobs:
           cache: pip
 
       - name: Install Bandit
-        run: pip install bandit[toml]==1.7.9
+        run: pip install --only-binary :all: "bandit[toml]==1.7.9"
 
       - name: Run Bandit
         run: |
@@ -188,7 +188,7 @@ jobs:
           cache: pip
 
       - name: Install pip-audit
-        run: pip install pip-audit==2.7.3
+        run: pip install --only-binary :all: pip-audit==2.7.3
 
       - name: Audit dependencies
         run: |
@@ -252,7 +252,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --only-binary :all: -r requirements.txt
 
       - name: Check for missing migrations
         env:
@@ -306,7 +306,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --only-binary :all: -r requirements.txt
 
       - name: Django system check
         env:
@@ -363,7 +363,9 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest pytest-cov pytest-django
+        run: |
+          pip install --only-binary :all: -r requirements.txt
+          pip install --only-binary :all: pytest pytest-cov pytest-django
 
       - name: Run tests with coverage (for Sonar)
         continue-on-error: true
@@ -403,7 +405,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --only-binary :all: -r requirements.txt
 
       - name: Deploy to staging
         run: |
@@ -437,7 +439,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --only-binary :all: -r requirements.txt
 
       - name: Deploy to production
         run: |

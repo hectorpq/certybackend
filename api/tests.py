@@ -386,6 +386,26 @@ class CertificateViewSetTest(TestCase):
         res = self.client.post(f"/api/certificates/{self.cert.id}/deliver/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_retrieve_certificate_with_event_instructor(self):
+        instructor = Instructor.objects.create(
+            full_name="Prof. Juan", email="juan@test.com", created_by=self.admin
+        )
+        event = Event.objects.create(
+            name="Evento con Instructor",
+            event_date=date(2026, 7, 1),
+            created_by=self.admin,
+            instructor=instructor,
+        )
+        cert = Certificate.objects.create(
+            participant=self.participant,
+            event=event,
+            template=self.template,
+            generated_by=self.admin,
+        )
+        res = self.client.get(f"/api/certificates/{cert.id}/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["event"]["instructor_name"], "Prof. Juan")
+
 
 # ─────────────────────────────────────────────
 # Templates

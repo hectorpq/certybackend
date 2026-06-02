@@ -1429,6 +1429,33 @@ class EventsViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(description="Evento no encontrado."),
         },
     )
+    def _process_enrollment(self, enrollment, event, request):
+        cert, created = Certificate.objects.get_or_create(
+            participant=enrollment.participant,
+            event=event,
+            defaults={
+                "status": "pending",
+                "generated_by": request.user,
+                "template": event.template,
+            },
+        )
+        if created or cert.status == "pending":
+            cert.generate(template=event.template, generated_by=request.user, skip_attendance_check=True)
+            return {
+                "type": "created",
+                "participant_id": enrollment.participant.id,
+                "participant_name": enrollment.participant.full_name,
+                "certificate_id": cert.id,
+                "status": cert.status,
+            }
+        return {
+            "type": "already_exists",
+            "participant_id": enrollment.participant.id,
+            "participant_name": enrollment.participant.full_name,
+            "certificate_id": cert.id,
+            "status": cert.status,
+        }
+
     @action(detail=True, methods=["post"], url_path="certificates/generate")
     def generate_certificates(self, request, pk=None):
         """
@@ -1457,45 +1484,8 @@ class EventsViewSet(viewsets.ModelViewSet):
 
         for enrollment in enrollments:
             try:
-                cert, created = Certificate.objects.get_or_create(
-                    participant=enrollment.participant,
-                    event=event,
-                    defaults={
-                        "status": "pending",
-                        "generated_by": request.user,
-                        "template": event.template,
-                    },
-                )
-
-                if not created and cert.status == "pending":
-                    cert.generate(template=event.template, generated_by=request.user, skip_attendance_check=True)
-                    results["created"].append(
-                        {
-                            "participant_id": enrollment.participant.id,
-                            "participant_name": enrollment.participant.full_name,
-                            "certificate_id": cert.id,
-                            "status": cert.status,
-                        }
-                    )
-                elif created:
-                    cert.generate(template=event.template, generated_by=request.user, skip_attendance_check=True)
-                    results["created"].append(
-                        {
-                            "participant_id": enrollment.participant.id,
-                            "participant_name": enrollment.participant.full_name,
-                            "certificate_id": cert.id,
-                            "status": cert.status,
-                        }
-                    )
-                else:
-                    results["already_exists"].append(
-                        {
-                            "participant_id": enrollment.participant.id,
-                            "participant_name": enrollment.participant.full_name,
-                            "certificate_id": cert.id,
-                            "status": cert.status,
-                        }
-                    )
+                entry = self._process_enrollment(enrollment, event, request)
+                results[entry.pop("type")].append(entry)
             except Exception as e:
                 results["errors"].append(
                     {

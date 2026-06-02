@@ -10,6 +10,7 @@ Targets:
   - Certificate generation flow (admin, low volume)
 """
 
+import os
 import random
 import string
 
@@ -60,11 +61,13 @@ class CoordinatorUser(HttpUser):
 
     wait_time = between(1, 3)
     weight = 2
+    EVENTS_PATH = "/api/events/"
+    CERTIFICATES_PATH = "/api/certificates/"
 
     def on_start(self):
         resp = self.client.post(
             "/api/login/",
-            json={"email": "perf_coordinator@test.local", "password": "PerfPass123!"},
+            json={"email": os.environ.get("LOCUST_COORD_EMAIL", "perf_coordinator@test.local"), "password": os.environ.get("LOCUST_COORD_PASSWORD", "PerfPass123!")},
             name="[setup] login",
         )
         if resp.status_code == 200:
@@ -77,7 +80,7 @@ class CoordinatorUser(HttpUser):
     @task(5)
     @tag("coordinator", "events")
     def list_events(self):
-        self.client.get("/api/events/", headers=self.headers, name="/api/events/")
+        self.client.get(self.EVENTS_PATH, headers=self.headers, name=self.EVENTS_PATH)
 
     @task(5)
     @tag("coordinator", "participants")
@@ -87,15 +90,15 @@ class CoordinatorUser(HttpUser):
     @task(4)
     @tag("coordinator", "certificates")
     def list_certificates(self):
-        self.client.get("/api/certificates/", headers=self.headers, name="/api/certificates/")
+        self.client.get(self.CERTIFICATES_PATH, headers=self.headers, name=self.CERTIFICATES_PATH)
 
     @task(2)
     @tag("coordinator", "certificates")
     def list_certificates_page_2(self):
         self.client.get(
-            "/api/certificates/?page=2",
+            f"{self.CERTIFICATES_PATH}?page=2",
             headers=self.headers,
-            name="/api/certificates/?page=N",
+            name=f"{self.CERTIFICATES_PATH}?page=N",
         )
 
     @task(1)
@@ -114,11 +117,13 @@ class AdminUser(HttpUser):
 
     wait_time = between(3, 8)
     weight = 1
+    EVENTS_PATH = "/api/events/"
+    CERTIFICATES_PATH = "/api/certificates/"
 
     def on_start(self):
         resp = self.client.post(
             "/api/login/",
-            json={"email": "perf_admin@test.local", "password": "PerfAdmin123!"},
+            json={"email": os.environ.get("LOCUST_ADMIN_EMAIL", "perf_admin@test.local"), "password": os.environ.get("LOCUST_ADMIN_PASSWORD", "PerfAdmin123!")},
             name="[setup] login",
         )
         if resp.status_code == 200:
@@ -131,21 +136,21 @@ class AdminUser(HttpUser):
     @task(3)
     @tag("admin", "events")
     def list_events(self):
-        self.client.get("/api/events/", headers=self.headers, name="/api/events/")
+        self.client.get(self.EVENTS_PATH, headers=self.headers, name=self.EVENTS_PATH)
 
     @task(2)
     @tag("admin", "certificates")
     def list_certificates(self):
-        self.client.get("/api/certificates/", headers=self.headers, name="/api/certificates/")
+        self.client.get(self.CERTIFICATES_PATH, headers=self.headers, name=self.CERTIFICATES_PATH)
 
     @task(1)
     @tag("admin", "export")
     def export_certificates_csv(self):
         with self.client.get(
-            "/api/certificates/export/?file_format=csv",
+            f"{self.CERTIFICATES_PATH}export/?file_format=csv",
             headers=self.headers,
             catch_response=True,
-            name="/api/certificates/export/",
+            name=f"{self.CERTIFICATES_PATH}export/",
         ) as resp:
             if resp.status_code in (200, 403, 404):
                 resp.success()
