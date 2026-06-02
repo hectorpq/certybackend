@@ -61232,7 +61232,7 @@ E       django.db.utils.OperationalError
 ..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\psycopg2\__init__.py:122: OperationalError
 ============================== warnings summary ===============================
 services/test_unit.py::PDFCustomSignatureTest::test_draw_instructor_signature_path_exception_sets_none
-  C:\Users\LENOVO\Documents\certypro\SystemCertification:0: PytestWarning: Error when trying to teardown test databases: ProgrammingError('no existe la base de datos «test_certificados_db»\n')
+  C:\Users\LENOVO\Documents\certypro\SystemCertification:0: PytestWarning: Error when trying to teardown test databases: ProgrammingError('no existe la base de datos ï¿½test_certificados_dbï¿½\n')
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =============================== tests coverage ================================

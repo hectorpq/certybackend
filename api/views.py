@@ -1,4 +1,4 @@
-"""
+﻿"""
 ViewSets (views) for Certificate and Delivery APIs
 """
 
@@ -2999,8 +2999,6 @@ class BulkCertificateGenerationView(APIView):
     )
     def post(self, request):
         """Procesa un archivo Excel para generar y enviar certificados masivamente"""
-        from django.utils import timezone as tz
-
         from api.permissions import is_operational_user
 
         if not is_operational_user(request):
@@ -3035,73 +3033,15 @@ class BulkCertificateGenerationView(APIView):
         except (Event.DoesNotExist, ValueError):
             return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Coordenadas del nombre (porcentaje 0-100, y desde arriba)
-        name_x = float(request.data.get("name_x", 50))
-        name_y = float(request.data.get("name_y", 40))
-        font_size = int(request.data.get("font_size", 28))
-        font_color = request.data.get("font_color", "#000000")
-        font_family = request.data.get("font_family", "Helvetica")
-        instructor_name = request.data.get("instructor_name", "").strip()
-        instructor_specialty = request.data.get("instructor_specialty", "").strip()
-
-        # Convertir porcentaje a pulgadas para layout_config
-        # A4 horizontal: 841.89 x 595.28 pts / 72 pts/inch
-        x_inch = name_x / 100 * 841.89 / 72
-        y_inch = (1 - name_y / 100) * 595.28 / 72
-
-        layout_config = {
-            "student_name": {
-                "x": x_inch,
-                "y": y_inch,
-                "font_size": font_size,
-                "font_family": font_family,
-                "color": font_color,
-                "centered": True,
-            }
-        }
-
-        # Save ad-hoc signature image and add to layout_config
-        if signature_image:
-            import pathlib
-
-            from django.conf import settings as django_settings
-
-            sig_dir = pathlib.Path(django_settings.MEDIA_ROOT) / "bulk_signatures"
-            sig_dir.mkdir(parents=True, exist_ok=True)
-            sig_filename = f"sig_{tz.now().strftime('%Y%m%d%H%M%S%f')}{pathlib.Path(signature_image.name).suffix}"
-            sig_path = sig_dir / sig_filename
-            with open(sig_path, "wb+") as dest:
-                for chunk in signature_image.chunks():
-                    dest.write(chunk)
-            layout_config["signature"] = {
-                "image_path": str(sig_path),
-                "instructor_name": instructor_name,
-                "instructor_specialty": instructor_specialty,
-            }
-        elif instructor_name:
-            # No image but have a name — still render line + name
-            layout_config["signature"] = {
-                "instructor_name": instructor_name,
-                "instructor_specialty": instructor_specialty,
-            }
-
-        template = Template.objects.create(
-            name=f'Bulk - {event.name} - {tz.now().strftime("%Y%m%d%H%M%S")}',
-            created_by=request.user,
-            background_image=template_image,
-            layout_config=layout_config,
-            font_color=font_color,
-            font_family=font_family,
-            font_size=font_size,
-            x_coord=x_inch,
-            y_coord=y_inch,
-            is_active=False,
-        )
-
+        from procesos.services import ExcelProcessingService
+        template = None
         try:
-            file_bytes = BytesIO(excel_file.read())
-            from procesos.services import ExcelProcessingService
+            # Creamos la plantilla ad-hoc
+            template = ExcelProcessingService.create_bulk_template(
+                event, request.user, template_image, request.data
+            )
 
+            file_bytes = BytesIO(excel_file.read())
             service = ExcelProcessingService(
                 file_object=file_bytes,
                 created_by_user=request.user,
@@ -3114,7 +3054,8 @@ class BulkCertificateGenerationView(APIView):
             return Response(result_dict, status=status.HTTP_200_OK)
 
         except Exception as e:
-            template.delete()
+            if template and template.id:
+                template.delete()
             return Response(
                 {"error": "Error al procesar archivo Excel", "detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,

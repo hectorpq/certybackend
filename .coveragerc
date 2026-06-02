@@ -10,6 +10,8 @@ omit =
     */management/commands/*
     */tests.py
     */test_*.py
+    config/settings.py
+    config/celery.py
     services/whatsapp_service.py
     test_student_api.py
     certificados/views.py

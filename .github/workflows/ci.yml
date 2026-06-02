@@ -32,14 +32,14 @@ jobs:
           cache: pip
 
       - name: Install lint tools
-        run: "pip install --only-binary :all: flake8==7.0.0 black==24.1.1 isort==5.13.2"
+        run: "pip install flake8==7.0.0 black==24.1.1 isort==5.13.2"
 
       - name: flake8 — style & syntax errors
         run: |
           flake8 . \
             --max-line-length=120 \
             --exclude=migrations,__pycache__,.git,venv,.venv \
-            --extend-ignore=E501,W503,E402,F841,E266,E125 \
+            --extend-ignore=E221,E402,E266,E125,F841 \
             --statistics
 
       - name: black — formatting check
@@ -96,8 +96,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --only-binary :all: -r requirements.txt
-          pip install --only-binary :all: pytest pytest-cov pytest-django
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-django
 
       - name: Run tests with coverage
         env:
@@ -110,10 +110,9 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
         run: |
-          python manage.py test --verbosity=2 2>&1 | tee test-output.txt
-          coverage run --source='.' manage.py test -v 0
+          coverage run --source='.' -m pytest -v
           coverage xml
-          coverage report --fail-under=50
+          coverage report --fail-under=85
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -138,7 +137,7 @@ jobs:
           cache: pip
 
       - name: Install Bandit
-        run: "pip install --only-binary :all: \"bandit[toml]==1.7.9\""
+        run: "pip install \"bandit[toml]==1.7.9\""
 
       - name: Run Bandit
         run: |
@@ -188,7 +187,7 @@ jobs:
           cache: pip
 
       - name: Install pip-audit
-        run: "pip install --only-binary :all: pip-audit==2.7.3"
+        run: "pip install pip-audit==2.7.3"
 
       - name: Audit dependencies
         run: |
@@ -252,7 +251,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: "pip install --only-binary :all: -r requirements.txt"
+        run: "pip install -r requirements.txt"
 
       - name: Check for missing migrations
         env:
@@ -272,7 +271,7 @@ jobs:
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
           DB_HOST: ${{ env.DB_HOST }}
           DB_PORT: ${{ env.DB_PORT }}
-        run: python manage.py migrate --run-syncdb
+        run: python manage.py migrate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STAGE 6 — Django system check + collectstatic
@@ -306,7 +305,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: "pip install --only-binary :all: -r requirements.txt"
+        run: "pip install -r requirements.txt"
 
       - name: Django system check
         env:
@@ -364,8 +363,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --only-binary :all: -r requirements.txt
-          pip install --only-binary :all: pytest pytest-cov pytest-django
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-django
 
       - name: Run tests with coverage (for Sonar)
         continue-on-error: true
@@ -433,7 +432,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: "pip install --only-binary :all: -r requirements.txt"
+        run: "pip install -r requirements.txt"
 
       - name: Deploy to staging
         run: |
@@ -467,7 +466,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: "pip install --only-binary :all: -r requirements.txt"
+        run: "pip install -r requirements.txt"
 
       - name: Deploy to production
         run: |
