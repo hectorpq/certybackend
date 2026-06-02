@@ -615,11 +615,7 @@ class ExcelServiceLogicTest(TestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
-        config = {
-            "name_x": "50",  # Centro
-            "name_y": "50",  # Centro
-            "font_size": "30"
-        }
+        config = {"name_x": "50", "name_y": "50", "font_size": "30"}  # Centro  # Centro
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
 
         # A4 horizontal es ~11.69 x 8.27 pulgadas.
@@ -629,6 +625,7 @@ class ExcelServiceLogicTest(TestCase):
 
     def test_excel_result_summary_truncation(self):
         from procesos.services import ExcelProcessingResult
+
         result = ExcelProcessingResult()
         # Agregar 15 errores para probar el "y 5 errores más"
         for i in range(15):
@@ -641,6 +638,7 @@ class ExcelServiceLogicTest(TestCase):
 
     def test_excel_service_get_event_not_found_raises_error(self):
         from procesos.services import ExcelProcessingService
+
         service = ExcelProcessingService(file_object=None)
         with self.assertRaises(ValueError) as ctx:
             service._get_event("Non Existent Event")

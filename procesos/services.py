@@ -164,7 +164,8 @@ class ExcelProcessingService:
 
         layout_config = {
             "student_name": {
-                "x": x_inch, "y": y_inch,
+                "x": x_inch,
+                "y": y_inch,
                 "font_size": int(config_data.get("font_size", 28)),
                 "font_family": config_data.get("font_family", "Helvetica"),
                 "color": config_data.get("font_color", "#000000"),

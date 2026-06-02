@@ -1232,14 +1232,14 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         tags=["Eventos"],
         summary="Actualizar evento (parcial)",
         description="Actualiza uno o más campos de un evento sin necesidad de enviar "
-                    "todos los datos. Útil para cambiar solo el estado o la plantilla.",
+        "todos los datos. Útil para cambiar solo el estado o la plantilla.",
         responses={200: EventSerializer, 400: OpenApiResponse(description="Datos inválidos.")},
     ),
     destroy=extend_schema(
         tags=["Eventos"],
         summary="Eliminar evento",
         description="Elimina permanentemente un evento y sus registros asociados. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Evento eliminado correctamente."),
             404: OpenApiResponse(description="Evento no encontrado."),
@@ -2198,7 +2198,7 @@ Equipo CertyPro
         tags=["Participantes"],
         summary="Detalle de participante",
         description="Retorna todos los datos de un participante: documento de identidad, "
-                    "nombre completo, email, teléfono, estado activo y fechas de creación.",
+        "nombre completo, email, teléfono, estado activo y fechas de creación.",
         responses={
             200: ParticipantSerializer,
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2221,7 +2221,7 @@ Equipo CertyPro
         tags=["Participantes"],
         summary="Eliminar participante",
         description="Elimina permanentemente un participante del sistema. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Participante eliminado correctamente."),
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2484,7 +2484,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         tags=["Instructores"],
         summary="Detalle de instructor",
         description="Retorna todos los campos de un instructor: nombre completo, email, "
-                    "especialidad y datos de auditoría.",
+        "especialidad y datos de auditoría.",
         responses={200: InstructorSerializer, 404: OpenApiResponse(description="Instructor no encontrado.")},
     ),
     update=extend_schema(
@@ -2658,7 +2658,7 @@ class InstructorsViewSet(viewsets.ModelViewSet):
         tags=["Plantillas"],
         summary="Eliminar plantilla",
         description="Elimina permanentemente una plantilla y su imagen de fondo asociada. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Plantilla eliminada correctamente."),
             404: OpenApiResponse(description="Plantilla no encontrada."),
@@ -3060,12 +3060,11 @@ class BulkCertificateGenerationView(APIView):
             return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         from procesos.services import ExcelProcessingService
+
         template = None
         try:
             # Creamos la plantilla ad-hoc
-            template = ExcelProcessingService.create_bulk_template(
-                event, request.user, template_image, request.data
-            )
+            template = ExcelProcessingService.create_bulk_template(event, request.user, template_image, request.data)
 
             file_bytes = BytesIO(excel_file.read())
             service = ExcelProcessingService(
