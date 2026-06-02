@@ -410,9 +410,7 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
         return Participant.objects.filter(email__iexact=obj.email).exists()
 
     def _participant_exists(self, obj):
-        if obj.participant:
-            return True
-        return Participant.objects.filter(email__iexact=obj.email).exists()
+        return self._student_exists(obj)
 
     def get_student_exists(self, obj):
         return self._student_exists(obj)

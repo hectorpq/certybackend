@@ -285,7 +285,7 @@ class GoogleAuthView(APIView):
         examples=[
             OpenApiExample(
                 "Login con Google",
-                value={"token": "google_id_token_here"},
+                value={"token": "google_id_token_here"},  # noqa
                 request_only=True,
             ),
         ],
@@ -364,10 +364,10 @@ class GoogleAuthView(APIView):
             )
 
         except ValueError as e:
-            logger.error("Google token validation failed: %s", str(e))
+            logger.exception("Google token validation failed")
             return Response({"error": "Invalid Google token"}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
-            logger.error("Google auth error: %s", str(e))
+            logger.exception("Google auth error")
             return Response(
                 {"error": "Authentication failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -2106,7 +2106,7 @@ Equipo CertyPro
                             delivery_log.error_message,
                         )
                 except Exception as e:
-                    logger.error("Error processing certificate %s: %s", certificate.id, str(e))
+                    logger.exception("Error processing certificate %s", certificate.id)
 
         return Response(result)
 
@@ -2310,6 +2310,32 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         url_path="import_students",
         permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
     )
+    def _parse_import_file(self, file):
+        import pandas as pd
+
+        if file.name.endswith((".xlsx", ".xls")):
+            return pd.read_excel(file)
+        return pd.read_csv(file)
+
+    def _normalize_import_row(self, row):
+        doc_id = str(row.get("document_id", row.get("documento", ""))).strip()
+        email = str(row.get("email", "")).strip()
+        first_name = str(row.get("first_name", row.get("nombre", ""))).strip()
+        last_name = str(row.get("last_name", row.get("apellido", ""))).strip()
+
+        if not first_name and not last_name:
+            full = str(row.get("full_name", row.get("nombre_completo", ""))).strip()
+            if full:
+                parts = full.split(" ", 1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ""
+
+        phone = str(row.get("phone", row.get("telefono", ""))).strip()
+        if phone.lower() in ("nan", "none", ""):
+            phone = ""
+
+        return doc_id, email, first_name, last_name, phone
+
     def import_students(self, request):
         """
         Bulk import students from Excel/CSV file
@@ -2327,7 +2353,6 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             ]
         }
         """
-        import pandas as pd
         from django.db import IntegrityError
 
         if "file" not in request.FILES:
@@ -2338,37 +2363,16 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         errors = []
 
         try:
-            if file.name.endswith(".xlsx") or file.name.endswith(".xls"):
-                df = pd.read_excel(file)
-            else:
-                df = pd.read_csv(file)
-
-            # Normalize column names: strip whitespace, lowercase
+            df = self._parse_import_file(file)
             df.columns = [str(c).strip().lower() for c in df.columns]
 
             for idx, row in df.iterrows():
                 try:
-                    doc_id = str(row.get("document_id", row.get("documento", ""))).strip()
-                    email = str(row.get("email", "")).strip()
+                    doc_id, email, first_name, last_name, phone = self._normalize_import_row(row)
 
                     if not doc_id or not email:
                         errors.append({"row": idx + 2, "error": "Faltan document_id o email"})
                         continue
-
-                    # Support both first_name/last_name columns and a single full_name column
-                    first_name = str(row.get("first_name", row.get("nombre", ""))).strip()
-                    last_name = str(row.get("last_name", row.get("apellido", ""))).strip()
-
-                    if not first_name and not last_name:
-                        full = str(row.get("full_name", row.get("nombre_completo", ""))).strip()
-                        if full:
-                            parts = full.split(" ", 1)
-                            first_name = parts[0]
-                            last_name = parts[1] if len(parts) > 1 else ""
-
-                    phone = str(row.get("phone", row.get("telefono", ""))).strip()
-                    if phone.lower() in ("nan", "none", ""):
-                        phone = ""
 
                     _, created = Participant.objects.get_or_create(
                         document_id=doc_id,
@@ -2768,7 +2772,7 @@ class TemplateViewSet(viewsets.ModelViewSet):
         if "file" in request.FILES:
             uploaded_file = request.FILES["file"]
         elif request.FILES:
-            uploaded_file = list(request.FILES.values())[0]
+            uploaded_file = next(iter(request.FILES.values()))
 
         if not uploaded_file:
             return Response(
@@ -3035,7 +3039,6 @@ class BulkCertificateGenerationView(APIView):
 
         excel_file = request.FILES.get("excel_file")
         template_image = request.FILES.get("template_image")
-        signature_image = request.FILES.get("signature_image")
         event_id = request.data.get("event_id")
 
         if not excel_file:
@@ -3257,7 +3260,7 @@ class BulkCertificatePreviewView(APIView):
         except ExcelImportError as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error("Error en preview: %s", str(e))
+            logger.exception("Error en preview")
             return Response(
                 {
                     "success": False,
@@ -3382,13 +3385,13 @@ class BulkCertificateProcessView(APIView):
             return Response(result.to_dict(), status=status.HTTP_200_OK)
 
         except ExcelImportError as e:
-            logger.error("Error en procesamiento: %s", str(e))
+            logger.exception("Error en procesamiento")
             return Response(
                 {"error": "Error al procesar registros", "detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
-            logger.error("Error inesperado en procesamiento: %s", str(e))
+            logger.exception("Error inesperado en procesamiento")
             return Response(
                 {"error": "Error inesperado al procesar registros", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

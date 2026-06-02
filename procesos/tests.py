@@ -466,7 +466,7 @@ class ExcelProcessingServiceCoverageTest(TestCase):
 
 class BulkTemplateCreationTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(email="bulk@test.com", full_name="Bulk", password="pass")
+        self.user = User.objects.create_user(email="bulk@test.com", full_name="Bulk", password="bulkPass99!")
         self.event = Event.objects.create(name="Bulk Event", event_date=date(2026, 6, 1), created_by=self.user)
 
     def test_default_y_coord_when_no_name_y(self):
@@ -510,7 +510,8 @@ class BulkTemplateCreationTest(TestCase):
     def test_signature_with_instructor_name_and_specialty(self):
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
         config = {
-            "name_x": "50", "name_y": "50",
+            "name_x": "50",
+            "name_y": "50",
             "instructor_name": "Dr. Perez",
             "instructor_specialty": "Medicina",
         }
