@@ -439,16 +439,25 @@ class ExcelProcessingServiceCoverageTest(TestCase):
         self.assertEqual(cert.template.id, new_template.id)
         self.assertEqual(cert.status, "pending")
 
-    @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP fail"})
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP fail"}
+    )
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     def test_delivery_failure_raises_value_error_in_process_row(self, mock_pdf, mock_email):
         """Line 359: raise ValueError when delivery fails."""
-        buf = make_excel([{
-            "full_name": "Cover Test",
-            "email": "cover@test.com",
-            "document_id": "PROC01",
-            "event_name": "Proc Coverage Event",
-        }])
+        buf = make_excel(
+            [
+                {
+                    "full_name": "Cover Test",
+                    "email": "cover@test.com",
+                    "document_id": "PROC01",
+                    "event_name": "Proc Coverage Event",
+                }
+            ]
+        )
         svc = ExcelProcessingService(buf, created_by_user=self.user, event=self.event)
         result = svc.process()
         self.assertGreater(result.failed, 0)

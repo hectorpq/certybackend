@@ -257,14 +257,35 @@ SPECTACULAR_SETTINGS = {
     "SECURITY": [{"BearerAuth": []}],
     "TAGS": [
         {"name": "Autenticación", "description": "Registro, inicio de sesión, Google OAuth y renovación de tokens."},
-        {"name": "Certificados", "description": "CRUD de certificados, generación de PDF, entrega, verificación pública, exportación y reintentos."},
-        {"name": "Certificados - Masivo", "description": "Generación masiva de certificados desde archivos Excel con previsualización y procesamiento."},
-        {"name": "Eventos", "description": "CRUD de eventos académicos, inscripción de participantes, generación/envío de certificados, invitaciones y estadísticas."},
-        {"name": "Participantes", "description": "CRUD de participantes/estudiantes e importación masiva desde Excel/CSV."},
+        {
+            "name": "Certificados",
+            "description": "CRUD de certificados, generación de PDF, entrega, verificación pública, exportación y reintentos.",
+        },
+        {
+            "name": "Certificados - Masivo",
+            "description": "Generación masiva de certificados desde archivos Excel con previsualización y procesamiento.",
+        },
+        {
+            "name": "Eventos",
+            "description": "CRUD de eventos académicos, inscripción de participantes, generación/envío de certificados, invitaciones y estadísticas.",
+        },
+        {
+            "name": "Participantes",
+            "description": "CRUD de participantes/estudiantes e importación masiva desde Excel/CSV.",
+        },
         {"name": "Instructores", "description": "CRUD de instructores que firman los certificados."},
-        {"name": "Plantillas", "description": "CRUD de plantillas PDF para certificados, carga de imagen de fondo y firma."},
-        {"name": "Inscripciones", "description": "Inscripción de participantes a eventos, marcado de asistencia y notas."},
-        {"name": "Invitaciones", "description": "Invitaciones públicas con token para que participantes se registren y acepten eventos."},
+        {
+            "name": "Plantillas",
+            "description": "CRUD de plantillas PDF para certificados, carga de imagen de fondo y firma.",
+        },
+        {
+            "name": "Inscripciones",
+            "description": "Inscripción de participantes a eventos, marcado de asistencia y notas.",
+        },
+        {
+            "name": "Invitaciones",
+            "description": "Invitaciones públicas con token para que participantes se registren y acepten eventos.",
+        },
         {"name": "Registros de Entrega", "description": "Historial de todos los intentos de entrega de certificados."},
         {"name": "Auditoría", "description": "Log completo de acciones del sistema (solo administradores)."},
     ],

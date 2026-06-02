@@ -388,9 +388,7 @@ class CertificateViewSetTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_retrieve_certificate_with_event_instructor(self):
-        instructor = Instructor.objects.create(
-            full_name="Prof. Juan", email="juan@test.com", created_by=self.admin
-        )
+        instructor = Instructor.objects.create(full_name="Prof. Juan", email="juan@test.com", created_by=self.admin)
         event = Event.objects.create(
             name="Evento con Instructor",
             event_date=date(2026, 7, 1),
@@ -1104,9 +1102,6 @@ class GoogleAuthEdgeCasesTest(TestCase):
 # ─────────────────────────────────────────────
 # IsAdminUserOrReadOnly + IsCertificateOwnerOrAdmin in views.py
 # ─────────────────────────────────────────────
-
-
-import pytest
 
 
 @pytest.mark.integration
@@ -3461,7 +3456,6 @@ class AttendanceAPIBlockTest(TestCase):
 # ═══════════════════════════════════════════════════════════════
 # PASO 3 — TC-025 a TC-035
 # ═══════════════════════════════════════════════════════════════
-from django.conf import settings as django_settings
 from django.core.cache import cache
 
 # ─────────────────────────────────────────────
@@ -4661,8 +4655,6 @@ class ChangelogSerializerMethodTest(TestCase):
         self.assertEqual(s.data["history_type_display"], "Eliminado (baja lógica)")
 
     def test_history_type_tilde_restored(self):
-        from unittest.mock import PropertyMock
-
         from api.serializers import ChangelogSerializer
 
         mock_prev = MagicMock()
@@ -4927,6 +4919,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/certificates/{cert.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from certificados.models import Certificate as Cert
+
         self.assertFalse(Cert.objects.filter(pk=cert.id).exists())
         self.assertTrue(Cert.all_objects.filter(pk=cert.id, is_deleted=True).exists())
 
@@ -4937,7 +4930,6 @@ class SoftDeleteEndpointTest(TestCase):
         self.assertIsInstance(res.data, list)
 
     def test_certificate_restore_success(self):
-        from certificados.models import Certificate as Cert
         cert = self._make_certificate()
         cert.delete(deleted_by=self.admin)
         res = self.client.post(f"/api/certificates/{cert.id}/restore/")
@@ -4956,6 +4948,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/events/{event.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from events.models import Event as Ev
+
         self.assertTrue(Ev.all_objects.filter(pk=event.id, is_deleted=True).exists())
 
     def test_event_changelog(self):
@@ -4979,6 +4972,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/participants/{participant.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from participants.models import Participant as Part
+
         self.assertTrue(Part.all_objects.filter(pk=participant.id, is_deleted=True).exists())
 
     def test_participant_changelog(self):
@@ -5019,6 +5013,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/templates/{tpl.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from certificados.models import Template as Tpl
+
         self.assertTrue(Tpl.all_objects.filter(pk=tpl.id, is_deleted=True).exists())
 
     def test_template_changelog(self):
@@ -5064,7 +5059,9 @@ class CertificateEdgeCaseTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Plantilla", res.data.get("message", ""))
 
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/a.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/a.pdf"}
+    )
     def test_deliver_on_pending_cert_raises_400(self, mock_pdf):
         cert = self._make_cert()
         res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
@@ -5086,9 +5083,7 @@ class EventSendCertificatesTest(TestCase):
 
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
     def test_send_certificates_failed_delivery_in_results(self, mock_email):
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.admin
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.admin)
         cert.status = "generated"
         cert.pdf_url = "/m/cert.pdf"
         cert.save()
@@ -5097,7 +5092,10 @@ class EventSendCertificatesTest(TestCase):
         self.assertGreater(len(res.data.get("results", {}).get("failed", [])), 0)
 
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     def test_finalize_event_with_send_certificates_generates_and_fails_delivery(self, mock_pdf, mock_email):
         Enrollment.objects.create(
             participant=self.participant, event=self.event, attendance=True, created_by=self.admin
@@ -5139,7 +5137,9 @@ class ParticipantBulkImportEdgeCasesTest(TestCase):
 
         # Omit document_id column entirely so row.get("document_id") returns "" → triggers error
         data = self._make_excel_bytes([{"email": "x@test.com", "first_name": "A", "last_name": "B"}])
-        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        f = SimpleUploadedFile(
+            "p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data.get("errors", [])), 0)
@@ -5148,7 +5148,9 @@ class ParticipantBulkImportEdgeCasesTest(TestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         data = self._make_excel_bytes([{"document_id": "FN01", "email": "fn01@test.com", "full_name": "Juan Perez"}])
-        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        f = SimpleUploadedFile(
+            "p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -5231,7 +5233,9 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
         buf.seek(0)
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        return SimpleUploadedFile("data.xlsx", buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return SimpleUploadedFile(
+            "data.xlsx", buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
     def test_missing_event_id_with_all_fields_returns_400(self):
         res = self.client.post(
@@ -5267,7 +5271,13 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
 
         with patch("procesos.services.ExcelProcessingService.process") as mock_proc:
             mock_result = MagicMock()
-            mock_result.to_dict.return_value = {"total_rows": 1, "successful": 1, "failed": 0, "errors": [], "created_certificates": []}
+            mock_result.to_dict.return_value = {
+                "total_rows": 1,
+                "successful": 1,
+                "failed": 0,
+                "errors": [],
+                "created_certificates": [],
+            }
             mock_result.get_summary.return_value = "ok"
             mock_proc.return_value = mock_result
             with patch("pathlib.Path.mkdir"):
@@ -5299,7 +5309,10 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Error al procesar", res.data.get("error", ""))
 
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": True, "message": "sent"})
     def test_with_instructor_name_only_no_image(self, mock_email, mock_pdf):
         res = self.client.post(
@@ -5331,6 +5344,7 @@ class InvitationAcceptWithExistingEnrollmentTest(TestCase):
         from datetime import timedelta
 
         from django.utils import timezone
+
         from events.models import Enrollment, EventInvitation
 
         invitation = EventInvitation.objects.create(

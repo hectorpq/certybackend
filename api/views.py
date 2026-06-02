@@ -7,19 +7,13 @@ import logging
 from io import BytesIO
 
 from django.db import models, transaction
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import (
-    OpenApiExample,
-    OpenApiParameter,
-    OpenApiResponse,
-    extend_schema,
-    extend_schema_view,
-)
 
 from api.audit import get_client_ip, log_action
 from api.models import AuditLog
@@ -124,13 +118,20 @@ class RegisterView(APIView):
         examples=[
             OpenApiExample(
                 "Registro exitoso",
-                value={"email": "nuevo@example.com", "full_name": "Juan Pérez", "password": "MiPassword123", "password_confirm": "MiPassword123"},
+                value={
+                    "email": "nuevo@example.com",
+                    "full_name": "Juan Pérez",
+                    "password": "MiPassword123",
+                    "password_confirm": "MiPassword123",
+                },
                 request_only=True,
             ),
         ],
         responses={
             201: OpenApiResponse(description="Usuario creado exitosamente. Retorna id, email, full_name y mensaje."),
-            400: OpenApiResponse(description="Datos inválidos: email duplicado, contraseñas no coinciden o campos requeridos faltantes."),
+            400: OpenApiResponse(
+                description="Datos inválidos: email duplicado, contraseñas no coinciden o campos requeridos faltantes."
+            ),
         },
     )
     def post(self, request):
@@ -286,7 +287,9 @@ class GoogleAuthView(APIView):
             ),
         ],
         responses={
-            200: OpenApiResponse(description="Autenticación exitosa. Retorna access token, refresh token y datos del usuario (incluye is_new_user)."),
+            200: OpenApiResponse(
+                description="Autenticación exitosa. Retorna access token, refresh token y datos del usuario (incluye is_new_user)."
+            ),
             400: OpenApiResponse(description="Token no proporcionado o email no incluido en el token de Google."),
             401: OpenApiResponse(description="Token de Google inválido o expirado."),
             500: OpenApiResponse(description="Google OAuth no está configurado en el servidor o error interno."),
@@ -396,7 +399,14 @@ class CurrentUserView(APIView):
         examples=[
             OpenApiExample(
                 "Respuesta típica",
-                value={"id": 1, "email": "admin@example.com", "full_name": "Admin Sistema", "role": "admin", "is_active": True, "is_staff": True},
+                value={
+                    "id": 1,
+                    "email": "admin@example.com",
+                    "full_name": "Admin Sistema",
+                    "role": "admin",
+                    "is_active": True,
+                    "is_staff": True,
+                },
                 response_only=True,
             ),
         ],
@@ -432,7 +442,9 @@ class CurrentUserView(APIView):
             "Cada item incluye datos del estudiante, evento, estado, código de verificación y URL del PDF."
         ),
         parameters=[
-            OpenApiParameter("page", OpenApiTypes.INT, description="Número de página (paginación de 20 items por defecto)."),
+            OpenApiParameter(
+                "page", OpenApiTypes.INT, description="Número de página (paginación de 20 items por defecto)."
+            ),
         ],
         responses={200: CertificateListSerializer(many=True)},
     ),
@@ -578,7 +590,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
         ),
         request=CertificateGenerateSerializer,
         responses={
-            200: OpenApiResponse(description="PDF generado exitosamente. Retorna los datos actualizados del certificado."),
+            200: OpenApiResponse(
+                description="PDF generado exitosamente. Retorna los datos actualizados del certificado."
+            ),
             400: OpenApiResponse(description="Error al generar el PDF o plantilla especificada no encontrada."),
             403: OpenApiResponse(description="Sin permisos para generar certificados."),
             404: OpenApiResponse(description="Certificado no encontrado."),
@@ -651,7 +665,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
         ),
         request=CertificateDeliverSerializer,
         responses={
-            200: OpenApiResponse(description="Certificado entregado exitosamente. Retorna datos del log de entrega y certificado actualizado."),
+            200: OpenApiResponse(
+                description="Certificado entregado exitosamente. Retorna datos del log de entrega y certificado actualizado."
+            ),
             400: OpenApiResponse(description="Error al entregar, método inválido o certificado no generado."),
             403: OpenApiResponse(description="Sin permisos para entregar certificados."),
             404: OpenApiResponse(description="Certificado no encontrado."),
@@ -717,7 +733,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
             "Útil para auditar qué pasó con cada certificado y cuántas veces se intentó enviar."
         ),
         responses={
-            200: OpenApiResponse(description="Retorna total de intentos y lista de registros de entrega ordenados por fecha."),
+            200: OpenApiResponse(
+                description="Retorna total de intentos y lista de registros de entrega ordenados por fecha."
+            ),
             404: OpenApiResponse(description="Certificado no encontrado."),
         },
     )
@@ -764,8 +782,12 @@ class CertificateViewSet(viewsets.ModelViewSet):
             ),
         ],
         responses={
-            200: OpenApiResponse(description="Reintento exitoso. Retorna el nuevo log de entrega y datos actualizados del certificado."),
-            400: OpenApiResponse(description="El certificado no está en estado failed, o no hay método disponible y no se proporcionó uno."),
+            200: OpenApiResponse(
+                description="Reintento exitoso. Retorna el nuevo log de entrega y datos actualizados del certificado."
+            ),
+            400: OpenApiResponse(
+                description="El certificado no está en estado failed, o no hay método disponible y no se proporcionó uno."
+            ),
             404: OpenApiResponse(description="Certificado no encontrado."),
         },
     )
@@ -837,12 +859,18 @@ class CertificateViewSet(viewsets.ModelViewSet):
             "Soporta filtros opcionales por evento y estado."
         ),
         parameters=[
-            OpenApiParameter("file_format", OpenApiTypes.STR, description="Formato de exportación: `csv` (por defecto) o `excel`."),
+            OpenApiParameter(
+                "file_format", OpenApiTypes.STR, description="Formato de exportación: `csv` (por defecto) o `excel`."
+            ),
             OpenApiParameter("event_id", OpenApiTypes.INT, description="Filtrar certificados por ID de evento."),
-            OpenApiParameter("status", OpenApiTypes.STR, description="Filtrar por estado: `pending`, `generated`, `sent`, `failed`."),
+            OpenApiParameter(
+                "status", OpenApiTypes.STR, description="Filtrar por estado: `pending`, `generated`, `sent`, `failed`."
+            ),
         ],
         responses={
-            200: OpenApiResponse(description="Archivo descargable en el formato solicitado (Content-Type: text/csv o application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)."),
+            200: OpenApiResponse(
+                description="Archivo descargable en el formato solicitado (Content-Type: text/csv o application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)."
+            ),
             403: OpenApiResponse(description="Solo administradores pueden exportar certificados."),
         },
     )
@@ -967,7 +995,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
             ),
         ],
         responses={
-            200: OpenApiResponse(description="Certificado válido y auténtico. Retorna datos completos del certificado."),
+            200: OpenApiResponse(
+                description="Certificado válido y auténtico. Retorna datos completos del certificado."
+            ),
             400: OpenApiResponse(description="Parámetro `code` no proporcionado."),
             404: OpenApiResponse(description="No existe ningún certificado con ese código de verificación."),
             410: OpenApiResponse(description="El certificado existe pero ha expirado."),
@@ -1022,7 +1052,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.delete(deleted_by=self.request.user)
-        log_action("certificate_deleted", user=self.request.user, certificate=instance, ip_address=get_client_ip(self.request))
+        log_action(
+            "certificate_deleted", user=self.request.user, certificate=instance, ip_address=get_client_ip(self.request)
+        )
 
     @extend_schema(
         tags=["Certificados"],
@@ -1049,13 +1081,19 @@ class CertificateViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(description="No encontrado o no está eliminado."),
         },
     )
-    @action(detail=True, methods=["post"], url_path="restore",
-            permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="restore",
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
     def restore(self, request, pk=None):
         try:
             instance = Certificate.all_objects.get(pk=pk, is_deleted=True)
         except Certificate.DoesNotExist:
-            return Response({"error": "Certificado no encontrado o no está eliminado"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Certificado no encontrado o no está eliminado"}, status=status.HTTP_404_NOT_FOUND
+            )
         instance.restore()
         log_action("certificate_restored", user=request.user, certificate=instance, ip_address=get_client_ip(request))
         return Response({"status": "success", "message": "Certificado restaurado correctamente"})
@@ -1073,7 +1111,11 @@ class CertificateViewSet(viewsets.ModelViewSet):
             "estado (`success`/`failed`/`pending`), fecha/hora y mensaje de error si aplica."
         ),
         parameters=[
-            OpenApiParameter("certificate_id", OpenApiTypes.STR, description="UUID del certificado para filtrar sus registros de entrega."),
+            OpenApiParameter(
+                "certificate_id",
+                OpenApiTypes.STR,
+                description="UUID del certificado para filtrar sus registros de entrega.",
+            ),
         ],
         responses={200: DeliveryLogSerializer(many=True)},
     ),
@@ -1127,10 +1169,20 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             "Cada evento incluye nombre del instructor y nombre de la plantilla asociada."
         ),
         parameters=[
-            OpenApiParameter("status", OpenApiTypes.STR, description="Filtrar por estado: `draft`, `active`, `finished`, `cancelled`."),
+            OpenApiParameter(
+                "status",
+                OpenApiTypes.STR,
+                description="Filtrar por estado: `draft`, `active`, `finished`, `cancelled`.",
+            ),
             OpenApiParameter("category", OpenApiTypes.STR, description="Filtrar por categoría del evento."),
-            OpenApiParameter("search", OpenApiTypes.STR, description="Buscar texto en nombre y descripción del evento."),
-            OpenApiParameter("ordering", OpenApiTypes.STR, description="Ordenar por: `event_date`, `created_at`, `name`. Prefijo `-` para descendente."),
+            OpenApiParameter(
+                "search", OpenApiTypes.STR, description="Buscar texto en nombre y descripción del evento."
+            ),
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                description="Ordenar por: `event_date`, `created_at`, `name`. Prefijo `-` para descendente.",
+            ),
         ],
         responses={200: EventSerializer(many=True)},
     ),
@@ -1802,7 +1854,9 @@ Equipo CertyPro
             ),
         ],
         responses={
-            200: OpenApiResponse(description="Resumen: total de emails procesados, creados exitosamente y lista de errores."),
+            200: OpenApiResponse(
+                description="Resumen: total de emails procesados, creados exitosamente y lista de errores."
+            ),
             400: OpenApiResponse(description="No se encontraron emails válidos o error al leer el archivo."),
         },
     )
@@ -1963,7 +2017,9 @@ Equipo CertyPro
             ),
         ],
         responses={
-            200: OpenApiResponse(description="Evento finalizado. Retorna event_id, status y certificates_sent (cantidad de certificados enviados)."),
+            200: OpenApiResponse(
+                description="Evento finalizado. Retorna event_id, status y certificates_sent (cantidad de certificados enviados)."
+            ),
             400: OpenApiResponse(description="El evento ya está finalizado."),
             404: OpenApiResponse(description="Evento no encontrado."),
         },
@@ -2064,8 +2120,12 @@ Equipo CertyPro
             404: OpenApiResponse(description="No encontrado o no está eliminado."),
         },
     )
-    @action(detail=True, methods=["post"], url_path="restore",
-            permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="restore",
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
     def restore(self, request, pk=None):
         try:
             instance = Event.all_objects.get(pk=pk, is_deleted=True)
@@ -2087,9 +2147,17 @@ Equipo CertyPro
             "Soporta búsqueda por nombre, email o documento de identidad, y filtrado por estado activo."
         ),
         parameters=[
-            OpenApiParameter("is_active", OpenApiTypes.BOOL, description="Filtrar por estado activo: `true` o `false`."),
-            OpenApiParameter("search", OpenApiTypes.STR, description="Buscar en nombre, apellido, email o documento de identidad."),
-            OpenApiParameter("ordering", OpenApiTypes.STR, description="Ordenar por: `first_name`, `last_name`, `created_at`. Prefijo `-` para descendente."),
+            OpenApiParameter(
+                "is_active", OpenApiTypes.BOOL, description="Filtrar por estado activo: `true` o `false`."
+            ),
+            OpenApiParameter(
+                "search", OpenApiTypes.STR, description="Buscar en nombre, apellido, email o documento de identidad."
+            ),
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                description="Ordenar por: `first_name`, `last_name`, `created_at`. Prefijo `-` para descendente.",
+            ),
         ],
         responses={200: ParticipantSerializer(many=True)},
     ),
@@ -2208,7 +2276,9 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             "Retorna el total de filas procesadas, cuántas se importaron y los errores detallados por fila."
         ),
         responses={
-            200: OpenApiResponse(description="Resultado: total_rows, imported (creados), errors (lista de {row, error})."),
+            200: OpenApiResponse(
+                description="Resultado: total_rows, imported (creados), errors (lista de {row, error})."
+            ),
             400: OpenApiResponse(description="No se proporcionó archivo o error al leer el formato."),
             403: OpenApiResponse(description="Solo administradores pueden importar participantes."),
         },
@@ -2339,13 +2409,19 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(description="No encontrado o no está eliminado."),
         },
     )
-    @action(detail=True, methods=["post"], url_path="restore",
-            permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="restore",
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
     def restore(self, request, pk=None):
         try:
             instance = Participant.all_objects.get(pk=pk, is_deleted=True)
         except Participant.DoesNotExist:
-            return Response({"error": "Participante no encontrado o no está eliminado"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Participante no encontrado o no está eliminado"}, status=status.HTTP_404_NOT_FOUND
+            )
         instance.restore()
         log_action("participant_restored", user=request.user, ip_address=get_client_ip(request))
         return Response({"status": "success", "message": "Participante restaurado correctamente"})
@@ -2361,8 +2437,14 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             "Soporta búsqueda por nombre completo, email y especialidad."
         ),
         parameters=[
-            OpenApiParameter("search", OpenApiTypes.STR, description="Buscar por nombre completo, email o especialidad."),
-            OpenApiParameter("ordering", OpenApiTypes.STR, description="Ordenar por: `full_name`, `created_at`. Prefijo `-` para descendente."),
+            OpenApiParameter(
+                "search", OpenApiTypes.STR, description="Buscar por nombre completo, email o especialidad."
+            ),
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                description="Ordenar por: `full_name`, `created_at`. Prefijo `-` para descendente.",
+            ),
         ],
         responses={200: InstructorSerializer(many=True)},
     ),
@@ -2476,11 +2558,16 @@ class InstructorsViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(description="No encontrado o no está eliminado."),
         },
     )
-    @action(detail=True, methods=["post"], url_path="restore",
-            permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="restore",
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
     def restore(self, request, pk=None):
         try:
             from instructors.models import Instructor
+
             instance = Instructor.all_objects.get(pk=pk, is_deleted=True)
         except Instructor.DoesNotExist:
             return Response({"error": "Instructor no encontrado o no está eliminado"}, status=status.HTTP_404_NOT_FOUND)
@@ -2499,7 +2586,9 @@ class InstructorsViewSet(viewsets.ModelViewSet):
             "Soporta filtrado por estado activo y categoría, y búsqueda por nombre."
         ),
         parameters=[
-            OpenApiParameter("is_active", OpenApiTypes.BOOL, description="Filtrar plantillas activas (`true`) o inactivas (`false`)."),
+            OpenApiParameter(
+                "is_active", OpenApiTypes.BOOL, description="Filtrar plantillas activas (`true`) o inactivas (`false`)."
+            ),
             OpenApiParameter("category", OpenApiTypes.STR, description="Filtrar por categoría de la plantilla."),
             OpenApiParameter("search", OpenApiTypes.STR, description="Buscar por nombre o categoría."),
         ],
@@ -2638,7 +2727,9 @@ class TemplateViewSet(viewsets.ModelViewSet):
             "El archivo debe enviarse en el campo `file` del formulario multipart."
         ),
         responses={
-            200: OpenApiResponse(description="Imagen subida correctamente. Retorna success, background_image (URL) y mensaje."),
+            200: OpenApiResponse(
+                description="Imagen subida correctamente. Retorna success, background_image (URL) y mensaje."
+            ),
             400: OpenApiResponse(description="No se proporcionó archivo o el formato no es PNG/JPG."),
             404: OpenApiResponse(description="Plantilla no encontrada."),
         },
@@ -2706,7 +2797,9 @@ class TemplateViewSet(viewsets.ModelViewSet):
             "para renderizarlos en texto en el PDF."
         ),
         responses={
-            200: OpenApiResponse(description="Firma guardada correctamente. Retorna success, signature (config guardada) y mensaje."),
+            200: OpenApiResponse(
+                description="Firma guardada correctamente. Retorna success, signature (config guardada) y mensaje."
+            ),
             400: OpenApiResponse(description="Formato de imagen no válido."),
             404: OpenApiResponse(description="Plantilla no encontrada."),
         },
@@ -2772,7 +2865,9 @@ class TemplateViewSet(viewsets.ModelViewSet):
             "Usa `background_image` si existe, de lo contrario usa `preview_url`."
         ),
         responses={
-            200: OpenApiResponse(description="Retorna preview_url (URL de la imagen) y layout_config (configuración completa del diseño)."),
+            200: OpenApiResponse(
+                description="Retorna preview_url (URL de la imagen) y layout_config (configuración completa del diseño)."
+            ),
             404: OpenApiResponse(description="Plantilla no encontrada."),
         },
     )
@@ -2815,8 +2910,12 @@ class TemplateViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(description="No encontrada o no está eliminada."),
         },
     )
-    @action(detail=True, methods=["post"], url_path="restore",
-            permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="restore",
+        permission_classes=[permissions.IsAuthenticated, permissions.IsAdminUser],
+    )
     def restore(self, request, pk=None):
         try:
             instance = Template.all_objects.get(pk=pk, is_deleted=True)
@@ -2891,7 +2990,9 @@ class BulkCertificateGenerationView(APIView):
             200: OpenApiResponse(
                 description="Resumen: processing_timestamp, total_rows, successful, failed, success_rate, errors (detallados por fila) y created_certificates (lista de IDs)."
             ),
-            400: OpenApiResponse(description="Falta excel_file, template_image o event_id; o error al procesar el archivo."),
+            400: OpenApiResponse(
+                description="Falta excel_file, template_image o event_id; o error al procesar el archivo."
+            ),
             403: OpenApiResponse(description="Solo administradores y coordinadores pueden usar esta función."),
             404: OpenApiResponse(description="Evento no encontrado."),
         },
@@ -3026,7 +3127,9 @@ class BulkCertificateGenerationView(APIView):
             "Retorna una guía completa sobre el formato requerido del archivo Excel para la generación masiva de certificados: "
             "columnas obligatorias, columnas opcionales, ejemplo de fila y notas importantes sobre el procesamiento."
         ),
-        responses={200: OpenApiResponse(description="Guía con columnas requeridas/opcionales, ejemplo y notas del proceso.")},
+        responses={
+            200: OpenApiResponse(description="Guía con columnas requeridas/opcionales, ejemplo y notas del proceso.")
+        },
     )
     def get(self, request):
         """
@@ -3133,8 +3236,12 @@ class BulkCertificatePreviewView(APIView):
             ),
         ],
         responses={
-            200: OpenApiResponse(description="success, row_count (total de filas), columns (nombres de columnas) y data (lista de registros)."),
-            400: OpenApiResponse(description="Archivo no proporcionado, formato inválido o columnas requeridas faltantes."),
+            200: OpenApiResponse(
+                description="success, row_count (total de filas), columns (nombres de columnas) y data (lista de registros)."
+            ),
+            400: OpenApiResponse(
+                description="Archivo no proporcionado, formato inválido o columnas requeridas faltantes."
+            ),
             403: OpenApiResponse(description="Solo administradores y coordinadores pueden previsualizar archivos."),
         },
     )
@@ -3249,8 +3356,18 @@ class BulkCertificateProcessView(APIView):
                 "Procesar registros editados",
                 value={
                     "data": [
-                        {"full_name": "Juan Pérez", "email": "juan@example.com", "document_id": "12345", "event_name": "Curso Python"},
-                        {"full_name": "María García", "email": "maria@example.com", "document_id": "67890", "event_name": "Curso Python"},
+                        {
+                            "full_name": "Juan Pérez",
+                            "email": "juan@example.com",
+                            "document_id": "12345",
+                            "event_name": "Curso Python",
+                        },
+                        {
+                            "full_name": "María García",
+                            "email": "maria@example.com",
+                            "document_id": "67890",
+                            "event_name": "Curso Python",
+                        },
                     ]
                 },
                 request_only=True,
@@ -3451,7 +3568,7 @@ class EnrollmentViewSet(viewsets.ViewSet):
         summary="Marcar asistencia de un participante",
         description=(
             "Actualiza el campo `attendance` de una inscripción para marcar si el participante asistió al evento. "
-            "Solo se requiere enviar `{\"attendance\": true}` o `{\"attendance\": false}` en el body. "
+            'Solo se requiere enviar `{"attendance": true}` o `{"attendance": false}` en el body. '
             "**La asistencia debe estar en `true` para que se genere el certificado del participante.**"
         ),
         responses={
@@ -3548,8 +3665,12 @@ class InvitationPublicView(APIView):
             "crea un certificado en estado `pending` y marca la invitación como `accepted`."
         ),
         responses={
-            200: OpenApiResponse(description="Inscripción exitosa. Retorna mensaje, nombre del evento y nombre del participante."),
-            400: OpenApiResponse(description="Invitación ya respondida, expirada, o el participante debe registrarse primero."),
+            200: OpenApiResponse(
+                description="Inscripción exitosa. Retorna mensaje, nombre del evento y nombre del participante."
+            ),
+            400: OpenApiResponse(
+                description="Invitación ya respondida, expirada, o el participante debe registrarse primero."
+            ),
             404: OpenApiResponse(description="Invitación no encontrada."),
         },
     )
@@ -3652,7 +3773,9 @@ class InvitationRegisterView(APIView):
         ),
         request=InvitationRegisterSerializer,
         responses={
-            200: OpenApiResponse(description="Registro exitoso. Retorna mensaje, nombre del evento, nombre del participante y email."),
+            200: OpenApiResponse(
+                description="Registro exitoso. Retorna mensaje, nombre del evento, nombre del participante y email."
+            ),
             400: OpenApiResponse(description="Datos inválidos, invitación ya respondida o expirada."),
             404: OpenApiResponse(description="Invitación no encontrada."),
         },
@@ -3786,8 +3909,16 @@ class InvitationRegisterView(APIView):
             "detalles adicionales en JSON y timestamp exacto."
         ),
         parameters=[
-            OpenApiParameter("action", OpenApiTypes.STR, description="Filtrar por tipo de acción (ej: `user_login`, `certificate_generated`, `certificate_delivered`)."),
-            OpenApiParameter("user_id", OpenApiTypes.INT, description="Filtrar acciones realizadas por un usuario específico (por su ID)."),
+            OpenApiParameter(
+                "action",
+                OpenApiTypes.STR,
+                description="Filtrar por tipo de acción (ej: `user_login`, `certificate_generated`, `certificate_delivered`).",
+            ),
+            OpenApiParameter(
+                "user_id",
+                OpenApiTypes.INT,
+                description="Filtrar acciones realizadas por un usuario específico (por su ID).",
+            ),
         ],
         responses={200: AuditLogSerializer(many=True)},
     ),
