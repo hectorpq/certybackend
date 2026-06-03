@@ -26,13 +26,13 @@ pipeline {
 
         stage('Build Infrastructure') {
             steps {
-                sh 'docker compose build web db redis'
+                sh 'docker-compose build web db redis'
             }
         }
 
         stage('Test & Coverage') {
             steps {
-                sh 'docker compose run --rm web pytest --cov=. --cov-report=xml'
+                sh 'docker-compose run --rm web pytest --cov=. --cov-report=xml'
             }
         }
 
