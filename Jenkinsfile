@@ -5,6 +5,9 @@ pipeline {
         DOCKER_BUILDKIT = '1'
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
+    tools {
+        hudson.plugins.sonar.SonarRunnerInstallation 'SonarQubeScanner'
+    }
 
     stages {
         stage('Limpieza y Entorno') {
