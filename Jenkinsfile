@@ -27,6 +27,8 @@ pipeline {
         stage('Build Infrastructure') {
             steps {
                 sh 'docker-compose build web db redis'
+                sh 'docker-compose build --no-cache web'
+                sh 'docker-compose build db redis'
             }
         }
 
