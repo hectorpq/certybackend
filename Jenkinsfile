@@ -35,19 +35,26 @@ pipeline {
         stage('Test & Coverage') {
             steps {
                 sh 'docker-compose run --rm web pytest --cov=. --cov-report=xml'
+                script {
+                    sh 'docker-compose create --name temp-web web'
+                    sh 'docker cp temp-web:/app/coverage.xml ./coverage.xml'
+                    sh 'docker rm temp-web'
+                }
             }
         }
 
         stage('Static Analysis (SonarQube)') {
             steps {
                 script {
-                    // Inyectamos la ruta del scanner de forma nativa y robusta usando su clase explícita
                     def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                     
                     withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                         withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
-                            // Usamos la ruta absoluta del binario recién descargado de forma segura
-                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.login=${SONAR_TOKEN} -Dsonar.projectBaseDir=$WORKSPACE"
+                            // 3. Le indicamos explícitamente a sonar-scanner la ruta del archivo extraído
+                            sh "${scannerHome}/bin/sonar-scanner " +
+                               "-Dsonar.login=${SONAR_TOKEN} " +
+                               "-Dsonar.projectBaseDir=$WORKSPACE " +
+                               "-Dsonar.python.coverage.reportPaths=coverage.xml"
                         }
                     }
                 }
