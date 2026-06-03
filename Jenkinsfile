@@ -34,9 +34,14 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
-                // 🚀 SOLUCIÓN: Mapeamos el directorio actual ($WORKSPACE) al directorio /app del contenedor de pruebas
-                // Esto hace que cualquier archivo que escriba pytest aparezca mágicamente afuera al instante.
-                sh 'docker-compose run --rm -v $WORKSPACE:/app web pytest --cov=. --cov-report=xml'
+                // 1. Ejecutamos las pruebas de forma normal usando el código interno de la imagen compilada
+                sh 'docker-compose run --name test_runner web pytest --cov=. --cov-report=xml'
+                
+                // 2. Extraemos el archivo coverage.xml directamente leyendo el flujo del contenedor de test
+                script {
+                    sh 'docker cp test_runner:/app/coverage.xml ./coverage.xml'
+                    sh 'docker rm -f test_runner'
+                }
             }
         }
 
