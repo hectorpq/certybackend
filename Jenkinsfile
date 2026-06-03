@@ -34,15 +34,9 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
-                // 1. Ejecuta las pruebas de forma normal generando coverage.xml
-                sh 'docker-compose run --rm web pytest --cov=. --cov-report=xml'
-                
-                // 2. 🚀 EXTRACCIÓN ROBUSTA: Creamos el contenedor con docker nativo para no fallar en banderas
-                script {
-                    sh 'docker create --name temp-web certificadosys-web:latest'
-                    sh 'docker cp temp-web:/app/coverage.xml ./coverage.xml'
-                    sh 'docker rm -f temp-web'
-                }
+                // 🚀 SOLUCIÓN: Mapeamos el directorio actual ($WORKSPACE) al directorio /app del contenedor de pruebas
+                // Esto hace que cualquier archivo que escriba pytest aparezca mágicamente afuera al instante.
+                sh 'docker-compose run --rm -v $WORKSPACE:/app web pytest --cov=. --cov-report=xml'
             }
         }
 
@@ -53,7 +47,7 @@ pipeline {
                     
                     withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                         withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
-                            // 3. Le indicamos explícitamente a sonar-scanner la ruta del archivo extraído
+                            // Invocamos el scanner apuntando al archivo mapeado nativamente
                             sh "${scannerHome}/bin/sonar-scanner " +
                                "-Dsonar.login=${SONAR_TOKEN} " +
                                "-Dsonar.projectBaseDir=$WORKSPACE " +
