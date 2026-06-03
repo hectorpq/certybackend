@@ -6,9 +6,9 @@ pipeline {
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
 
-    // Nombre clave exacto para inyectar la instalación global
+    // Usamos el identificador con guion exacto para mapear SonarRunnerInstallation
     tools {
-        sonarRunner 'SonarQubeScanner'
+        'sonar-runner' 'SonarQubeScanner'
     }
 
     stages {
