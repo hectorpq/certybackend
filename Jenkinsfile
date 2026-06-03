@@ -34,11 +34,14 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
+                // 1. Ejecuta las pruebas de forma normal generando coverage.xml
                 sh 'docker-compose run --rm web pytest --cov=. --cov-report=xml'
+                
+                // 2. 🚀 EXTRACCIÓN ROBUSTA: Creamos el contenedor con docker nativo para no fallar en banderas
                 script {
-                    sh 'docker-compose create --name temp-web web'
+                    sh 'docker create --name temp-web certificadosys-web:latest'
                     sh 'docker cp temp-web:/app/coverage.xml ./coverage.xml'
-                    sh 'docker rm temp-web'
+                    sh 'docker rm -f temp-web'
                 }
             }
         }
