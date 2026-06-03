@@ -52,11 +52,12 @@ pipeline {
                     
                     withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                         withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
-                            // Invocamos el scanner apuntando al archivo mapeado nativamente
+                            // Añadimos el relizamiento de rutas para que SonarQube asocie /app con la raíz del proyecto
                             sh "${scannerHome}/bin/sonar-scanner " +
                                "-Dsonar.login=${SONAR_TOKEN} " +
                                "-Dsonar.projectBaseDir=$WORKSPACE " +
-                               "-Dsonar.python.coverage.reportPaths=coverage.xml"
+                               "-Dsonar.python.coverage.reportPaths=coverage.xml " +
+                               "-Dsonar.sources=."
                         }
                     }
                 }
