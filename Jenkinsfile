@@ -5,8 +5,10 @@ pipeline {
         DOCKER_BUILDKIT = '1'
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
+
+    // Sintaxis limpia y simplificada reconocida por Jenkins
     tools {
-        hudson.plugins.sonar.SonarRunnerInstallation 'SonarQubeScanner'
+        sonarScanner 'SonarQubeScanner'
     }
 
     stages {
@@ -21,15 +23,13 @@ pipeline {
                     sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
-                    // Sintaxis estándar limpia
-                    sh 'docker compose down --remove-orphans || true'
+                    sh 'docker-compose down --remove-orphans || true'
                 }
             }
         }
 
         stage('Build Infrastructure') {
             steps {
-                sh 'docker-compose build web db redis'
                 sh 'docker-compose build --no-cache web'
                 sh 'docker-compose build db redis'
             }
@@ -45,6 +45,7 @@ pipeline {
             steps {
                 withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                     withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
+                        // Al usar 'tools', el comando 'sonar-scanner' ya estará disponible globalmente
                         sh "sonar-scanner -Dsonar.login=${SONAR_TOKEN} -Dsonar.projectBaseDir=$WORKSPACE"
                     }
                 }
@@ -54,7 +55,7 @@ pipeline {
 
     post {
         always {
-            sh 'docker compose down --remove-orphans || true'
+            sh 'docker-compose down --remove-orphans || true'
         }
     }
 }
