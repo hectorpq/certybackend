@@ -6,10 +6,7 @@ pipeline {
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
 
-    // Usamos el identificador con guion exacto para mapear SonarRunnerInstallation
-    tools {
-        'sonar-runner' 'SonarQubeScanner'
-    }
+    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba
 
     stages {
         stage('Limpieza y Entorno') {
@@ -43,9 +40,15 @@ pipeline {
 
         stage('Static Analysis (SonarQube)') {
             steps {
-                withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
-                    withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
-                        sh "sonar-scanner -Dsonar.login=${SONAR_TOKEN} -Dsonar.projectBaseDir=$WORKSPACE"
+                script {
+                    // Inyectamos la ruta del scanner de forma nativa y robusta usando su clase explícita
+                    def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                    
+                    withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
+                        withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
+                            // Usamos la ruta absoluta del binario recién descargado de forma segura
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.login=${SONAR_TOKEN} -Dsonar.projectBaseDir=$WORKSPACE"
+                        }
                     }
                 }
             }
