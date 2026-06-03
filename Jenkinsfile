@@ -6,9 +6,9 @@ pipeline {
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
 
-    // Sintaxis limpia y simplificada reconocida por Jenkins
+    // Nombre clave exacto para inyectar la instalación global
     tools {
-        sonarScanner 'SonarQubeScanner'
+        sonarRunner 'SonarQubeScanner'
     }
 
     stages {
@@ -45,7 +45,6 @@ pipeline {
             steps {
                 withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                     withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
-                        // Al usar 'tools', el comando 'sonar-scanner' ya estará disponible globalmente
                         sh "sonar-scanner -Dsonar.login=${SONAR_TOKEN} -Dsonar.projectBaseDir=$WORKSPACE"
                     }
                 }
