@@ -5,8 +5,8 @@ pipeline {
         DOCKER_BUILDKIT = '1'
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
-
-    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba
+// prueba 1
+    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba1
 
     stages {
         stage('Limpieza y Entorno') {
