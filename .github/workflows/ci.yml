@@ -110,9 +110,9 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
         run: |
-          coverage run --source='.' -m pytest -v
+          coverage run --rcfile=.coveragerc --source='.' -m pytest -v
           coverage xml
-          coverage report --fail-under=85
+          coverage report --fail-under=95
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

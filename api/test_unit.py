@@ -100,6 +100,36 @@ class ViewPermissionClassesTest(SimpleTestCase):
         perm = IsCertificateOwnerOrAdmin()
         self.assertTrue(perm.has_object_permission(req, None, None))
 
+    def test_is_admin_user_or_read_only_denies_non_staff_write(self):
+        from unittest.mock import MagicMock
+
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from api.views import IsAdminUserOrReadOnly
+
+        factory = APIRequestFactory()
+        raw = factory.post("/")
+        raw.user = MagicMock(is_staff=False, is_authenticated=True)
+        req = Request(raw)
+        perm = IsAdminUserOrReadOnly()
+        self.assertFalse(perm.has_permission(req, None))
+
+    def test_is_certificate_owner_or_admin_denies_non_staff_write(self):
+        from unittest.mock import MagicMock
+
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from api.views import IsCertificateOwnerOrAdmin
+
+        factory = APIRequestFactory()
+        raw = factory.post("/")
+        raw.user = MagicMock(is_staff=False, is_authenticated=True)
+        req = Request(raw)
+        perm = IsCertificateOwnerOrAdmin()
+        self.assertFalse(perm.has_object_permission(req, None, None))
+
 
 @pytest.mark.unit
 class DebugURLPatternTest(SimpleTestCase):
