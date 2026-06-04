@@ -217,10 +217,10 @@ class ExcelProcessingService:
             return data
 
         except ExcelImportError as e:
-            logger.error("Error en validación: %s", str(e))
+            logger.exception("Error en validación")
             raise
         except Exception as e:
-            logger.error("Error inesperado: %s", str(e))
+            logger.exception("Error inesperado")
             raise ExcelImportError(f"Error al leer Excel: {str(e)}")
 
     def process_records(self, records: List[Dict]) -> ExcelProcessingResult:
@@ -249,7 +249,7 @@ class ExcelProcessingService:
                     row = pd.Series(record)
                     self._process_row(row, row_number)
                 except Exception as e:
-                    logger.error("Error en fila %s: %s", row_number, str(e))
+                    logger.exception("Error en fila %s", row_number)
                     self.result.add_error(
                         row_number=row_number,
                         field="general",
@@ -265,7 +265,7 @@ class ExcelProcessingService:
             )
 
         except Exception as e:
-            logger.error("Error en procesamiento masivo: %s", str(e))
+            logger.exception("Error en procesamiento masivo")
             raise ExcelImportError(f"Error al procesar registros: {str(e)}")
 
         return self.result
@@ -290,10 +290,10 @@ class ExcelProcessingService:
             return self.process_records(records)
 
         except ExcelImportError as e:
-            logger.error("Error en importación: %s", str(e))
+            logger.exception("Error en importación")
             raise
         except Exception as e:
-            logger.error("Error inesperado: %s", str(e))
+            logger.exception("Error inesperado")
             raise ExcelImportError(f"Error al procesar Excel: {str(e)}")
 
     def _read_excel_file(self):
@@ -334,7 +334,7 @@ class ExcelProcessingService:
             try:
                 self._process_row(row, row_number)
             except Exception as e:
-                logger.error("Error en fila %s: %s", row_number, str(e))
+                logger.exception("Error en fila %s", row_number)
                 self.result.add_error(
                     row_number=row_number,
                     field="general",

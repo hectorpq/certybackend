@@ -133,7 +133,7 @@ Sistema de Certificados
                         logger.warning("PDF file not found at: %s", pdf_path)
 
                 except Exception as attach_err:
-                    logger.error("Error attaching PDF: %s", attach_err, exc_info=True)
+                    logger.exception("Error attaching PDF")
 
             # Send email
             result = email.send(fail_silently=False)

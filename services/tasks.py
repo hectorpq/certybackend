@@ -23,7 +23,7 @@ def send_certificate_email_task(self, certificate_id, recipient_email):
         logger.info("Async email sent for certificate %s", certificate_id)
         return result
     except Exception as exc:
-        logger.error("Email task failed for cert %s: %s", certificate_id, exc)
+        logger.exception("Email task failed for cert %s", certificate_id)
         raise self.retry(exc=exc)
 
 
@@ -43,7 +43,7 @@ def generate_certificate_pdf_task(self, certificate_id):
         logger.info("PDF task complete for certificate %s: %s", certificate_id, result)
         return result
     except Exception as exc:
-        logger.error("PDF task failed for cert %s: %s", certificate_id, exc)
+        logger.exception("PDF task failed for cert %s", certificate_id)
         raise self.retry(exc=exc)
 
 
