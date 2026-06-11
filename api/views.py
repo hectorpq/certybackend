@@ -1342,11 +1342,18 @@ class EventsViewSet(viewsets.ModelViewSet):
         """
         Get all participants of an event with their certificate status
         GET /events/{id}/participants/
-        Accessible by all authenticated users (admin and editor)
+        Only the event creator can see participants
         """
         from events.models import Enrollment
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"detail": "No tienes permiso para ver los participantes de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         enrollments = Enrollment.objects.filter(event=event).select_related("participant")
 
         participants = []
@@ -1410,18 +1417,19 @@ class EventsViewSet(viewsets.ModelViewSet):
         Enroll a participant to this event
         POST /events/{id}/enroll/
         Body: {"participant_id": 1} OR {"participant_email": "email@example.com"}
-        Admin only
+        Only the event creator can enroll participants
         """
         from events.models import Enrollment
         from participants.models import Participant
 
-        if not is_operational_user(request):
+        event = self.get_object()
+
+        if event.created_by != request.user:
             return Response(
-                {"error": "Solo administradores o coordinadores pueden inscribir participantes"},
+                {"error": "No tienes permiso para inscribir participantes en este evento."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        event = self.get_object()
         participant_id = request.data.get("participant_id") or request.data.get("student_id")
         participant_email = request.data.get("participant_email") or request.data.get("student_email")
 
@@ -1531,18 +1539,18 @@ class EventsViewSet(viewsets.ModelViewSet):
         Generate certificates for event participants (only those with attendance=True)
         POST /events/{id}/certificates/generate/
         Body: {"participant_ids": [1, 2, 3]} (optional, if empty generates for all with attendance)
-        Admin only
+        Only the event creator can generate certificates
         """
-
-        if not is_operational_user(request):
-            return Response(
-                {"error": "Solo administradores o coordinadores pueden generar certificados"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
 
         from events.models import Enrollment
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para generar certificados de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
 
         enrollments = Enrollment.objects.filter(event=event, attendance=True).select_related("participant")
@@ -1618,16 +1626,16 @@ class EventsViewSet(viewsets.ModelViewSet):
             "method": "email|whatsapp|link",
             "participant_ids": [1, 2, 3] (optional, if empty sends to all with certificates)
         }
-        Admin only
+        Only the event creator can send certificates
         """
 
-        if not is_operational_user(request):
+        event = self.get_object()
+
+        if event.created_by != request.user:
             return Response(
-                {"error": "Solo administradores o coordinadores pueden enviar certificados"},
+                {"error": "No tienes permiso para enviar certificados de este evento."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        event = self.get_object()
         method = request.data.get("method", "email")
         participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
 
@@ -1697,8 +1705,16 @@ class EventsViewSet(viewsets.ModelViewSet):
         """
         Get all delivery logs for an event's certificates
         GET /events/{id}/deliveries/
+        Only the event creator can see deliveries
         """
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"detail": "No tienes permiso para ver las entregas de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         certificates = Certificate.objects.filter(event=event)
 
         deliveries = (
@@ -1777,10 +1793,18 @@ class EventsViewSet(viewsets.ModelViewSet):
         """
         Get all invitations for an event
         GET /events/{id}/invitations/
+        Only the event creator can see invitations
         """
         from events.models import EventInvitation
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"detail": "No tienes permiso para ver las invitaciones de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         invitations = EventInvitation.objects.filter(event=event).select_related("participant")
 
         serializer = EventInvitationSerializer(invitations, many=True)
@@ -1886,6 +1910,7 @@ Equipo CertyPro
         Body (form-data):
         - file: Excel/CSV file (optional)
         - emails: JSON array of emails (optional, e.g., ["email1@test.com", "email2@test.com"])
+        Only the event creator can send invitations
         """
         import uuid
         from datetime import timedelta
@@ -1896,6 +1921,12 @@ Equipo CertyPro
         from events.models import EventInvitation
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para enviar invitaciones de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         emails = []
 
         if "file" in request.FILES:
@@ -1971,6 +2002,7 @@ Equipo CertyPro
         """
         Send pending invitations for an event
         POST /events/{id}/invitations/send-all/
+        Only the event creator can send invitations
         """
         import uuid
         from datetime import timedelta
@@ -1981,6 +2013,12 @@ Equipo CertyPro
         from events.models import EventInvitation
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para enviar invitaciones de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         pending = EventInvitation.objects.filter(event=event, status="pending")
 
         if not pending.exists():
@@ -2049,12 +2087,19 @@ Equipo CertyPro
         Finalize event and optionally send certificates
         POST /events/{id}/finalize/
         Body: {"send_certificates": true/false}
+        Only the event creator can finalize an event
         """
         from django.utils import timezone
 
         from events.models import Enrollment
 
         event = self.get_object()
+
+        if event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para finalizar este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if event.status == "finished":
             return Response(
@@ -2254,11 +2299,8 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     ordering = ["first_name", "last_name"]
 
     def get_queryset(self):
-        """Operational users see all participants; participante sees only relevant ones."""
+        """Users only see participants they created or enrolled in events they created."""
         queryset = super().get_queryset()
-
-        if is_operational_user(self.request):
-            return queryset
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
         return queryset.filter(
@@ -3426,17 +3468,15 @@ class EnrollmentViewSet(viewsets.ViewSet):
         responses={200: EnrollmentSerializer(many=True)},
     )
     def list(self, request, event_pk=None):
-        """List all enrollments for an event"""
+        """List all enrollments for an event — only the event creator can see them"""
         from events.models import Enrollment
 
-        # Verify user has access to this event
-        if not is_operational_user(request):
-            event = Event.objects.filter(id=event_pk, created_by=request.user).first()
-            if not event:
-                return Response(
-                    {"error": "No tienes acceso a este evento"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        event = Event.objects.filter(id=event_pk).first()
+        if not event or event.created_by != request.user:
+            return Response(
+                {"error": "No tienes acceso a este evento"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         enrollments = Enrollment.objects.filter(event_id=event_pk).select_related("participant", "created_by")
         serializer = EnrollmentSerializer(enrollments, many=True)
@@ -3459,7 +3499,7 @@ class EnrollmentViewSet(viewsets.ViewSet):
         },
     )
     def create(self, request, event_pk=None):
-        """Enroll a participant to an event"""
+        """Enroll a participant to an event — only the event creator can enroll"""
         from events.models import Enrollment
         from participants.models import Participant
 
@@ -3485,6 +3525,12 @@ class EnrollmentViewSet(viewsets.ViewSet):
             event = Event.objects.get(id=resolved_event_pk)
         except (Event.DoesNotExist, ValueError, TypeError):
             return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        if event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para inscribir participantes en este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         enrollment, created = Enrollment.objects.get_or_create(
             participant=participant,
@@ -3527,10 +3573,15 @@ class EnrollmentViewSet(viewsets.ViewSet):
         },
     )
     def destroy(self, request, event_pk=None, pk=None):
-        """Remove a student from an event"""
+        """Remove a student from an event — only the event creator can remove enrollments"""
         enrollment, error = self._get_enrollment(pk)
         if error:
             return error
+        if enrollment.event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para eliminar inscripciones de este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         enrollment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -3550,10 +3601,16 @@ class EnrollmentViewSet(viewsets.ViewSet):
     )
     @action(detail=True, methods=["patch"])
     def attendance(self, request, event_pk=None, pk=None):
-        """Mark attendance for an enrollment"""
+        """Mark attendance for an enrollment — only the event creator can mark attendance"""
         enrollment, error = self._get_enrollment(pk)
         if error:
             return error
+
+        if enrollment.event.created_by != request.user:
+            return Response(
+                {"error": "No tienes permiso para marcar asistencia en este evento."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         attendance = request.data.get("attendance")
         if attendance is None:
