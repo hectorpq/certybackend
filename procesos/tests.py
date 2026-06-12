@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from certificados.models import Certificate, Template
@@ -461,3 +462,72 @@ class ExcelProcessingServiceCoverageTest(TestCase):
         svc = ExcelProcessingService(buf, created_by_user=self.user, event=self.event)
         result = svc.process()
         self.assertGreater(result.failed, 0)
+
+
+class BulkTemplateCreationTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="bulk@test.com", full_name="Bulk", password="bulkPass99!")
+        self.event = Event.objects.create(name="Bulk Event", event_date=date(2026, 6, 1), created_by=self.user)
+
+    def test_default_y_coord_when_no_name_y(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        expected_y = (1 - 40 / 100) * 595.28 / 72
+        self.assertAlmostEqual(tpl.y_coord, expected_y, places=2)
+        self.assertEqual(tpl.layout_config["student_name"]["x"], tpl.x_coord)
+
+    def test_custom_y_coord_calculation(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "30", "name_y": "70", "font_size": "24"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        expected_x = 30 / 100 * 841.89 / 72
+        expected_y = (1 - 70 / 100) * 595.28 / 72
+        self.assertAlmostEqual(tpl.x_coord, expected_x, places=2)
+        self.assertAlmostEqual(tpl.y_coord, expected_y, places=2)
+        self.assertEqual(tpl.layout_config["student_name"]["font_size"], 24)
+
+    def test_custom_font_family_and_color(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50", "name_y": "50", "font_family": "Times-Roman", "font_color": "#FF0000"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertEqual(tpl.layout_config["student_name"]["font_family"], "Times-Roman")
+        self.assertEqual(tpl.layout_config["student_name"]["color"], "#FF0000")
+
+    def test_default_font_family_and_color(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50", "name_y": "50"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertEqual(tpl.layout_config["student_name"]["font_family"], "Helvetica")
+        self.assertEqual(tpl.layout_config["student_name"]["color"], "#000000")
+
+    def test_template_is_inactive(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50", "name_y": "50"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertFalse(tpl.is_active)
+
+    def test_signature_with_instructor_name_and_specialty(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {
+            "name_x": "50",
+            "name_y": "50",
+            "instructor_name": "Dr. Perez",
+            "instructor_specialty": "Medicina",
+        }
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertIn("signature", tpl.layout_config)
+        self.assertEqual(tpl.layout_config["signature"]["instructor_name"], "Dr. Perez")
+        self.assertEqual(tpl.layout_config["signature"]["instructor_specialty"], "Medicina")
+
+    def test_signature_without_specialty_defaults_empty(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50", "name_y": "50", "instructor_name": "Prof. Lopez"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertEqual(tpl.layout_config["signature"]["instructor_specialty"], "")
+
+    def test_no_signature_when_instructor_name_missing(self):
+        img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
+        config = {"name_x": "50", "name_y": "50"}
+        tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
+        self.assertNotIn("signature", tpl.layout_config)

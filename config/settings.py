@@ -260,17 +260,17 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Certificados",
             "description": "CRUD de certificados, generación de PDF, entrega, "
-                           "verificación pública, exportación y reintentos.",
+            "verificación pública, exportación y reintentos.",
         },
         {
             "name": "Certificados - Masivo",
             "description": "Generación masiva de certificados desde archivos Excel "
-                           "con previsualización y procesamiento.",
+            "con previsualización y procesamiento.",
         },
         {
             "name": "Eventos",
             "description": "CRUD de eventos académicos, inscripción de participantes, "
-                           "generación/envío de certificados, invitaciones y estadísticas.",
+            "generación/envío de certificados, invitaciones y estadísticas.",
         },
         {
             "name": "Participantes",

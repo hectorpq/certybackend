@@ -100,6 +100,36 @@ class ViewPermissionClassesTest(SimpleTestCase):
         perm = IsCertificateOwnerOrAdmin()
         self.assertTrue(perm.has_object_permission(req, None, None))
 
+    def test_is_admin_user_or_read_only_denies_non_staff_write(self):
+        from unittest.mock import MagicMock
+
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from api.views import IsAdminUserOrReadOnly
+
+        factory = APIRequestFactory()
+        raw = factory.post("/")
+        raw.user = MagicMock(is_staff=False, is_authenticated=True)
+        req = Request(raw)
+        perm = IsAdminUserOrReadOnly()
+        self.assertFalse(perm.has_permission(req, None))
+
+    def test_is_certificate_owner_or_admin_denies_non_staff_write(self):
+        from unittest.mock import MagicMock
+
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from api.views import IsCertificateOwnerOrAdmin
+
+        factory = APIRequestFactory()
+        raw = factory.post("/")
+        raw.user = MagicMock(is_staff=False, is_authenticated=True)
+        req = Request(raw)
+        perm = IsCertificateOwnerOrAdmin()
+        self.assertFalse(perm.has_object_permission(req, None, None))
+
 
 @pytest.mark.unit
 class DebugURLPatternTest(SimpleTestCase):
@@ -169,6 +199,7 @@ class AuditHelperFunctionsTest(SimpleTestCase):
 class PermissionFunctionsTest(SimpleTestCase):
     def test_is_admin_with_admin_role(self):
         from api.permissions import is_admin
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "admin"
@@ -176,6 +207,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_admin_with_non_admin_role(self):
         from api.permissions import is_admin
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "coordinador"
@@ -183,18 +215,21 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_admin_unauthenticated(self):
         from api.permissions import is_admin
+
         request = MagicMock()
         request.user.is_authenticated = False
         self.assertFalse(is_admin(request))
 
     def test_is_admin_no_user(self):
         from api.permissions import is_admin
+
         request = MagicMock()
         request.user = None
         self.assertFalse(is_admin(request))
 
     def test_is_coordinator_with_coordinator_role(self):
         from api.permissions import is_coordinator
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "coordinador"
@@ -202,6 +237,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_coordinator_with_non_coordinator(self):
         from api.permissions import is_coordinator
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "participante"
@@ -209,6 +245,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_operational_user_with_admin(self):
         from api.permissions import is_operational_user
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "admin"
@@ -216,6 +253,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_operational_user_with_coordinator(self):
         from api.permissions import is_operational_user
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "coordinador"
@@ -223,6 +261,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_operational_user_with_participant(self):
         from api.permissions import is_operational_user
+
         request = MagicMock()
         request.user.is_authenticated = True
         request.user.role = "participante"
@@ -230,6 +269,7 @@ class PermissionFunctionsTest(SimpleTestCase):
 
     def test_is_operational_user_unauthenticated(self):
         from api.permissions import is_operational_user
+
         request = MagicMock()
         request.user.is_authenticated = False
         self.assertFalse(is_operational_user(request))

@@ -1,4 +1,4 @@
-﻿from datetime import date, timedelta
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import ValidationError
@@ -121,7 +121,7 @@ class CertificateModelTest(TestCase):
         self.assertEqual(cert._determine_recipient("whatsapp"), "999000111")
 
     def test_determine_recipient_whatsapp_returns_none_when_no_phone(self):
-        """RN-07: WhatsApp requires phone — no fallback to email."""
+        """RN-07: WhatsApp requires phone � no fallback to email."""
         self.participant.phone = ""
         self.participant.save()
         cert = self._make_cert()
@@ -279,14 +279,14 @@ class CertificateModelTest(TestCase):
         self.assertIn("not configured", result["message"])
 
 
-# ─────────────────────────────────────────────
-# PASO 2 — Reglas de negocio faltantes
+# ---------------------------------------------
+# PASO 2 � Reglas de negocio faltantes
 # TC-010, TC-011, TC-017, TC-018, TC-019, TC-020, TC-021
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 class AttendanceBusinessRuleTest(TestCase):
-    """TC-010/011 — attendance=True es requisito para generar certificado."""
+    """TC-010/011 � attendance=True es requisito para generar certificado."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin2@test.com", full_name="Admin", password="pass")
@@ -301,7 +301,7 @@ class AttendanceBusinessRuleTest(TestCase):
         self.event = Event.objects.create(name="Evento Att", event_date=date(2026, 3, 1), created_by=self.user)
 
     def test_tc011_generate_blocked_when_attendance_false(self):
-        """TC-011: attendance=False debe bloquear la generación."""
+        """TC-011: attendance=False debe bloquear la generaci�n."""
         Enrollment.objects.create(
             participant=self.participant,
             event=self.event,
@@ -315,7 +315,7 @@ class AttendanceBusinessRuleTest(TestCase):
 
     @patch("services.pdf_service.PDFService.generate_certificate_pdf")
     def test_tc010_generate_succeeds_when_attendance_true(self, mock_pdf):
-        """TC-010: attendance=True permite la generación."""
+        """TC-010: attendance=True permite la generaci�n."""
         mock_pdf.return_value = {"success": True, "path": "/media/cert.pdf"}
         Enrollment.objects.create(
             participant=self.participant,
@@ -328,14 +328,14 @@ class AttendanceBusinessRuleTest(TestCase):
         self.assertEqual(result.status, "generated")
 
     def test_generate_blocked_when_not_enrolled_at_all(self):
-        """Sin matrícula no hay certificado."""
+        """Sin matr�cula no hay certificado."""
         cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
         with self.assertRaises(ValidationError):
             cert.generate()
 
 
 class WhatsAppPhoneRequirementTest(TestCase):
-    """TC-019/020 — WhatsApp requiere teléfono; no usa email como fallback."""
+    """TC-019/020 � WhatsApp requiere tel�fono; no usa email como fallback."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin3@test.com", full_name="Admin", password="pass")
@@ -353,7 +353,7 @@ class WhatsAppPhoneRequirementTest(TestCase):
         return Certificate.objects.create(participant=participant, event=self.event, generated_by=self.user)
 
     def test_tc020_whatsapp_without_phone_raises_validation_error(self):
-        """TC-020: sin teléfono, deliver vía WhatsApp debe fallar con ValidationError."""
+        """TC-020: sin tel�fono, deliver v�a WhatsApp debe fallar con ValidationError."""
         cert = self._make_cert(phone="")
         Certificate.objects.filter(pk=cert.pk).update(status="generated", pdf_url="/media/c.pdf")
         cert.refresh_from_db()
@@ -363,7 +363,7 @@ class WhatsAppPhoneRequirementTest(TestCase):
 
     @patch("services.whatsapp_service.get_whatsapp_service")
     def test_tc019_whatsapp_with_phone_calls_service(self, mock_get):
-        """TC-019: con teléfono registrado, WhatsApp llama al servicio."""
+        """TC-019: con tel�fono registrado, WhatsApp llama al servicio."""
         mock_ws = MagicMock()
         mock_ws.send_certificate.return_value = {
             "success": True,
@@ -388,7 +388,7 @@ class WhatsAppPhoneRequirementTest(TestCase):
 
 
 class DeliveryRetryTest(TestCase):
-    """TC-017/021 — reintento de entrega NO regenera el PDF; crea nuevo DeliveryLog."""
+    """TC-017/021 � reintento de entrega NO regenera el PDF; crea nuevo DeliveryLog."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin4@test.com", full_name="Admin", password="pass")
@@ -459,7 +459,7 @@ class DeliveryRetryTest(TestCase):
 
 
 class CertificateUniqueConstraintTest(TestCase):
-    """RN-03/04 — unique_together garantiza un solo certificado por par estudiante+evento."""
+    """RN-03/04 � unique_together garantiza un solo certificado por par estudiante+evento."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin5@test.com", full_name="Admin", password="pass")
@@ -480,7 +480,7 @@ class CertificateUniqueConstraintTest(TestCase):
             Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.user)
 
     def test_get_or_create_returns_existing_not_new(self):
-        """get_or_create respeta la restricción unique_together."""
+        """get_or_create respeta la restricci�n unique_together."""
         cert1, created1 = Certificate.objects.get_or_create(
             participant=self.participant,
             event=self.event,
@@ -497,7 +497,7 @@ class CertificateUniqueConstraintTest(TestCase):
 
 
 class CertificateExpiryTest(TestCase):
-    """RN-05 — los certificados vencen a 365 días."""
+    """RN-05 � los certificados vencen a 365 d�as."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin6@test.com", full_name="Admin", password="pass")
@@ -513,7 +513,7 @@ class CertificateExpiryTest(TestCase):
 
     @patch("services.pdf_service.PDFService.generate_certificate_pdf")
     def test_rn05_expires_at_set_to_365_days_on_generate(self, mock_pdf):
-        """RN-05: expires_at = now + 365 días al generar."""
+        """RN-05: expires_at = now + 365 d�as al generar."""
         mock_pdf.return_value = {"success": True, "path": "/media/cert.pdf"}
         Enrollment.objects.create(
             participant=self.participant,
@@ -540,7 +540,7 @@ class CertificateExpiryTest(TestCase):
 
 
 class NoPDFRegenerationGuardTest(TestCase):
-    """RN-06 — PDF no se regenera si ya está en generated/sent/failed."""
+    """RN-06 � PDF no se regenera si ya est� en generated/sent/failed."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="admin7@test.com", full_name="Admin", password="pass")
@@ -580,12 +580,12 @@ class NoPDFRegenerationGuardTest(TestCase):
 
 
 class ExcelServiceLogicTest(TestCase):
-    """Pruebas de cobertura para ramas específicas de procesos/services.py"""
+    """Pruebas de cobertura para ramas espec�ficas de procesos/services.py"""
 
     def setUp(self):
         self.user = User.objects.create_user(email="service@test.com", full_name="S", password="p")
         self.event = Event.objects.create(name="Service Event", event_date=date(2026, 1, 1), created_by=self.user)
-        self.template = Template.objects.create(name="Default Template", created_by=self.user)
+        self.template = Template.objects.create(name="Original Template", created_by=self.user)
 
     def test_get_or_create_participant_updates_email_if_doc_exists(self):
         from participants.models import Participant
@@ -629,13 +629,13 @@ class ExcelServiceLogicTest(TestCase):
         from procesos.services import ExcelProcessingResult
 
         result = ExcelProcessingResult()
-        # Agregar 15 errores para probar el "y 5 errores más"
+        # Agregar 15 errores para probar el "y 5 errores m�s"
         for i in range(15):
             result.add_error(i, "field", f"error {i}")
 
         summary = result.get_summary()
         self.assertIn("ERRORES ENCONTRADOS (15)", summary)
-        self.assertIn("y 5 errores más", summary)
+        self.assertIn("y 5 errores m�s", summary)
         self.assertEqual(result.failed, 15)
 
     def test_excel_service_get_event_not_found_raises_error(self):
@@ -653,7 +653,7 @@ class ExcelServiceLogicTest(TestCase):
 
         from procesos.services import ExcelProcessingService
 
-        # Caso 1: Archivo válido
+        # Caso 1: Archivo v�lido
         df = pd.DataFrame([{"full_name": "A", "email": "a@t.com", "document_id": "1"}])
         buf = BytesIO()
         df.to_excel(buf, index=False)
@@ -694,7 +694,7 @@ class ExcelServiceLogicTest(TestCase):
         from procesos.services import ExcelProcessingService
 
         p = Participant.objects.create(document_id="ENR01", first_name="A", last_name="B", email="a@test.com")
-        # Inscripción previa con asistencia en False
+        # Inscripci�n previa con asistencia en False
         Enrollment.objects.create(participant=p, event=self.event, attendance=False)
 
         service = ExcelProcessingService(file_object=None)

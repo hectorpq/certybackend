@@ -2,59 +2,63 @@ pipeline {
     agent any
 
     environment {
-        SCANNER_HOME = tool 'SonarScanner'
-        GITHUB_TOKEN_ID = 'github-token' 
+        DOCKER_BUILDKIT = '1'
+        SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
+// prueba 7
+    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba1
 
     stages {
         stage('Limpieza y Entorno') {
             steps {
                 script {
+                    sh 'echo DB_NAME=postgres > .env'
+                    sh 'echo DB_USER=postgres >> .env'
+                    sh 'echo DB_PASSWORD=postgres >> .env'
+                    sh 'echo DB_HOST=db >> .env'
+                    sh 'echo DB_PORT=5432 >> .env'
+                    sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
+                    sh 'echo DEBUG=True >> .env'
                     
-                    sh '''
-                        echo "DB_NAME=postgres" > .env
-                        echo "DB_USER=postgres" >> .env
-                        echo "DB_PASSWORD=postgres" >> .env
-                        echo "DB_HOST=db" >> .env
-                        echo "DB_PORT=5432" >> .env
-                        echo "SECRET_KEY=django-insecure-test-key-123" >> .env
-                        echo "DEBUG=True" >> .env
-                    '''
-                    // Aseguramos permisos del socket para que Testcontainers funcione en 'web'
-                    sh 'chmod 666 /var/run/docker.sock || true'
+                    sh 'docker-compose down --remove-orphans || true'
                 }
-                // Limpieza profunda de intentos fallidos anteriores
-                sh 'docker compose down --remove-orphans || true'
             }
         }
 
-        stage('Build') {
+        stage('Build Infrastructure') {
             steps {
-                sh 'docker compose build web'
+                sh 'docker-compose build --no-cache web'
+                sh 'docker-compose build db redis'
             }
         }
 
         stage('Test & Coverage') {
             steps {
-                // Ahora 'web' tiene el socket mapeado, Testcontainers podrá levantar el Postgres de prueba
-                sh 'docker compose run --rm web pytest --cov=. --cov-report=xml'
-            }
-        }
-
-        stage('Linting (Estilo)') {
-            steps {
-                sh 'docker compose run --rm web flake8 . || true'
+                // 1. Ejecutamos las pruebas de forma normal usando el código interno de la imagen compilada
+                sh 'docker-compose run --name test_runner web pytest --cov=. --cov-report=xml'
+                
+                // 2. Extraemos el archivo coverage.xml directamente leyendo el flujo del contenedor de test
+                script {
+                    sh 'docker cp test_runner:/app/coverage.xml ./coverage.xml'
+                    sh 'docker rm -f test_runner'
+                }
             }
         }
 
         stage('Static Analysis (SonarQube)') {
             steps {
-                withSonarQubeEnv('SonarQubeServer') {
-                    withCredentials([string(credentialsId: "${GITHUB_TOKEN_ID}", variable: 'GITHUB_TOKEN')]) {
-                        sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.analysis.github.token=${GITHUB_TOKEN}
-                        """
+                script {
+                    def scannerHome = tool name: 'SonarQubeScanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                    
+                    withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
+                        withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
+                            // Añadimos el relizamiento de rutas para que SonarQube asocie /app con la raíz del proyecto
+                            sh "${scannerHome}/bin/sonar-scanner " +
+                               "-Dsonar.login=${SONAR_TOKEN} " +
+                               "-Dsonar.projectBaseDir=$WORKSPACE " +
+                               "-Dsonar.python.coverage.reportPaths=coverage.xml " +
+                               "-Dsonar.sources=."
+                        }
                     }
                 }
             }
@@ -63,8 +67,7 @@ pipeline {
 
     post {
         always {
-            // Siempre limpiar para no dejar procesos consumiendo RAM
-            sh 'docker compose down --remove-orphans'
+            sh 'docker-compose down --remove-orphans || true'
         }
     }
 }

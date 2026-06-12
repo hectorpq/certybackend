@@ -1,8 +1,8 @@
-﻿from datetime import date
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -5565,7 +5565,7 @@ class CoverageEdgeCasesTest(TestCase):
                 self.assertEqual(res.status_code, 401)
                 self.assertEqual(res.data["error"], "Invalid Google token")
 
-    # ── Event.DoesNotExist paths (404) ──
+    # -- Event.DoesNotExist paths (404) --
 
     def test_enroll_event_not_found(self):
         """Cubre Event.DoesNotExist en EventsViewSet.enroll"""
@@ -5582,7 +5582,7 @@ class CoverageEdgeCasesTest(TestCase):
         res = self.client.post("/api/events/99999/certificates/send/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-    # ── Non-owner forbidden paths (403) on EventsViewSet ──
+    # -- Non-owner forbidden paths (403) on EventsViewSet --
 
     def test_participants_non_owner_forbidden(self):
         """Cubre 403 en EventsViewSet.participants"""
@@ -5626,7 +5626,7 @@ class CoverageEdgeCasesTest(TestCase):
         res = self.client.post(f"/api/events/{event.id}/finalize/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    # ── EnrollmentViewSet coverage ──
+    # -- EnrollmentViewSet coverage --
 
     def test_enrollment_list_coordinator(self):
         """Cubre coordinator path en EnrollmentViewSet.list"""
@@ -5668,3 +5668,63 @@ class CoverageEdgeCasesTest(TestCase):
         enrollment = Enrollment.objects.create(participant=participant, event=event, created_by=admin_other)
         res = self.client.patch(f"/api/enrollments/{enrollment.id}/attendance/", {"attendance": True}, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ImportHelpersTest(SimpleTestCase):
+    def test_normalize_row_with_first_last_name(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC01", "email": "a@b.com", "first_name": "Juan", "last_name": "Perez", "phone": "123"}
+        vs = ParticipantsViewSet()
+        doc_id, email, fn, ln, phone = vs._normalize_import_row(row)
+        self.assertEqual((doc_id, email, fn, ln, phone), ("DOC01", "a@b.com", "Juan", "Perez", "123"))
+
+    def test_normalize_row_with_full_name(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC02", "email": "c@d.com", "full_name": "Maria Lopez"}
+        vs = ParticipantsViewSet()
+        doc_id, email, fn, ln, phone = vs._normalize_import_row(row)
+        self.assertEqual((fn, ln), ("Maria", "Lopez"))
+
+    def test_normalize_row_phone_nan_becomes_empty(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC03", "email": "e@f.com", "first_name": "A", "last_name": "B", "phone": "nan"}
+        vs = ParticipantsViewSet()
+        *_, phone = vs._normalize_import_row(row)
+        self.assertEqual(phone, "")
+
+    def test_parse_import_file_csv(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import ParticipantsViewSet
+
+        f = SimpleUploadedFile("data.csv", b"document_id,email,name\n1,a@b.com,T", content_type="text/csv")
+        vs = ParticipantsViewSet()
+        df = vs._parse_import_file(f)
+        self.assertEqual(len(df), 1)
+
+    def test_parse_import_file_xlsx(self):
+        from io import BytesIO
+
+        import openpyxl
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import ParticipantsViewSet
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["document_id", "email"])
+        ws.append(["1", "a@b.com"])
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        f = SimpleUploadedFile(
+            "data.xlsx",
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        vs = ParticipantsViewSet()
+        df = vs._parse_import_file(f)
+        self.assertEqual(len(df), 1)
