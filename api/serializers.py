@@ -71,7 +71,15 @@ class EventSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "created_by", "is_deleted", "deleted_at", "deleted_by", "deleted_by_detail"]
+        read_only_fields = [
+            "created_at",
+            "updated_at",
+            "created_by",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
+        ]
 
     def get_status_display(self, obj):
         return obj.get_status_display()

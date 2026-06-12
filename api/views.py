@@ -1277,7 +1277,9 @@ class EventsViewSet(viewsets.ModelViewSet):
 
         if is_admin(self.request):
             if self.request.query_params.get("show_deleted") == "true":
-                return Event.all_objects.select_related("category", "created_by", "instructor", "template").order_by("-event_date")
+                return Event.all_objects.select_related("category", "created_by", "instructor", "template").order_by(
+                    "-event_date"
+                )
             return super().get_queryset()
 
         queryset = super().get_queryset()
@@ -2323,9 +2325,12 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             return super().get_queryset()
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
-        return super().get_queryset().filter(
-            models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events)
-        ).distinct()
+        return (
+            super()
+            .get_queryset()
+            .filter(models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events))
+            .distinct()
+        )
 
     def get_permissions(self):
         """Only admins can modify"""
