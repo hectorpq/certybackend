@@ -1265,14 +1265,20 @@ class EventsViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.select_related("category", "created_by", "instructor", "template").order_by("-event_date")
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["status", "category"]
+    filterset_fields = ["status", "category", "is_deleted"]
     search_fields = ["name", "description"]
     ordering_fields = ["event_date", "created_at", "name"]
     ordering = ["-event_date"]
 
     def get_queryset(self):
-        """Operational users (admin/coordinador) see all events; participante sees only enrolled."""
+        """Admin sees all (including deleted if show_deleted=true);
+        coordinador sees all non-deleted; participante sees only enrolled."""
         from events.models import Enrollment
+
+        if is_admin(self.request):
+            if self.request.query_params.get("show_deleted") == "true":
+                return Event.all_objects.select_related("category", "created_by", "instructor", "template").order_by("-event_date")
+            return super().get_queryset()
 
         queryset = super().get_queryset()
 
@@ -2304,20 +2310,20 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     queryset = Participant.objects.all().order_by("first_name", "last_name")
     serializer_class = ParticipantSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["is_active"]
+    filterset_fields = ["is_active", "is_deleted"]
     search_fields = ["first_name", "last_name", "email", "document_id"]
     ordering_fields = ["first_name", "last_name", "created_at"]
     ordering = ["first_name", "last_name"]
 
     def get_queryset(self):
-        """Admin sees all; coordinator/participante see only their own or enrolled in their events."""
-        queryset = super().get_queryset()
-
+        """Admin sees all (including deleted if show_deleted=true); coordinator sees only their own."""
         if is_admin(self.request):
-            return queryset
+            if self.request.query_params.get("show_deleted") == "true":
+                return Participant.all_objects.all().order_by("first_name", "last_name")
+            return super().get_queryset()
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
-        return queryset.filter(
+        return super().get_queryset().filter(
             models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events)
         ).distinct()
 

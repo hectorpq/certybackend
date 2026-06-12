@@ -35,6 +35,7 @@ class EventSerializer(serializers.ModelSerializer):
     template_name = serializers.SerializerMethodField()
     instructor_name = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
+    deleted_by_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -63,10 +64,14 @@ class EventSerializer(serializers.ModelSerializer):
             "name_x",
             "name_y",
             "template_image",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "created_by"]
+        read_only_fields = ["created_at", "updated_at", "created_by", "is_deleted", "deleted_at", "deleted_by", "deleted_by_detail"]
 
     def get_status_display(self, obj):
         return obj.get_status_display()
@@ -81,6 +86,11 @@ class EventSerializer(serializers.ModelSerializer):
             return obj.instructor.full_name
         return None
 
+    def get_deleted_by_detail(self, obj):
+        if obj.deleted_by:
+            return {"id": obj.deleted_by.id, "full_name": obj.deleted_by.full_name, "email": obj.deleted_by.email}
+        return None
+
 
 class EventSimpleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,6 +100,7 @@ class EventSimpleSerializer(serializers.ModelSerializer):
 
 class ParticipantSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
+    deleted_by_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Participant
@@ -102,10 +113,20 @@ class ParticipantSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "is_active",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
             "created_by",
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["is_deleted", "deleted_at", "deleted_by", "deleted_by_detail"]
+
+    def get_deleted_by_detail(self, obj):
+        if obj.deleted_by:
+            return {"id": obj.deleted_by.id, "full_name": obj.deleted_by.full_name, "email": obj.deleted_by.email}
+        return None
 
 
 class UserSerializer(serializers.ModelSerializer):
