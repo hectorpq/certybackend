@@ -17,7 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.audit import get_client_ip, log_action
 from api.models import AuditLog
-from api.permissions import is_operational_user
+from api.permissions import is_admin, is_operational_user
 from certificados.models import Certificate, Template
 from deliveries.models import DeliveryLog
 from events.models import Event
@@ -1232,14 +1232,14 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         tags=["Eventos"],
         summary="Actualizar evento (parcial)",
         description="Actualiza uno o más campos de un evento sin necesidad de enviar "
-                    "todos los datos. Útil para cambiar solo el estado o la plantilla.",
+        "todos los datos. Útil para cambiar solo el estado o la plantilla.",
         responses={200: EventSerializer, 400: OpenApiResponse(description="Datos inválidos.")},
     ),
     destroy=extend_schema(
         tags=["Eventos"],
         summary="Eliminar evento",
         description="Elimina permanentemente un evento y sus registros asociados. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Evento eliminado correctamente."),
             404: OpenApiResponse(description="Evento no encontrado."),
@@ -1419,10 +1419,13 @@ class EventsViewSet(viewsets.ModelViewSet):
         Body: {"participant_id": 1} OR {"participant_email": "email@example.com"}
         Only the event creator can enroll participants
         """
-        from events.models import Enrollment
+        from events.models import Enrollment, Event
         from participants.models import Participant
 
-        event = self.get_object()
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         if event.created_by != request.user:
             return Response(
@@ -1542,9 +1545,12 @@ class EventsViewSet(viewsets.ModelViewSet):
         Only the event creator can generate certificates
         """
 
-        from events.models import Enrollment
+        from events.models import Enrollment, Event
 
-        event = self.get_object()
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         if event.created_by != request.user:
             return Response(
@@ -1629,7 +1635,12 @@ class EventsViewSet(viewsets.ModelViewSet):
         Only the event creator can send certificates
         """
 
-        event = self.get_object()
+        from events.models import Event
+
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         if event.created_by != request.user:
             return Response(
@@ -2243,7 +2254,7 @@ Equipo CertyPro
         tags=["Participantes"],
         summary="Detalle de participante",
         description="Retorna todos los datos de un participante: documento de identidad, "
-                    "nombre completo, email, teléfono, estado activo y fechas de creación.",
+        "nombre completo, email, teléfono, estado activo y fechas de creación.",
         responses={
             200: ParticipantSerializer,
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2266,7 +2277,7 @@ Equipo CertyPro
         tags=["Participantes"],
         summary="Eliminar participante",
         description="Elimina permanentemente un participante del sistema. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Participante eliminado correctamente."),
             404: OpenApiResponse(description="Participante no encontrado."),
@@ -2299,8 +2310,11 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     ordering = ["first_name", "last_name"]
 
     def get_queryset(self):
-        """Users only see participants they created or enrolled in events they created."""
+        """Admin sees all; coordinator/participante see only their own or enrolled in their events."""
         queryset = super().get_queryset()
+
+        if is_admin(self.request):
+            return queryset
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
         return queryset.filter(
@@ -2526,7 +2540,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
         tags=["Instructores"],
         summary="Detalle de instructor",
         description="Retorna todos los campos de un instructor: nombre completo, email, "
-                    "especialidad y datos de auditoría.",
+        "especialidad y datos de auditoría.",
         responses={200: InstructorSerializer, 404: OpenApiResponse(description="Instructor no encontrado.")},
     ),
     update=extend_schema(
@@ -2700,7 +2714,7 @@ class InstructorsViewSet(viewsets.ModelViewSet):
         tags=["Plantillas"],
         summary="Eliminar plantilla",
         description="Elimina permanentemente una plantilla y su imagen de fondo asociada. "
-                    "**Acción irreversible.** Solo administradores.",
+        "**Acción irreversible.** Solo administradores.",
         responses={
             204: OpenApiResponse(description="Plantilla eliminada correctamente."),
             404: OpenApiResponse(description="Plantilla no encontrada."),
@@ -3102,12 +3116,11 @@ class BulkCertificateGenerationView(APIView):
             return Response({"error": "Evento no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         from procesos.services import ExcelProcessingService
+
         template = None
         try:
             # Creamos la plantilla ad-hoc
-            template = ExcelProcessingService.create_bulk_template(
-                event, request.user, template_image, request.data
-            )
+            template = ExcelProcessingService.create_bulk_template(event, request.user, template_image, request.data)
 
             file_bytes = BytesIO(excel_file.read())
             service = ExcelProcessingService(
@@ -3468,17 +3481,22 @@ class EnrollmentViewSet(viewsets.ViewSet):
         responses={200: EnrollmentSerializer(many=True)},
     )
     def list(self, request, event_pk=None):
-        """List all enrollments for an event — only the event creator can see them"""
+        """List enrollments — admin sees all, coordinator sees own events' enrollments, others 403"""
         from events.models import Enrollment
 
-        event = Event.objects.filter(id=event_pk).first()
-        if not event or event.created_by != request.user:
+        if is_admin(request):
+            enrollments = Enrollment.objects.all().select_related("participant", "created_by")
+        elif is_operational_user(request):
+            user_events = Event.objects.filter(created_by=request.user).values_list("id", flat=True)
+            enrollments = Enrollment.objects.filter(event_id__in=user_events).select_related(
+                "participant", "created_by"
+            )
+        else:
             return Response(
-                {"error": "No tienes acceso a este evento"},
+                {"error": "No tienes permiso para listar inscripciones."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        enrollments = Enrollment.objects.filter(event_id=event_pk).select_related("participant", "created_by")
         serializer = EnrollmentSerializer(enrollments, many=True)
         return Response(serializer.data)
 
