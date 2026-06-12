@@ -1,4 +1,4 @@
-﻿from datetime import date, timedelta
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import ValidationError
@@ -279,10 +279,10 @@ class CertificateModelTest(TestCase):
         self.assertIn("not configured", result["message"])
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # PASO 2 — Reglas de negocio faltantes
 # TC-010, TC-011, TC-017, TC-018, TC-019, TC-020, TC-021
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 class AttendanceBusinessRuleTest(TestCase):

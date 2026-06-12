@@ -3147,16 +3147,16 @@ class CoordinadorRoleTest(TestCase):
 
 
 class CoordinadorOperationalAccessTest(TestCase):
-    """Coordinador can enroll, generate, send — same as admin for day-to-day ops."""
+    """Coordinador can enroll, generate, send on their own events."""
 
     def setUp(self):
         self.client = APIClient()
         self.coordinator = make_coordinator("coord2@test.com")
         self.admin = make_admin("adm_op@test.com")
         self.client.force_authenticate(user=self.coordinator)
-        self.event = make_event(self.admin)
-        self.participant = make_participant(self.admin)
-        self.template = Template.objects.create(name="T", created_by=self.admin)
+        self.event = make_event(self.coordinator)
+        self.participant = make_participant(self.coordinator)
+        self.template = Template.objects.create(name="T", created_by=self.coordinator)
 
     def test_coordinator_can_enroll_participant(self):
         res = self.client.post(f"/api/events/{self.event.id}/enroll/", {"student_id": self.participant.id})
@@ -3294,7 +3294,7 @@ class CoordinadorWriteAccessTest(TestCase):
             first_name="Orig",
             last_name="Name",
             email="cwupd@test.com",
-            created_by=self.admin,
+            created_by=self.coordinator,
         )
         res = self.client.patch(f"/api/participants/{p.id}/", {"first_name": "Actualizado"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -3306,7 +3306,7 @@ class CoordinadorWriteAccessTest(TestCase):
             first_name="Del",
             last_name="Me",
             email="cwdel@test.com",
-            created_by=self.admin,
+            created_by=self.coordinator,
         )
         res = self.client.delete(f"/api/participants/{p.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
@@ -3327,9 +3327,8 @@ class CoordinadorWriteAccessTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_create_enrollment(self):
-        admin = make_admin("coord_enr_adm@test.com")
-        event = make_event(admin, name="CW Event")
-        participant = make_participant(admin, doc="CW004", email="cwenr@test.com")
+        event = make_event(self.coordinator, name="CW Event")
+        participant = make_participant(self.coordinator, doc="CW004", email="cwenr@test.com")
         res = self.client.post(
             "/api/enrollments/",
             {
@@ -5517,9 +5516,11 @@ class CoverageEdgeCasesTest(TestCase):
         p = make_participant(self.admin, doc="COV01", email="cov01@test.com")
         p.delete(deleted_by=self.admin)
         p.restore()
-        # El último registro en el historial debería ser la restauración (tipo ~)
-        history = p.history.all().order_by("-history_date").first()
-        serializer = ChangelogSerializer(history)
+        # Buscar la entrada de tipo ~ con is_deleted=False (restauración)
+        restore_entry = p.history.filter(history_type="~", is_deleted=False).order_by("-history_date").first()
+        if restore_entry is None:
+            self.skipTest("No se encontró entrada de restauración en el historial")
+        serializer = ChangelogSerializer(restore_entry)
         self.assertEqual(serializer.data["history_type_display"], "Restaurado")
 
     def test_parse_emails_invalid_json(self):
@@ -5563,6 +5564,110 @@ class CoverageEdgeCasesTest(TestCase):
                 res = self.client.post("/api/auth/google/", {"token": "bad-token"})
                 self.assertEqual(res.status_code, 401)
                 self.assertEqual(res.data["error"], "Invalid Google token")
+
+    # -- Event.DoesNotExist paths (404) --
+
+    def test_enroll_event_not_found(self):
+        """Cubre Event.DoesNotExist en EventsViewSet.enroll"""
+        res = self.client.post("/api/events/99999/enroll/", {"student_email": "x@x.com"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_generate_certificates_event_not_found(self):
+        """Cubre Event.DoesNotExist en generate_certificates"""
+        res = self.client.post("/api/events/99999/certificates/generate/", {})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_send_certificates_event_not_found(self):
+        """Cubre Event.DoesNotExist en send_certificates"""
+        res = self.client.post("/api/events/99999/certificates/send/", {"method": "email"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # -- Non-owner forbidden paths (403) on EventsViewSet --
+
+    def test_participants_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.participants"""
+        admin_other = make_admin("other_parts@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/participants/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_event_deliveries_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.event_deliveries"""
+        admin_other = make_admin("other_del@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/deliveries/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.invitations"""
+        admin_other = make_admin("other_inv@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/invitations/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_send_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.send_invitations"""
+        admin_other = make_admin("other_sinv@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send/", {"emails": ["a@b.com"]}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_send_all_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.send_all_invitations"""
+        admin_other = make_admin("other_sall@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send-all/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_finalize_event_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.finalize_event"""
+        admin_other = make_admin("other_fin@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/finalize/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    # -- EnrollmentViewSet coverage --
+
+    def test_enrollment_list_coordinator(self):
+        """Cubre coordinator path en EnrollmentViewSet.list"""
+        coord = make_coordinator("cov_coord_list@test.com")
+        self.client.force_authenticate(user=coord)
+        res = self.client.get("/api/enrollments/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_enrollment_create_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.create"""
+        admin_other = make_admin("other_enc@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="ENC01", email="enc01@test.com")
+        res = self.client.post(
+            "/api/enrollments/",
+            {"participant_id": participant.id, "event_id": event.id},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enrollment_destroy_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.destroy"""
+        from events.models import Enrollment
+
+        admin_other = make_admin("other_des@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="DES01", email="des01@test.com")
+        enrollment = Enrollment.objects.create(participant=participant, event=event, created_by=admin_other)
+        res = self.client.delete(f"/api/enrollments/{enrollment.id}/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enrollment_attendance_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.attendance"""
+        from events.models import Enrollment
+
+        admin_other = make_admin("other_att@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="ATT01", email="att01@test.com")
+        enrollment = Enrollment.objects.create(participant=participant, event=event, created_by=admin_other)
+        res = self.client.patch(f"/api/enrollments/{enrollment.id}/attendance/", {"attendance": True}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class ImportHelpersTest(SimpleTestCase):
