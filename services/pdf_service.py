@@ -128,7 +128,7 @@ class PDFService:
             }
 
         except Exception as exc:
-            logger.error("Error generating PDF: %s", exc)
+            logger.exception("Error generating PDF")
             return {
                 "success": False,
                 "path": None,

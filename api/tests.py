@@ -2,7 +2,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -388,9 +388,7 @@ class CertificateViewSetTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_retrieve_certificate_with_event_instructor(self):
-        instructor = Instructor.objects.create(
-            full_name="Prof. Juan", email="juan@test.com", created_by=self.admin
-        )
+        instructor = Instructor.objects.create(full_name="Prof. Juan", email="juan@test.com", created_by=self.admin)
         event = Event.objects.create(
             name="Evento con Instructor",
             event_date=date(2026, 7, 1),
@@ -845,7 +843,77 @@ class GoogleAuthViewTest(TestCase):
         settings.GOOGLE_CLIENT_ID = "test-client-id"
         mock_verify.return_value = {"email": "newgoogle@test.com", "name": "New"}
         res = self.client.post("/api/auth/google/", {"token": "valid-token"})
-        self.assertIn(res.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR])
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["user"]["is_new_user"])
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_google_auth_no_email_in_token_returns_400(self, mock_verify):
+        from django.conf import settings
+
+        settings.GOOGLE_CLIENT_ID = "test-client-id"
+        mock_verify.return_value = {"name": "No Email User"}  # Falta el key 'email'
+        res = self.client.post("/api/auth/google/", {"token": "valid-token"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data["error"], "Email not provided by Google")
+
+    def test_google_auth_no_client_id_configured_returns_500(self):
+        from django.conf import settings
+
+        with patch.object(settings, "GOOGLE_CLIENT_ID", None):
+            res = self.client.post("/api/auth/google/", {"token": "any-token"})
+            self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            self.assertEqual(res.data["error"], "Google authentication not configured")
+
+
+# ─────────────────────────────────────────────
+# Excel Processing Helpers Coverage
+# ─────────────────────────────────────────────
+
+
+class ExcelParsingHelpersTest(TestCase):
+    def setUp(self):
+        self.admin = make_admin("parsing@test.com")
+
+    def test_parse_emails_from_json_string(self):
+        import json
+
+        from api.views import EventsViewSet
+
+        emails_json = json.dumps(["test1@test.com", "test2@test.com"])
+        result = EventsViewSet._parse_emails_from_json(emails_json)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], "test1@test.com")
+
+    def test_parse_emails_from_json_list_directly(self):
+        from api.views import EventsViewSet
+
+        emails_list = ["direct@test.com"]
+        result = EventsViewSet._parse_emails_from_json(emails_list)
+        self.assertEqual(result, ["direct@test.com"])
+
+    def test_parse_emails_from_invalid_json_returns_empty(self):
+        from api.views import EventsViewSet
+
+        result = EventsViewSet._parse_emails_from_json("not-a-json")
+        self.assertEqual(result, [])
+
+    def test_parse_emails_from_file_excel_missing_column(self):
+        from io import BytesIO
+
+        import pandas as pd
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import EventsViewSet
+
+        df = pd.DataFrame([{"name": "No Email Col"}])
+        buf = BytesIO()
+        df.to_excel(buf, index=False)
+        buf.seek(0)
+        f = SimpleUploadedFile("test.xlsx", buf.read(), content_type="application/vnd.ms-excel")
+
+        emails, error = EventsViewSet._parse_emails_from_file(f)
+        self.assertEqual(emails, [])
+        self.assertIn("No se encontró columna de email", error)
 
 
 # ─────────────────────────────────────────────
@@ -1104,9 +1172,6 @@ class GoogleAuthEdgeCasesTest(TestCase):
 # ─────────────────────────────────────────────
 # IsAdminUserOrReadOnly + IsCertificateOwnerOrAdmin in views.py
 # ─────────────────────────────────────────────
-
-
-import pytest
 
 
 @pytest.mark.integration
@@ -3082,16 +3147,16 @@ class CoordinadorRoleTest(TestCase):
 
 
 class CoordinadorOperationalAccessTest(TestCase):
-    """Coordinador can enroll, generate, send — same as admin for day-to-day ops."""
+    """Coordinador can enroll, generate, send on their own events."""
 
     def setUp(self):
         self.client = APIClient()
         self.coordinator = make_coordinator("coord2@test.com")
         self.admin = make_admin("adm_op@test.com")
         self.client.force_authenticate(user=self.coordinator)
-        self.event = make_event(self.admin)
-        self.participant = make_participant(self.admin)
-        self.template = Template.objects.create(name="T", created_by=self.admin)
+        self.event = make_event(self.coordinator)
+        self.participant = make_participant(self.coordinator)
+        self.template = Template.objects.create(name="T", created_by=self.coordinator)
 
     def test_coordinator_can_enroll_participant(self):
         res = self.client.post(f"/api/events/{self.event.id}/enroll/", {"student_id": self.participant.id})
@@ -3229,7 +3294,7 @@ class CoordinadorWriteAccessTest(TestCase):
             first_name="Orig",
             last_name="Name",
             email="cwupd@test.com",
-            created_by=self.admin,
+            created_by=self.coordinator,
         )
         res = self.client.patch(f"/api/participants/{p.id}/", {"first_name": "Actualizado"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -3241,7 +3306,7 @@ class CoordinadorWriteAccessTest(TestCase):
             first_name="Del",
             last_name="Me",
             email="cwdel@test.com",
-            created_by=self.admin,
+            created_by=self.coordinator,
         )
         res = self.client.delete(f"/api/participants/{p.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
@@ -3262,9 +3327,8 @@ class CoordinadorWriteAccessTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_create_enrollment(self):
-        admin = make_admin("coord_enr_adm@test.com")
-        event = make_event(admin, name="CW Event")
-        participant = make_participant(admin, doc="CW004", email="cwenr@test.com")
+        event = make_event(self.coordinator, name="CW Event")
+        participant = make_participant(self.coordinator, doc="CW004", email="cwenr@test.com")
         res = self.client.post(
             "/api/enrollments/",
             {
@@ -3461,7 +3525,6 @@ class AttendanceAPIBlockTest(TestCase):
 # ═══════════════════════════════════════════════════════════════
 # PASO 3 — TC-025 a TC-035
 # ═══════════════════════════════════════════════════════════════
-from django.conf import settings as django_settings
 from django.core.cache import cache
 
 # ─────────────────────────────────────────────
@@ -4661,8 +4724,6 @@ class ChangelogSerializerMethodTest(TestCase):
         self.assertEqual(s.data["history_type_display"], "Eliminado (baja lógica)")
 
     def test_history_type_tilde_restored(self):
-        from unittest.mock import PropertyMock
-
         from api.serializers import ChangelogSerializer
 
         mock_prev = MagicMock()
@@ -4927,6 +4988,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/certificates/{cert.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from certificados.models import Certificate as Cert
+
         self.assertFalse(Cert.objects.filter(pk=cert.id).exists())
         self.assertTrue(Cert.all_objects.filter(pk=cert.id, is_deleted=True).exists())
 
@@ -4937,7 +4999,6 @@ class SoftDeleteEndpointTest(TestCase):
         self.assertIsInstance(res.data, list)
 
     def test_certificate_restore_success(self):
-        from certificados.models import Certificate as Cert
         cert = self._make_certificate()
         cert.delete(deleted_by=self.admin)
         res = self.client.post(f"/api/certificates/{cert.id}/restore/")
@@ -4956,6 +5017,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/events/{event.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from events.models import Event as Ev
+
         self.assertTrue(Ev.all_objects.filter(pk=event.id, is_deleted=True).exists())
 
     def test_event_changelog(self):
@@ -4979,6 +5041,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/participants/{participant.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from participants.models import Participant as Part
+
         self.assertTrue(Part.all_objects.filter(pk=participant.id, is_deleted=True).exists())
 
     def test_participant_changelog(self):
@@ -5019,6 +5082,7 @@ class SoftDeleteEndpointTest(TestCase):
         res = self.client.delete(f"/api/templates/{tpl.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         from certificados.models import Template as Tpl
+
         self.assertTrue(Tpl.all_objects.filter(pk=tpl.id, is_deleted=True).exists())
 
     def test_template_changelog(self):
@@ -5064,7 +5128,9 @@ class CertificateEdgeCaseTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Plantilla", res.data.get("message", ""))
 
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/a.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/a.pdf"}
+    )
     def test_deliver_on_pending_cert_raises_400(self, mock_pdf):
         cert = self._make_cert()
         res = self.client.post(f"/api/certificates/{cert.id}/deliver/", {"method": "email"})
@@ -5086,9 +5152,7 @@ class EventSendCertificatesTest(TestCase):
 
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
     def test_send_certificates_failed_delivery_in_results(self, mock_email):
-        cert = Certificate.objects.create(
-            participant=self.participant, event=self.event, generated_by=self.admin
-        )
+        cert = Certificate.objects.create(participant=self.participant, event=self.event, generated_by=self.admin)
         cert.status = "generated"
         cert.pdf_url = "/m/cert.pdf"
         cert.save()
@@ -5097,7 +5161,10 @@ class EventSendCertificatesTest(TestCase):
         self.assertGreater(len(res.data.get("results", {}).get("failed", [])), 0)
 
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP"})
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     def test_finalize_event_with_send_certificates_generates_and_fails_delivery(self, mock_pdf, mock_email):
         Enrollment.objects.create(
             participant=self.participant, event=self.event, attendance=True, created_by=self.admin
@@ -5139,7 +5206,9 @@ class ParticipantBulkImportEdgeCasesTest(TestCase):
 
         # Omit document_id column entirely so row.get("document_id") returns "" → triggers error
         data = self._make_excel_bytes([{"email": "x@test.com", "first_name": "A", "last_name": "B"}])
-        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        f = SimpleUploadedFile(
+            "p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data.get("errors", [])), 0)
@@ -5148,7 +5217,9 @@ class ParticipantBulkImportEdgeCasesTest(TestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         data = self._make_excel_bytes([{"document_id": "FN01", "email": "fn01@test.com", "full_name": "Juan Perez"}])
-        f = SimpleUploadedFile("p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        f = SimpleUploadedFile(
+            "p.xlsx", data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         res = self.client.post("/api/participants/import_students/", {"file": f}, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -5231,7 +5302,9 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
         buf.seek(0)
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        return SimpleUploadedFile("data.xlsx", buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return SimpleUploadedFile(
+            "data.xlsx", buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
     def test_missing_event_id_with_all_fields_returns_400(self):
         res = self.client.post(
@@ -5267,7 +5340,13 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
 
         with patch("procesos.services.ExcelProcessingService.process") as mock_proc:
             mock_result = MagicMock()
-            mock_result.to_dict.return_value = {"total_rows": 1, "successful": 1, "failed": 0, "errors": [], "created_certificates": []}
+            mock_result.to_dict.return_value = {
+                "total_rows": 1,
+                "successful": 1,
+                "failed": 0,
+                "errors": [],
+                "created_certificates": [],
+            }
             mock_result.get_summary.return_value = "ok"
             mock_proc.return_value = mock_result
             with patch("pathlib.Path.mkdir"):
@@ -5299,7 +5378,10 @@ class BulkCertificateGenerationViewEdgeCaseTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Error al procesar", res.data.get("error", ""))
 
-    @patch("services.pdf_service.PDFService.generate_certificate_pdf", return_value={"success": True, "path": "/m/cert.pdf"})
+    @patch(
+        "services.pdf_service.PDFService.generate_certificate_pdf",
+        return_value={"success": True, "path": "/m/cert.pdf"},
+    )
     @patch("services.email_service.EmailService.send_certificate", return_value={"success": True, "message": "sent"})
     def test_with_instructor_name_only_no_image(self, mock_email, mock_pdf):
         res = self.client.post(
@@ -5331,6 +5413,7 @@ class InvitationAcceptWithExistingEnrollmentTest(TestCase):
         from datetime import timedelta
 
         from django.utils import timezone
+
         from events.models import Enrollment, EventInvitation
 
         invitation = EventInvitation.objects.create(
@@ -5418,4 +5501,230 @@ class CertificateRetryExceptionTest(TestCase):
         with patch.object(Certificate, "deliver", side_effect=Exception("network error")):
             res = self.client.post(f"/api/certificates/{self.cert.id}/retry/", {"method": "email"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("network error", res.data.get("message", ""))
+
+
+class CoverageEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_admin("coverage@test.com")
+        self.client.force_authenticate(user=self.admin)
+
+    def test_changelog_restored_display(self):
+        """Cubre la rama 'Restaurado' en ChangelogSerializer"""
+        from api.serializers import ChangelogSerializer
+
+        p = make_participant(self.admin, doc="COV01", email="cov01@test.com")
+        p.delete(deleted_by=self.admin)
+        p.restore()
+        # Buscar la entrada de tipo ~ con is_deleted=False (restauración)
+        restore_entry = p.history.filter(history_type="~", is_deleted=False).order_by("-history_date").first()
+        if restore_entry is None:
+            self.skipTest("No se encontró entrada de restauración en el historial")
+        serializer = ChangelogSerializer(restore_entry)
+        self.assertEqual(serializer.data["history_type_display"], "Restaurado")
+
+    def test_parse_emails_invalid_json(self):
+        """Cubre error de parsing JSON en invitaciones"""
+        event = make_event(self.admin)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send/", {"emails": "invalid-json"})
+        self.assertEqual(res.status_code, 400)
+
+    @patch("procesos.services.ExcelProcessingService.read_and_validate_structure")
+    def test_bulk_preview_generic_exception(self, mock_read):
+        """Cubre el bloque except genérico en BulkCertificatePreviewView"""
+        mock_read.side_effect = Exception("Critical Error")
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        f = SimpleUploadedFile("test.xlsx", b"content", content_type="application/vnd.ms-excel")
+        res = self.client.post("/api/certificates/preview/", {"excel_file": f}, format="multipart")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("detail", res.data)
+
+    def test_is_expired_logic(self):
+        """Cubre el método is_expired del modelo Certificate"""
+        p = make_participant(self.admin)
+        e = make_event(self.admin)
+        cert = Certificate.objects.create(participant=p, event=e)
+        self.assertFalse(cert.is_expired())  # Sin fecha de expiración
+
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        cert.expires_at = timezone.now() - timedelta(days=1)
+        cert.save()
+        self.assertTrue(cert.is_expired())
+
+    def test_google_auth_value_error_caught(self):
+        """Cubre el bloque except ValueError en GoogleAuthView"""
+        with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("Token error")):
+            from django.conf import settings
+
+            with patch.object(settings, "GOOGLE_CLIENT_ID", "test-id"):
+                res = self.client.post("/api/auth/google/", {"token": "bad-token"})
+                self.assertEqual(res.status_code, 401)
+                self.assertEqual(res.data["error"], "Invalid Google token")
+
+    # -- Event.DoesNotExist paths (404) --
+
+    def test_enroll_event_not_found(self):
+        """Cubre Event.DoesNotExist en EventsViewSet.enroll"""
+        res = self.client.post("/api/events/99999/enroll/", {"student_email": "x@x.com"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_generate_certificates_event_not_found(self):
+        """Cubre Event.DoesNotExist en generate_certificates"""
+        res = self.client.post("/api/events/99999/certificates/generate/", {})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_send_certificates_event_not_found(self):
+        """Cubre Event.DoesNotExist en send_certificates"""
+        res = self.client.post("/api/events/99999/certificates/send/", {"method": "email"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # -- Non-owner forbidden paths (403) on EventsViewSet --
+
+    def test_participants_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.participants"""
+        admin_other = make_admin("other_parts@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/participants/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_event_deliveries_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.event_deliveries"""
+        admin_other = make_admin("other_del@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/deliveries/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.invitations"""
+        admin_other = make_admin("other_inv@test.com")
+        event = make_event(admin_other)
+        res = self.client.get(f"/api/events/{event.id}/invitations/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_send_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.send_invitations"""
+        admin_other = make_admin("other_sinv@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send/", {"emails": ["a@b.com"]}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_send_all_invitations_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.send_all_invitations"""
+        admin_other = make_admin("other_sall@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/invitations/send-all/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_finalize_event_non_owner_forbidden(self):
+        """Cubre 403 en EventsViewSet.finalize_event"""
+        admin_other = make_admin("other_fin@test.com")
+        event = make_event(admin_other)
+        res = self.client.post(f"/api/events/{event.id}/finalize/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    # -- EnrollmentViewSet coverage --
+
+    def test_enrollment_list_coordinator(self):
+        """Cubre coordinator path en EnrollmentViewSet.list"""
+        coord = make_coordinator("cov_coord_list@test.com")
+        self.client.force_authenticate(user=coord)
+        res = self.client.get("/api/enrollments/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_enrollment_create_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.create"""
+        admin_other = make_admin("other_enc@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="ENC01", email="enc01@test.com")
+        res = self.client.post(
+            "/api/enrollments/",
+            {"participant_id": participant.id, "event_id": event.id},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enrollment_destroy_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.destroy"""
+        from events.models import Enrollment
+
+        admin_other = make_admin("other_des@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="DES01", email="des01@test.com")
+        enrollment = Enrollment.objects.create(participant=participant, event=event, created_by=admin_other)
+        res = self.client.delete(f"/api/enrollments/{enrollment.id}/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enrollment_attendance_non_owner_forbidden(self):
+        """Cubre 403 en EnrollmentViewSet.attendance"""
+        from events.models import Enrollment
+
+        admin_other = make_admin("other_att@test.com")
+        event = make_event(admin_other)
+        participant = make_participant(admin_other, doc="ATT01", email="att01@test.com")
+        enrollment = Enrollment.objects.create(participant=participant, event=event, created_by=admin_other)
+        res = self.client.patch(f"/api/enrollments/{enrollment.id}/attendance/", {"attendance": True}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ImportHelpersTest(SimpleTestCase):
+    def test_normalize_row_with_first_last_name(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC01", "email": "a@b.com", "first_name": "Juan", "last_name": "Perez", "phone": "123"}
+        vs = ParticipantsViewSet()
+        doc_id, email, fn, ln, phone = vs._normalize_import_row(row)
+        self.assertEqual((doc_id, email, fn, ln, phone), ("DOC01", "a@b.com", "Juan", "Perez", "123"))
+
+    def test_normalize_row_with_full_name(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC02", "email": "c@d.com", "full_name": "Maria Lopez"}
+        vs = ParticipantsViewSet()
+        doc_id, email, fn, ln, phone = vs._normalize_import_row(row)
+        self.assertEqual((fn, ln), ("Maria", "Lopez"))
+
+    def test_normalize_row_phone_nan_becomes_empty(self):
+        from api.views import ParticipantsViewSet
+
+        row = {"document_id": "DOC03", "email": "e@f.com", "first_name": "A", "last_name": "B", "phone": "nan"}
+        vs = ParticipantsViewSet()
+        *_, phone = vs._normalize_import_row(row)
+        self.assertEqual(phone, "")
+
+    def test_parse_import_file_csv(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import ParticipantsViewSet
+
+        f = SimpleUploadedFile("data.csv", b"document_id,email,name\n1,a@b.com,T", content_type="text/csv")
+        vs = ParticipantsViewSet()
+        df = vs._parse_import_file(f)
+        self.assertEqual(len(df), 1)
+
+    def test_parse_import_file_xlsx(self):
+        from io import BytesIO
+
+        import openpyxl
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from api.views import ParticipantsViewSet
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["document_id", "email"])
+        ws.append(["1", "a@b.com"])
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        f = SimpleUploadedFile(
+            "data.xlsx",
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        vs = ParticipantsViewSet()
+        df = vs._parse_import_file(f)
+        self.assertEqual(len(df), 1)

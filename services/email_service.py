@@ -34,7 +34,8 @@ def check_email_limit():
             "limit": GMAIL_DAILY_LIMIT,
             "warning": True,
             "blocked": True,
-            "message": f"Límite diario de Gmail alcanzado ({count}/{GMAIL_DAILY_LIMIT}). No se pueden enviar más emails hoy. Se reinicia mañana.",
+            "message": f"Límite diario de Gmail alcanzado ({count}/{GMAIL_DAILY_LIMIT}). "
+            "No se pueden enviar más emails hoy. Se reinicia mañana.",
         }
     if count >= GMAIL_WARNING_THRESHOLD:
         remaining = GMAIL_DAILY_LIMIT - count
@@ -132,7 +133,7 @@ Sistema de Certificados
                         logger.warning("PDF file not found at: %s", pdf_path)
 
                 except Exception as attach_err:
-                    logger.error("Error attaching PDF: %s", attach_err, exc_info=True)
+                    logger.exception("Error attaching PDF")
 
             # Send email
             result = email.send(fail_silently=False)
