@@ -1326,13 +1326,10 @@ class EventsViewSet(viewsets.ModelViewSet):
                     {
                         "enrollment_id": 1,
                         "participant_id": 1,
-                        "student_id": 1,
+                        "participant_id": 1,
                         "participant_name": "Juan Pérez",
-                        "student_name": "Juan Pérez",
                         "participant_email": "juan@example.com",
-                        "student_email": "juan@example.com",
                         "participant_phone": "+123456789",
-                        "student_phone": "+123456789",
                         "attendance": True,
                         "certificate_id": "a1b2c3d4-...",
                         "certificate_status": "generated",
@@ -1372,13 +1369,10 @@ class EventsViewSet(viewsets.ModelViewSet):
                 {
                     "enrollment_id": enrollment.id,
                     "participant_id": enrollment.participant.id,
-                    "student_id": enrollment.participant.id,
+                    "participant_id": enrollment.participant.id,
                     "participant_name": enrollment.participant.full_name,
-                    "student_name": enrollment.participant.full_name,
                     "participant_email": enrollment.participant.email,
-                    "student_email": enrollment.participant.email,
                     "participant_phone": enrollment.participant.phone or "",
-                    "student_phone": enrollment.participant.phone or "",
                     "attendance": enrollment.attendance,
                     "certificate_id": certificate.id if certificate else None,
                     "certificate_status": certificate.status if certificate else None,
@@ -1395,7 +1389,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         summary="Inscribir participante al evento",
         description=(
             "Inscribe un participante existente a este evento. **Solo administradores y coordinadores.**\n\n"
-            "Se puede identificar al participante por `participant_id` (o `student_id`) o por `participant_email`. "
+            "Se puede identificar al participante por `participant_id` o por `participant_email`. "
             "Si se usa email y el participante no existe, se crea uno nuevo automáticamente.\n\n"
             "Retorna error si el participante ya está inscrito en el evento."
         ),
@@ -1441,8 +1435,8 @@ class EventsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        participant_id = request.data.get("participant_id") or request.data.get("student_id")
-        participant_email = request.data.get("participant_email") or request.data.get("student_email")
+        participant_id = request.data.get("participant_id")
+        participant_email = request.data.get("participant_email")
 
         if participant_id:
             try:
@@ -1565,7 +1559,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                 {"error": "No tienes permiso para generar certificados de este evento."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
+        participant_ids = request.data.get("participant_ids", [])
 
         enrollments = Enrollment.objects.filter(event=event, attendance=True).select_related("participant")
         if participant_ids:
@@ -1656,7 +1650,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         method = request.data.get("method", "email")
-        participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
+        participant_ids = request.data.get("participant_ids", [])
 
         certificates = Certificate.objects.filter(
             event=event, status__in=["generated", "sent", "pending"]
@@ -2778,10 +2772,10 @@ class TemplateViewSet(viewsets.ModelViewSet):
         self._sync_layout_config(instance)
 
     def _sync_layout_config(self, template):
-        """Keep layout_config.student_name in sync with the flat coord/font fields."""
+        """Keep layout_config.participant_name in sync with the flat coord/font fields."""
         layout = dict(template.layout_config or {})
-        student_name = dict(layout.get("student_name", {}))
-        student_name.update(
+        participant_name = dict(layout.get("participant_name", {}))
+        participant_name.update(
             {
                 "x": template.x_coord,
                 "y": template.y_coord,
@@ -2790,7 +2784,7 @@ class TemplateViewSet(viewsets.ModelViewSet):
                 "color": template.font_color,
             }
         )
-        layout["student_name"] = student_name
+        layout["participant_name"] = participant_name
         template.layout_config = layout
         template.save(update_fields=["layout_config"])
 

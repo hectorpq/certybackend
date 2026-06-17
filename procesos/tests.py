@@ -475,7 +475,7 @@ class BulkTemplateCreationTest(TestCase):
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
         expected_y = (1 - 40 / 100) * 595.28 / 72
         self.assertAlmostEqual(tpl.y_coord, expected_y, places=2)
-        self.assertEqual(tpl.layout_config["student_name"]["x"], tpl.x_coord)
+        self.assertEqual(tpl.layout_config["participant_name"]["x"], tpl.x_coord)
 
     def test_custom_y_coord_calculation(self):
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
@@ -485,21 +485,21 @@ class BulkTemplateCreationTest(TestCase):
         expected_y = (1 - 70 / 100) * 595.28 / 72
         self.assertAlmostEqual(tpl.x_coord, expected_x, places=2)
         self.assertAlmostEqual(tpl.y_coord, expected_y, places=2)
-        self.assertEqual(tpl.layout_config["student_name"]["font_size"], 24)
+        self.assertEqual(tpl.layout_config["participant_name"]["font_size"], 24)
 
     def test_custom_font_family_and_color(self):
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
         config = {"name_x": "50", "name_y": "50", "font_family": "Times-Roman", "font_color": "#FF0000"}
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
-        self.assertEqual(tpl.layout_config["student_name"]["font_family"], "Times-Roman")
-        self.assertEqual(tpl.layout_config["student_name"]["color"], "#FF0000")
+        self.assertEqual(tpl.layout_config["participant_name"]["font_family"], "Times-Roman")
+        self.assertEqual(tpl.layout_config["participant_name"]["color"], "#FF0000")
 
     def test_default_font_family_and_color(self):
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")
         config = {"name_x": "50", "name_y": "50"}
         tpl = ExcelProcessingService.create_bulk_template(self.event, self.user, img, config)
-        self.assertEqual(tpl.layout_config["student_name"]["font_family"], "Helvetica")
-        self.assertEqual(tpl.layout_config["student_name"]["color"], "#000000")
+        self.assertEqual(tpl.layout_config["participant_name"]["font_family"], "Helvetica")
+        self.assertEqual(tpl.layout_config["participant_name"]["color"], "#000000")
 
     def test_template_is_inactive(self):
         img = SimpleUploadedFile("tpl.png", b"data", content_type="image/png")

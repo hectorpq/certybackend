@@ -623,7 +623,7 @@ class ExcelServiceLogicTest(TestCase):
         # A4 horizontal es ~11.69 x 8.27 pulgadas.
         # 50% de X debe ser ~5.84
         self.assertAlmostEqual(tpl.x_coord, 5.84, places=1)
-        self.assertEqual(tpl.layout_config["student_name"]["font_size"], 30)
+        self.assertEqual(tpl.layout_config["participant_name"]["font_size"], 30)
 
     def test_excel_result_summary_truncation(self):
         from procesos.services import ExcelProcessingResult

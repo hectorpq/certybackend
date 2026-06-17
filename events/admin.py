@@ -107,28 +107,28 @@ class EventInstructorInline(admin.TabularInline):
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
     list_display = (
-        "student_name",
+        "participant_name",
         "event_name",
         "enrolled_at",
         "attendance_badge",
         "grade",
     )
     list_filter = ("attendance", "enrolled_at", "event")
-    search_fields = ("student__first_name", "student__last_name", "event__name")
+    search_fields = ("participant__first_name", "participant__last_name", "event__name")
     readonly_fields = ("id", "enrolled_at")
 
     fieldsets = (
-        ("Enrollment", {"fields": ("student", "event", "enrolled_at")}),
+        ("Enrollment", {"fields": ("participant", "event", "enrolled_at")}),
         ("Performance", {"fields": ("attendance", "grade", "notes")}),
     )
 
     ordering = ["-enrolled_at"]
     date_hierarchy = "enrolled_at"
 
-    def student_name(self, obj):
+    def participant_name(self, obj):
         return f"{obj.participant.first_name} {obj.participant.last_name}"
 
-    student_name.short_description = "Student"
+    participant_name.short_description = "Participante"
 
     def event_name(self, obj):
         return obj.event.name

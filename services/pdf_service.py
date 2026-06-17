@@ -48,15 +48,15 @@ class PDFService:
             layout = template.layout_config if template else {}
 
             # Text fields
-            student_name = f"{certificate.participant.first_name} {certificate.participant.last_name}".upper()
+            participant_name_txt = f"{certificate.participant.first_name} {certificate.participant.last_name}".upper()
             event_name = certificate.event.name.upper()
             event_date = certificate.event.event_date.strftime("%d de %B de %Y")
             expires_at = certificate.expires_at.strftime("%d/%m/%Y") if certificate.expires_at else "N/A"
 
             PDFService._draw_text(
                 c,
-                student_name,
-                layout.get("student_name", {}),
+                participant_name_txt,
+                layout.get("participant_name", {}),
                 PDFService.BASE_WIDTH / 2,
                 PDFService.BASE_HEIGHT - 3.2 * inch,
                 28,
