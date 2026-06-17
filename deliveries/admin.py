@@ -9,7 +9,7 @@ from .models import DeliveryLog
 @admin.register(DeliveryLog)
 class DeliveryLogAdmin(admin.ModelAdmin):
     list_display = (
-        "student_name",
+        "participant_name",
         "certificate_event",
         "icons_display",
         "status_badge",
@@ -18,8 +18,8 @@ class DeliveryLogAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "delivery_method", "sent_at")
     search_fields = (
-        "certificate__student__first_name",
-        "certificate__student__last_name",
+        "certificate__participant__first_name",
+        "certificate__participant__last_name",
         "recipient",
         "certificate__event__name",
     )
@@ -48,10 +48,10 @@ class DeliveryLogAdmin(admin.ModelAdmin):
     ordering = ["-sent_at"]
     date_hierarchy = "sent_at"
 
-    def student_name(self, obj):
+    def participant_name(self, obj):
         return f"{obj.certificate.participant.first_name} {obj.certificate.participant.last_name}"
 
-    student_name.short_description = "Student"
+    participant_name.short_description = "Participante"
 
     def certificate_event(self, obj):
         return obj.certificate.event.name

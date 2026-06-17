@@ -58,10 +58,10 @@ class TemplateAdmin(admin.ModelAdmin):
 class CertificateAdmin(admin.ModelAdmin):
     # Constants
     _CERT_INFO_LABEL = "Certificate Information"
-    _STUDENT_EVENT_LABEL = "Student & Event"
+    _PARTICIPANT_EVENT_LABEL = "Participante & Evento"
 
     list_display = (
-        "student_name",
+        "participant_name",
         "event_name",
         "verification_code_short",
         "status_badge",
@@ -70,9 +70,9 @@ class CertificateAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "issued_at", "template", "event__category")
     search_fields = (
-        "student__first_name",
-        "student__last_name",
-        "student__email",
+        "participant__first_name",
+        "participant__last_name",
+        "participant__email",
         "verification_code",
         "event__name",
     )
@@ -87,7 +87,7 @@ class CertificateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (_CERT_INFO_LABEL, {"fields": ("id", "verification_code_info", "status")}),
-        (_STUDENT_EVENT_LABEL, {"fields": ("student", "event")}),
+        (_PARTICIPANT_EVENT_LABEL, {"fields": ("participant", "event")}),
         ("Template", {"fields": ("template", "template_info")}),
         ("PDF & Generation", {"fields": ("pdf_url", "generated_by")}),
         (
@@ -102,7 +102,7 @@ class CertificateAdmin(admin.ModelAdmin):
     )
 
     def get_readonly_fields(self, request, obj=None):
-        """Student and event are editable only during creation"""
+        """Participant and event are editable only during creation"""
         base_readonly = (
             "id",
             "issued_at",
@@ -114,7 +114,7 @@ class CertificateAdmin(admin.ModelAdmin):
 
         # During edit (obj exists), student and event become readonly
         if obj:
-            return base_readonly + ("student", "event")
+            return base_readonly + ("participant", "event")
 
         # During creation, they are editable
         return base_readonly
@@ -128,7 +128,7 @@ class CertificateAdmin(admin.ModelAdmin):
                     self._CERT_INFO_LABEL,
                     {"fields": ("id", "verification_code_info", "status")},
                 ),
-                (self._STUDENT_EVENT_LABEL, {"fields": ("student", "event")}),
+                (self._PARTICIPANT_EVENT_LABEL, {"fields": ("participant", "event")}),
                 ("Template", {"fields": ("template", "template_info")}),
                 ("PDF & Generation", {"fields": ("pdf_url", "generated_by")}),
                 (
@@ -154,8 +154,8 @@ class CertificateAdmin(admin.ModelAdmin):
                 (
                     self._STUDENT_EVENT_LABEL,
                     {
-                        "fields": ("student", "event"),
-                        "description": "Select the student and event for this certificate.",
+                        "fields": ("participant", "event"),
+                        "description": "Select the participant and event for this certificate.",
                     },
                 ),
                 ("Template", {"fields": ("template",)}),
@@ -165,10 +165,10 @@ class CertificateAdmin(admin.ModelAdmin):
     ordering = ["-issued_at"]
     date_hierarchy = "issued_at"
 
-    def student_name(self, obj):
+    def participant_name(self, obj):
         return f"{obj.participant.first_name} {obj.participant.last_name}"
 
-    student_name.short_description = "Student"
+    participant_name.short_description = "Participante"
 
     def event_name(self, obj):
         return obj.event.name
@@ -215,7 +215,7 @@ class CertificateAdmin(admin.ModelAdmin):
 
     verification_code_info.short_description = "Verification Code"
 
-    def student_info(self, obj):
+    def participant_info(self, obj):
         return format_html(
             "<b>{}</b><br/>Document: {}<br/>Email: {}",
             obj.participant.full_name,
@@ -223,7 +223,7 @@ class CertificateAdmin(admin.ModelAdmin):
             obj.participant.email,
         )
 
-    student_info.short_description = "Student"
+    participant_info.short_description = "Participante"
 
     def event_info(self, obj):
         return format_html(

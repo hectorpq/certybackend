@@ -226,7 +226,7 @@ class PDFServiceTest(TestCase):
         mock_canvas.return_value = mock_c
         template = MagicMock()
         template.background_image = None
-        template.layout_config = {"student_name": {"x": 8, "y": 3, "font_size": 28}}
+        template.layout_config = {"participant_name": {"x": 8, "y": 3, "font_size": 28}}
         result = PDFService.generate_certificate_pdf(self.cert, template=template)
         self.assertTrue(result["success"])
         mock_c.drawCentredString.assert_called()

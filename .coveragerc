@@ -17,11 +17,9 @@ omit =
     certificados/views.py
     core/views.py
     deliveries/views.py
-    emails/views.py
     events/views.py
     instructors/views.py
     procesos/views.py
-    students/views.py
     users/views.py
 
 [report]

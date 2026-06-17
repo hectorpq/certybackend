@@ -162,7 +162,7 @@ class ExcelProcessingService:
         y_inch = (1 - name_y / 100) * 595.28 / 72
 
         layout_config = {
-            "student_name": {
+            "participant_name": {
                 "x": x_inch,
                 "y": y_inch,
                 "font_size": int(config_data.get("font_size", 28)),

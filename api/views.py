@@ -1265,14 +1265,22 @@ class EventsViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.select_related("category", "created_by", "instructor", "template").order_by("-event_date")
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["status", "category"]
+    filterset_fields = ["status", "category", "is_deleted"]
     search_fields = ["name", "description"]
     ordering_fields = ["event_date", "created_at", "name"]
     ordering = ["-event_date"]
 
     def get_queryset(self):
-        """Operational users (admin/coordinador) see all events; participante sees only enrolled."""
+        """Admin sees all (including deleted if show_deleted=true);
+        coordinador sees all non-deleted; participante sees only enrolled."""
         from events.models import Enrollment
+
+        if is_admin(self.request):
+            if self.request.query_params.get("show_deleted") == "true":
+                return Event.all_objects.select_related("category", "created_by", "instructor", "template").order_by(
+                    "-event_date"
+                )
+            return super().get_queryset()
 
         queryset = super().get_queryset()
 
@@ -1318,13 +1326,10 @@ class EventsViewSet(viewsets.ModelViewSet):
                     {
                         "enrollment_id": 1,
                         "participant_id": 1,
-                        "student_id": 1,
+                        "participant_id": 1,
                         "participant_name": "Juan Pérez",
-                        "student_name": "Juan Pérez",
                         "participant_email": "juan@example.com",
-                        "student_email": "juan@example.com",
                         "participant_phone": "+123456789",
-                        "student_phone": "+123456789",
                         "attendance": True,
                         "certificate_id": "a1b2c3d4-...",
                         "certificate_status": "generated",
@@ -1364,13 +1369,9 @@ class EventsViewSet(viewsets.ModelViewSet):
                 {
                     "enrollment_id": enrollment.id,
                     "participant_id": enrollment.participant.id,
-                    "student_id": enrollment.participant.id,
                     "participant_name": enrollment.participant.full_name,
-                    "student_name": enrollment.participant.full_name,
                     "participant_email": enrollment.participant.email,
-                    "student_email": enrollment.participant.email,
                     "participant_phone": enrollment.participant.phone or "",
-                    "student_phone": enrollment.participant.phone or "",
                     "attendance": enrollment.attendance,
                     "certificate_id": certificate.id if certificate else None,
                     "certificate_status": certificate.status if certificate else None,
@@ -1387,7 +1388,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         summary="Inscribir participante al evento",
         description=(
             "Inscribe un participante existente a este evento. **Solo administradores y coordinadores.**\n\n"
-            "Se puede identificar al participante por `participant_id` (o `student_id`) o por `participant_email`. "
+            "Se puede identificar al participante por `participant_id` o por `participant_email`. "
             "Si se usa email y el participante no existe, se crea uno nuevo automáticamente.\n\n"
             "Retorna error si el participante ya está inscrito en el evento."
         ),
@@ -1433,8 +1434,8 @@ class EventsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        participant_id = request.data.get("participant_id") or request.data.get("student_id")
-        participant_email = request.data.get("participant_email") or request.data.get("student_email")
+        participant_id = request.data.get("participant_id")
+        participant_email = request.data.get("participant_email")
 
         if participant_id:
             try:
@@ -1557,7 +1558,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                 {"error": "No tienes permiso para generar certificados de este evento."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
+        participant_ids = request.data.get("participant_ids", [])
 
         enrollments = Enrollment.objects.filter(event=event, attendance=True).select_related("participant")
         if participant_ids:
@@ -1648,7 +1649,7 @@ class EventsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         method = request.data.get("method", "email")
-        participant_ids = request.data.get("participant_ids") or request.data.get("student_ids", [])
+        participant_ids = request.data.get("participant_ids", [])
 
         certificates = Certificate.objects.filter(
             event=event, status__in=["generated", "sent", "pending"]
@@ -2304,22 +2305,25 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     queryset = Participant.objects.all().order_by("first_name", "last_name")
     serializer_class = ParticipantSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["is_active"]
+    filterset_fields = ["is_active", "is_deleted"]
     search_fields = ["first_name", "last_name", "email", "document_id"]
     ordering_fields = ["first_name", "last_name", "created_at"]
     ordering = ["first_name", "last_name"]
 
     def get_queryset(self):
-        """Admin sees all; coordinator/participante see only their own or enrolled in their events."""
-        queryset = super().get_queryset()
-
+        """Admin sees all (including deleted if show_deleted=true); coordinator sees only their own."""
         if is_admin(self.request):
-            return queryset
+            if self.request.query_params.get("show_deleted") == "true":
+                return Participant.all_objects.all().order_by("first_name", "last_name")
+            return super().get_queryset()
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
-        return queryset.filter(
-            models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events)
-        ).distinct()
+        return (
+            super()
+            .get_queryset()
+            .filter(models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events))
+            .distinct()
+        )
 
     def get_permissions(self):
         """Only admins can modify"""
@@ -2767,10 +2771,10 @@ class TemplateViewSet(viewsets.ModelViewSet):
         self._sync_layout_config(instance)
 
     def _sync_layout_config(self, template):
-        """Keep layout_config.student_name in sync with the flat coord/font fields."""
+        """Keep layout_config.participant_name in sync with the flat coord/font fields."""
         layout = dict(template.layout_config or {})
-        student_name = dict(layout.get("student_name", {}))
-        student_name.update(
+        participant_name = dict(layout.get("participant_name", {}))
+        participant_name.update(
             {
                 "x": template.x_coord,
                 "y": template.y_coord,
@@ -2779,7 +2783,7 @@ class TemplateViewSet(viewsets.ModelViewSet):
                 "color": template.font_color,
             }
         )
-        layout["student_name"] = student_name
+        layout["participant_name"] = participant_name
         template.layout_config = layout
         template.save(update_fields=["layout_config"])
 

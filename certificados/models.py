@@ -42,7 +42,7 @@ class Template(SoftDeleteMixin):
         default=dict,
         help_text="""Configuración de posiciones y estilos. Ejemplo:
         {
-            "student_name": {"x": 100, "y": 150, "font_size": 24, "font_family": "Arial", "color": "#000000"},
+            "participant_name": {"x": 100, "y": 150, "font_size": 24, "font_family": "Arial", "color": "#000000"},
             "event_name": {"x": 100, "y": 200, "font_size": 20, "font_family": "Arial", "color": "#333333"},
             "event_date": {"x": 100, "y": 250, "font_size": 16, "font_family": "Arial", "color": "#666666"},
             "verification_code": {"x": 100, "y": 300, "font_size": 14, "font_family": "Arial", "color": "#999999"}
@@ -54,8 +54,8 @@ class Template(SoftDeleteMixin):
     font_color = models.CharField(max_length=20, default="#000000")
     font_family = models.CharField(max_length=50, default="Helvetica")
     font_size = models.IntegerField(default=24)
-    x_coord = models.FloatField(default=100.0)
-    y_coord = models.FloatField(default=150.0)
+    x_coord = models.FloatField(default=1.39)
+    y_coord = models.FloatField(default=2.08)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

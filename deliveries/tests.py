@@ -67,7 +67,7 @@ class DeliveryLogTest(TestCase):
     def test_status_icon_pending(self):
         self.assertEqual(self._make_log(status="pending").get_status_icon(), "⏳")
 
-    def test_str_includes_student_name_method_status(self):
+    def test_str_includes_participant_name_and_status(self):
         s = str(self._make_log(method="email", status="success"))
         self.assertIn("Luis", s)
         self.assertIn("email", s)

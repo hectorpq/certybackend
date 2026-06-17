@@ -59,8 +59,6 @@ INSTALLED_APPS = [
     "api",
     "deliveries",
     "procesos",
-    "emails",
-    "students",
 ]
 AUTH_USER_MODEL = "users.User"
 
