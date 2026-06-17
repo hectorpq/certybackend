@@ -1369,7 +1369,6 @@ class EventsViewSet(viewsets.ModelViewSet):
                 {
                     "enrollment_id": enrollment.id,
                     "participant_id": enrollment.participant.id,
-                    "participant_id": enrollment.participant.id,
                     "participant_name": enrollment.participant.full_name,
                     "participant_email": enrollment.participant.email,
                     "participant_phone": enrollment.participant.phone or "",
