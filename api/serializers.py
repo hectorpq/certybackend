@@ -35,6 +35,7 @@ class EventSerializer(serializers.ModelSerializer):
     template_name = serializers.SerializerMethodField()
     instructor_name = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
+    deleted_by_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -63,10 +64,22 @@ class EventSerializer(serializers.ModelSerializer):
             "name_x",
             "name_y",
             "template_image",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "created_by"]
+        read_only_fields = [
+            "created_at",
+            "updated_at",
+            "created_by",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
+        ]
 
     def get_status_display(self, obj):
         return obj.get_status_display()
@@ -81,6 +94,11 @@ class EventSerializer(serializers.ModelSerializer):
             return obj.instructor.full_name
         return None
 
+    def get_deleted_by_detail(self, obj):
+        if obj.deleted_by:
+            return {"id": obj.deleted_by.id, "full_name": obj.deleted_by.full_name, "email": obj.deleted_by.email}
+        return None
+
 
 class EventSimpleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,6 +108,7 @@ class EventSimpleSerializer(serializers.ModelSerializer):
 
 class ParticipantSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
+    deleted_by_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Participant
@@ -102,10 +121,20 @@ class ParticipantSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "is_active",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
+            "deleted_by_detail",
             "created_by",
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["is_deleted", "deleted_at", "deleted_by", "deleted_by_detail"]
+
+    def get_deleted_by_detail(self, obj):
+        if obj.deleted_by:
+            return {"id": obj.deleted_by.id, "full_name": obj.deleted_by.full_name, "email": obj.deleted_by.email}
+        return None
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -148,7 +177,7 @@ class InstructorSerializer(serializers.ModelSerializer):
 
 
 class CertificateListSerializer(serializers.ModelSerializer):
-    student = serializers.SerializerMethodField()
+    participant_info = serializers.SerializerMethodField()
     event = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
 
@@ -156,7 +185,7 @@ class CertificateListSerializer(serializers.ModelSerializer):
         model = Certificate
         fields = [
             "id",
-            "student",
+            "participant_info",
             "event",
             "template",
             "status",
@@ -169,7 +198,7 @@ class CertificateListSerializer(serializers.ModelSerializer):
             "generated_by",
         ]
 
-    def get_student(self, obj):
+    def get_participant_info(self, obj):
         return {
             "id": obj.participant.id,
             "full_name": obj.participant.full_name,
@@ -190,7 +219,7 @@ class CertificateListSerializer(serializers.ModelSerializer):
 
 
 class CertificateDetailSerializer(serializers.ModelSerializer):
-    student = serializers.SerializerMethodField()
+    participant_info = serializers.SerializerMethodField()
     event = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
     delivery_history = serializers.SerializerMethodField()
@@ -199,7 +228,7 @@ class CertificateDetailSerializer(serializers.ModelSerializer):
         model = Certificate
         fields = [
             "id",
-            "student",
+            "participant_info",
             "event",
             "template",
             "status",
@@ -213,7 +242,7 @@ class CertificateDetailSerializer(serializers.ModelSerializer):
             "delivery_history",
         ]
 
-    def get_student(self, obj):
+    def get_participant_info(self, obj):
         return {
             "id": obj.participant.id,
             "full_name": obj.participant.full_name,
@@ -340,7 +369,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 class EventInvitationSerializer(serializers.ModelSerializer):
     status_display = serializers.SerializerMethodField()
-    student_name = serializers.SerializerMethodField()
+    participant_name = serializers.SerializerMethodField()
     event_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -350,7 +379,7 @@ class EventInvitationSerializer(serializers.ModelSerializer):
             "event",
             "event_name",
             "participant",
-            "student_name",
+            "participant_name",
             "email",
             "token",
             "status",
@@ -365,7 +394,7 @@ class EventInvitationSerializer(serializers.ModelSerializer):
     def get_status_display(self, obj):
         return obj.get_status_display()
 
-    def get_student_name(self, obj):
+    def get_participant_name(self, obj):
         return obj.participant.full_name if obj.participant else None
 
     def get_event_name(self, obj):
@@ -378,9 +407,8 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
     event_location = serializers.CharField(source="event.location", read_only=True)
     event_description = serializers.CharField(source="event.description", read_only=True)
     status_display = serializers.SerializerMethodField()
-    student_exists = serializers.SerializerMethodField()
     participant_exists = serializers.SerializerMethodField()
-    student = serializers.SerializerMethodField()
+    participant = serializers.SerializerMethodField()
 
     class Meta:
         model = EventInvitation
@@ -395,30 +423,19 @@ class InvitationDetailSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "expires_at",
-            "student_exists",
             "participant_exists",
-            "student",
             "participant",
         ]
 
     def get_status_display(self, obj):
         return obj.get_status_display()
 
-    def _student_exists(self, obj):
+    def get_participant_exists(self, obj):
         if obj.participant:
             return True
         return Participant.objects.filter(email__iexact=obj.email).exists()
 
-    def _participant_exists(self, obj):
-        return self._student_exists(obj)
-
-    def get_student_exists(self, obj):
-        return self._student_exists(obj)
-
-    def get_participant_exists(self, obj):
-        return self._participant_exists(obj)
-
-    def get_student(self, obj):
+    def get_participant(self, obj):
         return obj.participant_id
 
 
@@ -491,11 +508,9 @@ class EnrollmentCreateSerializer(serializers.Serializer):
 
 class EventEnrollSerializer(serializers.Serializer):
     participant_id = serializers.IntegerField(required=False, help_text="ID del participante a inscribir.")
-    student_id = serializers.IntegerField(required=False, help_text="Alias de participant_id (backward compat).")
     participant_email = serializers.EmailField(
         required=False, help_text="Email del participante. Si no existe, se crea automáticamente."
     )
-    student_email = serializers.EmailField(required=False, help_text="Alias de participant_email (backward compat).")
 
 
 class EventGenerateCertificatesSerializer(serializers.Serializer):
@@ -503,9 +518,6 @@ class EventGenerateCertificatesSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
         help_text="Lista opcional de IDs de participantes. Si se omite, genera para todos los que asistieron.",
-    )
-    student_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False, help_text="Alias de participant_ids (backward compat)."
     )
 
 
@@ -520,9 +532,6 @@ class EventSendCertificatesSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
         help_text="Lista opcional de IDs de participantes. Si se omite, envía a todos los que tienen certificado.",
-    )
-    student_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False, help_text="Alias de participant_ids (backward compat)."
     )
 
 

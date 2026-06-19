@@ -63,6 +63,23 @@ services:
     networks:
       - certy_network
 
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+    networks:
+      - certy_network
+
 volumes:
   db_data:
   jenkins_data: # Definido para que no pierdas tus configuraciones al reiniciar

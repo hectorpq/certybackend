@@ -22,7 +22,7 @@ class Command(BaseCommand):
         self.stdout.write(f"✓ Admin: {admin.email}\n")
 
         # Obtener certificados sin PDF válido o con URL vieja
-        bad_certs = Certificate.objects.select_related("student", "event").filter(
+        bad_certs = Certificate.objects.select_related("participant", "event").filter(
             Q(pdf_url="")
             | Q(pdf_url__startswith="https://example.com")
             | Q(pdf_url__startswith="https://certificates.example.com")

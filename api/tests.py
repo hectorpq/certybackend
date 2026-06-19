@@ -287,19 +287,19 @@ class EventsViewSetTest(TestCase):
     def test_enroll_student_by_id(self):
         e = make_event(self.admin)
         s = make_participant(self.admin)
-        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_id": s.id})
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_id": s.id})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_enroll_student_by_email(self):
         e = make_event(self.admin)
-        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_email": "new@enroll.com"})
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_email": "new@enroll.com"})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_enroll_duplicate_returns_400(self):
         e = make_event(self.admin)
         s = make_participant(self.admin)
         Enrollment.objects.create(participant=s, event=e, created_by=self.admin)
-        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_id": s.id})
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_id": s.id})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_enroll_missing_params_returns_400(self):
@@ -309,7 +309,7 @@ class EventsViewSetTest(TestCase):
 
     def test_enroll_nonexistent_student_returns_404(self):
         e = make_event(self.admin)
-        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_id": 9999})
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_id": 9999})
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_stats(self):
@@ -321,7 +321,7 @@ class EventsViewSetTest(TestCase):
         regular = make_user("regular@test.com")
         self.client.force_authenticate(user=regular)
         e = make_event(self.admin)
-        res = self.client.post(f"/api/events/{e.id}/enroll/", {"student_email": "x@x.com"})
+        res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_email": "x@x.com"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -376,7 +376,7 @@ class CertificateViewSetTest(TestCase):
         res = self.client.post(
             f"/api/certificates/{self.cert.id}/generate/",
             {
-                "student_id": self.participant.id,
+                "participant_id": self.participant.id,
                 "event_id": self.event.id,
             },
             format="json",
@@ -1018,7 +1018,7 @@ class CertificateGenerateTest(TestCase):
         )
         res = self.client.post(
             f"/api/certificates/{cert.id}/generate/",
-            {"student_id": self.participant.id, "event_id": self.event.id},
+            {"participant_id": self.participant.id, "event_id": self.event.id},
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["status"], "success")
@@ -1339,9 +1339,9 @@ class EventsAdvancedTest(TestCase):
         res = self.client.post(f"/api/events/{self.event.id}/invitations/send/", {})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_with_email_list(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         import json
 
         res = self.client.post(
@@ -1351,9 +1351,9 @@ class EventsAdvancedTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("created", res.data)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_duplicate_skipped(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(event=self.event, email="dup@test.com", created_by=self.admin)
@@ -1370,9 +1370,9 @@ class EventsAdvancedTest(TestCase):
         res = self.client.post(f"/api/events/{self.event.id}/invitations/send-all/", {})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_sends_pending(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -1879,7 +1879,7 @@ class CertificateViewSetAdvancedTest(TestCase):
         res = self.client.post(
             f"/api/certificates/{cert.id}/generate/",
             {
-                "student_id": self.participant.id,
+                "participant_id": self.participant.id,
                 "event_id": self.event.id,
                 "template_id": template2.id,
             },
@@ -2107,7 +2107,7 @@ class CertificateViewSetCoverageTest(TestCase):
         res = self.client.post(
             "/api/certificates/",
             {
-                "student": self.participant.id,
+                "participant": self.participant.id,
                 "event": self.event.id,
                 "template": self.template.id,
             },
@@ -2121,7 +2121,7 @@ class CertificateViewSetCoverageTest(TestCase):
         res = self.client.post(
             "/api/certificates/",
             {
-                "student": self.participant.id,
+                "participant": self.participant.id,
                 "event": self.event.id,
             },
             format="json",
@@ -2141,7 +2141,7 @@ class CertificateViewSetCoverageTest(TestCase):
         res = self.client.post(
             f"/api/certificates/{cert.id}/generate/",
             {
-                "student_id": self.participant.id,
+                "participant_id": self.participant.id,
                 "event_id": self.event.id,
             },
             format="json",
@@ -2163,7 +2163,7 @@ class CertificateViewSetCoverageTest(TestCase):
         res = self.client.post(
             f"/api/certificates/{cert.id}/generate/",
             {
-                "student_id": self.participant.id,
+                "participant_id": self.participant.id,
                 "event_id": self.event.id,
                 "template_id": template2.id,
             },
@@ -2282,7 +2282,7 @@ class EventsEmailParsingTest(TestCase):
 
         csv_content = b"email\nfileguest@test.com\n"
         f = SimpleUploadedFile("emails.csv", csv_content, content_type="text/csv")
-        with patch("django.core.mail.send_mail", return_value=1):
+        with patch("services.email_service.EmailService.send_email", return_value={"success": True, "message": "sent"}):
             res = self.client.post(
                 f"/api/events/{self.event.id}/invitations/send/",
                 {"file": f},
@@ -2321,9 +2321,9 @@ class EventsEmailParsingTest(TestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_email_failure_appended_to_errors(self, mock_mail):
-        mock_mail.side_effect = Exception("SMTP error")
+        mock_mail.return_value = {"success": False, "message": "Email error: SMTP error"}
         import json
 
         res = self.client.post(
@@ -2333,9 +2333,9 @@ class EventsEmailParsingTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(len(res.data["errors"]) > 0)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_success_marks_sent(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -2348,9 +2348,9 @@ class EventsEmailParsingTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(res.data["sent"], 1)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_email_failure_appended_to_errors(self, mock_mail):
-        mock_mail.side_effect = Exception("SMTP fail")
+        mock_mail.return_value = {"success": False, "message": "Email error: SMTP fail"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -2878,9 +2878,9 @@ class SendAllInvitationsTokenMissingTest(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Tok Event")
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_assigns_token_when_missing(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         inv = EventInvitation.objects.create(
@@ -3159,7 +3159,7 @@ class CoordinadorOperationalAccessTest(TestCase):
         self.template = Template.objects.create(name="T", created_by=self.coordinator)
 
     def test_coordinator_can_enroll_participant(self):
-        res = self.client.post(f"/api/events/{self.event.id}/enroll/", {"student_id": self.participant.id})
+        res = self.client.post(f"/api/events/{self.event.id}/enroll/", {"participant_id": self.participant.id})
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_coordinator_can_generate_certificates(self):
@@ -4907,7 +4907,7 @@ class EventInvitationSerializerEdgeCasesTest(TestCase):
         self.event = make_event(self.user)
         self.participant = make_participant(self.user, doc="INV01", email="inv01@test.com")
 
-    def test_get_student_name_none_when_no_participant(self):
+    def test_get_participant_name_none_when_no_participant(self):
         from api.serializers import EventInvitationSerializer
         from events.models import EventInvitation
 
@@ -4917,9 +4917,9 @@ class EventInvitationSerializerEdgeCasesTest(TestCase):
             created_by=self.user,
         )
         s = EventInvitationSerializer(invitation)
-        self.assertIsNone(s.data["student_name"])
+        self.assertIsNone(s.data["participant_name"])
 
-    def test_get_student_name_returns_full_name(self):
+    def test_get_participant_name_returns_full_name(self):
         from api.serializers import EventInvitationSerializer
         from events.models import EventInvitation
 
@@ -4930,7 +4930,7 @@ class EventInvitationSerializerEdgeCasesTest(TestCase):
             created_by=self.user,
         )
         s = EventInvitationSerializer(invitation)
-        self.assertEqual(s.data["student_name"], self.participant.full_name)
+        self.assertEqual(s.data["participant_name"], self.participant.full_name)
 
     def test_get_event_name_returns_name(self):
         from api.serializers import EventInvitationSerializer
@@ -5569,7 +5569,7 @@ class CoverageEdgeCasesTest(TestCase):
 
     def test_enroll_event_not_found(self):
         """Cubre Event.DoesNotExist en EventsViewSet.enroll"""
-        res = self.client.post("/api/events/99999/enroll/", {"student_email": "x@x.com"})
+        res = self.client.post("/api/events/99999/enroll/", {"participant_email": "x@x.com"})
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_generate_certificates_event_not_found(self):
