@@ -7,8 +7,7 @@ import logging
 
 from django.conf import settings
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (Attachment, Disposition, FileContent,
-                                   FileName, FileType, From, Mail, To)
+from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, From, Mail, To
 
 logger = logging.getLogger(__name__)
 
