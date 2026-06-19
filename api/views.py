@@ -1850,7 +1850,7 @@ class EventsViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _send_invitation_email(invitation, event, frontend_url, expires_days, settings):
         """Send an invitation email. Returns error string, or None on success."""
-        from django.core.mail import send_mail
+        from services.email_service import EmailService
 
         try:
             invitation_link = f"{frontend_url}/invitation/{invitation.token}"
@@ -1871,14 +1871,10 @@ Esta invitación expira en {expires_days} días.
 Saludos,
 Equipo CertyPro
 """
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [invitation.email],
-                fail_silently=False,
-            )
-            return None
+            result = EmailService.send_email(subject, message, invitation.email)
+            if result["success"]:
+                return None
+            return f"Error enviando a {invitation.email}: {result['message']}"
         except Exception as e:
             return f"Error enviando a {invitation.email}: {str(e)}"
 

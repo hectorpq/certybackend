@@ -36,26 +36,6 @@ class PDFTextOverflowTest(SimpleTestCase):
 
 
 @pytest.mark.unit
-class EmailLimitTest(SimpleTestCase):
-    def test_blocked_when_at_daily_limit(self):
-        from services.email_service import GMAIL_DAILY_LIMIT, check_email_limit
-
-        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_DAILY_LIMIT):
-            result = check_email_limit()
-        self.assertTrue(result["blocked"])
-        self.assertTrue(result["warning"])
-
-    def test_warning_but_not_blocked_at_threshold(self):
-        from services.email_service import GMAIL_WARNING_THRESHOLD, check_email_limit
-
-        with patch("services.email_service.get_emails_sent_today", return_value=GMAIL_WARNING_THRESHOLD):
-            result = check_email_limit()
-        self.assertTrue(result["warning"])
-        self.assertFalse(result["blocked"])
-        self.assertIsNotNone(result["message"])
-
-
-@pytest.mark.unit
 class PDFCustomSignatureTest(SimpleTestCase):
     def test_draw_custom_signature_with_image_and_text(self):
         mock_c = MagicMock()

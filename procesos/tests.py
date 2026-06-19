@@ -285,7 +285,8 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             ]
         )
         svc = ExcelProcessingService(buf, created_by_user=self.user)
-        svc.process()
+        with patch("services.email_service.EmailService.send_certificate", return_value={"success": True, "message": "sent"}):
+            svc.process()
         participant = Participant.objects.get(document_id="UPDATE01")
         self.assertEqual(participant.email, "new@test.com")
 
