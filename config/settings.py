@@ -161,9 +161,9 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ========== EMAIL CONFIGURATION (Resend API) ==========
-RESEND_API_KEY = config("RESEND_API_KEY", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="onboarding@resend.dev")
+# ========== EMAIL CONFIGURATION (SendGrid) ==========
+SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@certypro.app")
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
 
 # ========== META WHATSAPP CLOUD API ==========
