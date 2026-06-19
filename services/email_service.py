@@ -1,62 +1,53 @@
 """
-Email Service - Send certificates via email using Django SMTP
+Email Service - Send certificates via email using Resend API
 """
 
 import logging
 
+import resend
 from django.conf import settings
-from django.core.mail import EmailMessage
-from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-GMAIL_DAILY_LIMIT = 500
-GMAIL_WARNING_THRESHOLD = 400
-
-
-def get_emails_sent_today():
-    """Count successful emails sent today via DeliveryLog."""
-    from deliveries.models import DeliveryLog
-
-    today = timezone.now().date()
-    return DeliveryLog.objects.filter(delivery_method="email", status="success", sent_at__date=today).count()
-
-
-def check_email_limit():
-    """
-    Returns a dict with the current email usage status.
-    {'count': int, 'limit': int, 'warning': bool, 'blocked': bool, 'message': str}
-    """
-    count = get_emails_sent_today()
-    if count >= GMAIL_DAILY_LIMIT:
-        return {
-            "count": count,
-            "limit": GMAIL_DAILY_LIMIT,
-            "warning": True,
-            "blocked": True,
-            "message": f"Límite diario de Gmail alcanzado ({count}/{GMAIL_DAILY_LIMIT}). "
-            "No se pueden enviar más emails hoy. Se reinicia mañana.",
-        }
-    if count >= GMAIL_WARNING_THRESHOLD:
-        remaining = GMAIL_DAILY_LIMIT - count
-        return {
-            "count": count,
-            "limit": GMAIL_DAILY_LIMIT,
-            "warning": True,
-            "blocked": False,
-            "message": f"Atención: solo quedan {remaining} emails disponibles hoy ({count}/{GMAIL_DAILY_LIMIT}).",
-        }
-    return {
-        "count": count,
-        "limit": GMAIL_DAILY_LIMIT,
-        "warning": False,
-        "blocked": False,
-        "message": None,
-    }
-
 
 class EmailService:
-    """Send certificate emails using SMTP/Gmail"""
+    """Send certificate emails using Resend API"""
+
+    @staticmethod
+    def send_email(subject, text, recipient_email):
+        """
+        Send a generic email via Resend API.
+
+        Args:
+            subject: Email subject
+            text: Plain text body
+            recipient_email: Email address to send to
+
+        Returns:
+            dict: {'success': bool, 'message': str}
+        """
+        try:
+            if not recipient_email:
+                return {"success": False, "message": "No email address provided"}
+
+            resend.api_key = settings.RESEND_API_KEY
+
+            params = {
+                "from": settings.DEFAULT_FROM_EMAIL,
+                "to": [recipient_email],
+                "subject": subject,
+                "text": text,
+            }
+
+            resend.Emails.send(params)
+
+            logger.info("Email sent to %s: %s", recipient_email, subject)
+            return {"success": True, "message": f"Email sent to {recipient_email}"}
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error("Error sending email: %s", error_msg)
+            return {"success": False, "message": f"Email error: {error_msg}"}
 
     @staticmethod
     def send_certificate(certificate, recipient_email):
@@ -74,18 +65,11 @@ class EmailService:
             if not recipient_email:
                 return {"success": False, "message": "No email address provided"}
 
-            limit_status = check_email_limit()
-            if limit_status["blocked"]:
-                return {
-                    "success": False,
-                    "message": limit_status["message"],
-                    "email_limit_reached": True,
-                }
+            resend.api_key = settings.RESEND_API_KEY
 
-            # Prepare email
             subject = f"🎓 Tu Certificado - {certificate.event.name}"
 
-            message = f"""
+            text = f"""
 Hola {certificate.participant.first_name},
 
 Felicidades! Tu certificado del evento "{certificate.event.name}" está listo.
@@ -104,30 +88,27 @@ Saludos,
 Sistema de Certificados
             """
 
-            email = EmailMessage(
-                subject=subject,
-                body=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[recipient_email],
-            )
+            params = {
+                "from": settings.DEFAULT_FROM_EMAIL,
+                "to": [recipient_email],
+                "subject": subject,
+                "text": text,
+            }
 
-            # Attach PDF if available
             if certificate.pdf_url:
                 try:
-                    # PDF path: /certificates/pdfs/filename.pdf
-                    # Extract filename from pdf_url
                     filename = certificate.pdf_url.split("/")[-1]
                     pdf_path = settings.CERTIFICATES_PDF_PATH / filename
 
                     logger.info("Attempting to attach PDF: %s", pdf_path)
 
                     if pdf_path.exists():
-                        with open(str(pdf_path), "rb") as pdf_file:
-                            email.attach(
-                                filename=filename,
-                                content=pdf_file.read(),
-                                mimetype="application/pdf",
-                            )
+                        params["attachments"] = [
+                            {
+                                "filename": filename,
+                                "path": str(pdf_path),
+                            }
+                        ]
                         logger.info("PDF attached successfully: %s", filename)
                     else:
                         logger.warning("PDF file not found at: %s", pdf_path)
@@ -135,22 +116,18 @@ Sistema de Certificados
                 except Exception as attach_err:
                     logger.exception("Error attaching PDF")
 
-            # Send email
-            result = email.send(fail_silently=False)
+            response = resend.Emails.send(params)
 
-            if result == 1:
-                logger.info(
-                    "Email sent to %s for certificate %s",
-                    recipient_email,
-                    certificate.id,
-                )
-                return {
-                    "success": True,
-                    "message": f"Email sent to {recipient_email}",
-                    "timestamp": timezone.now(),
-                }
-            else:
-                return {"success": False, "message": "Email not sent (unknown error)"}
+            logger.info(
+                "Email sent to %s for certificate %s (id=%s)",
+                recipient_email,
+                certificate.id,
+                response.get("id"),
+            )
+            return {
+                "success": True,
+                "message": f"Email sent to {recipient_email}",
+            }
 
         except Exception as e:
             error_msg = str(e)
@@ -169,26 +146,18 @@ Sistema de Certificados
         Returns:
             dict: {'sent': int, 'failed': int, 'errors': list}
         """
-        limit_status = check_email_limit()
         results = {
             "sent": 0,
             "failed": 0,
             "errors": [],
-            "email_limit_warning": limit_status["warning"],
-            "email_limit_message": limit_status["message"],
         }
 
-        if limit_status["blocked"]:
-            return results
-
         for cert in certificates:
-            # Determine recipient
             if recipient_map and cert.id in recipient_map:
                 recipient = recipient_map[cert.id]
             else:
                 recipient = cert.participant.email
 
-            # Send
             result = EmailService.send_certificate(cert, recipient)
 
             if result["success"]:

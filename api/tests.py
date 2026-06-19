@@ -1339,9 +1339,9 @@ class EventsAdvancedTest(TestCase):
         res = self.client.post(f"/api/events/{self.event.id}/invitations/send/", {})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_with_email_list(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         import json
 
         res = self.client.post(
@@ -1351,9 +1351,9 @@ class EventsAdvancedTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("created", res.data)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_duplicate_skipped(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(event=self.event, email="dup@test.com", created_by=self.admin)
@@ -1370,9 +1370,9 @@ class EventsAdvancedTest(TestCase):
         res = self.client.post(f"/api/events/{self.event.id}/invitations/send-all/", {})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_sends_pending(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -2282,7 +2282,7 @@ class EventsEmailParsingTest(TestCase):
 
         csv_content = b"email\nfileguest@test.com\n"
         f = SimpleUploadedFile("emails.csv", csv_content, content_type="text/csv")
-        with patch("django.core.mail.send_mail", return_value=1):
+        with patch("services.email_service.EmailService.send_email", return_value={"success": True, "message": "sent"}):
             res = self.client.post(
                 f"/api/events/{self.event.id}/invitations/send/",
                 {"file": f},
@@ -2321,9 +2321,9 @@ class EventsEmailParsingTest(TestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_invitations_email_failure_appended_to_errors(self, mock_mail):
-        mock_mail.side_effect = Exception("SMTP error")
+        mock_mail.return_value = {"success": False, "message": "Email error: SMTP error"}
         import json
 
         res = self.client.post(
@@ -2333,9 +2333,9 @@ class EventsEmailParsingTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(len(res.data["errors"]) > 0)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_success_marks_sent(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -2348,9 +2348,9 @@ class EventsEmailParsingTest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(res.data["sent"], 1)
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_email_failure_appended_to_errors(self, mock_mail):
-        mock_mail.side_effect = Exception("SMTP fail")
+        mock_mail.return_value = {"success": False, "message": "Email error: SMTP fail"}
         from events.models import EventInvitation
 
         EventInvitation.objects.create(
@@ -2878,9 +2878,9 @@ class SendAllInvitationsTokenMissingTest(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.event = make_event(self.admin, name="Tok Event")
 
-    @patch("django.core.mail.send_mail")
+    @patch("services.email_service.EmailService.send_email")
     def test_send_all_invitations_assigns_token_when_missing(self, mock_mail):
-        mock_mail.return_value = 1
+        mock_mail.return_value = {"success": True, "message": "sent"}
         from events.models import EventInvitation
 
         inv = EventInvitation.objects.create(

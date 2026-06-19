@@ -1,6 +1,6 @@
 import io
 from datetime import date
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.test import TestCase
@@ -67,87 +67,64 @@ class EmailServiceTest(TestCase):
         self.assertFalse(result["success"])
         self.assertIn("No email", result["message"])
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_success(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_certificate_success(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_smtp_returns_zero(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 0
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_certificate_exception_returns_failure(self, mock_send):
+        mock_send.side_effect = Exception("Resend API error")
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertFalse(result["success"])
+        self.assertIn("Resend API error", result["message"])
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_exception_returns_failure(self, mock_email):
-        mock_email.side_effect = Exception("SMTP error")
-        result = EmailService.send_certificate(self.cert, "test@test.com")
-        self.assertFalse(result["success"])
-        self.assertIn("SMTP error", result["message"])
-
-    @patch("services.email_service.EmailMessage")
-    def test_send_bulk_all_success(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_bulk_all_success(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["sent"], 1)
         self.assertEqual(result["failed"], 0)
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_bulk_with_recipient_map(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_bulk_with_recipient_map(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         result = EmailService.send_bulk_certificates([self.cert], recipient_map={self.cert.id: "custom@test.com"})
         self.assertEqual(result["sent"], 1)
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_bulk_failure_logged(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 0
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_bulk_failure_logged(self, mock_send):
+        mock_send.side_effect = Exception("API error")
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["failed"], 1)
         self.assertEqual(len(result["errors"]), 1)
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_attaches_pdf_when_present(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_certificate_attaches_pdf_when_present(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         self.cert.pdf_url = "/media/certificates/cert.pdf"
         self.cert.save()
-        with patch("builtins.open", mock_open(read_data=b"%PDF")):
-            with patch("pathlib.Path.exists", return_value=True):
-                result = EmailService.send_certificate(self.cert, "test@test.com")
+        with patch("pathlib.Path.exists", return_value=True):
+            result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         self.cert.pdf_url = "/media/certificates/missing.pdf"
         self.cert.save()
         with patch("pathlib.Path.exists", return_value=False):
             result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.EmailMessage")
-    def test_send_certificate_pdf_attach_exception_continues(self, mock_email):
-        mock_msg = MagicMock()
-        mock_msg.send.return_value = 1
-        mock_email.return_value = mock_msg
+    @patch("services.email_service.resend.Emails.send")
+    def test_send_certificate_pdf_attach_exception_continues(self, mock_send):
+        mock_send.return_value = {"id": "email_123"}
         self.cert.pdf_url = "/media/certificates/cert.pdf"
         self.cert.save()
         with patch("pathlib.Path.exists", return_value=True):
-            with patch("builtins.open", side_effect=IOError("disk error")):
+            with patch("pathlib.WindowsPath.open", side_effect=IOError("disk error")):
                 result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
@@ -512,25 +489,10 @@ class InstructorSignatureFieldTest(TestCase):
 
 @pytest.mark.integration
 class EmailLimitTest(TestCase):
-    def test_send_certificate_blocked_when_limit_reached(self):
+    def test_send_certificate_returns_failure_when_no_recipient(self):
         cert, _ = make_cert(doc_id="LMT01", p_email="lmt01@test.com")
-        with patch(
-            "services.email_service.check_email_limit",
-            return_value={"blocked": True, "warning": True, "message": "Limit reached"},
-        ):
-            result = EmailService.send_certificate(cert, "lmt01@test.com")
+        result = EmailService.send_certificate(cert, "")
         self.assertFalse(result["success"])
-        self.assertTrue(result.get("email_limit_reached"))
-
-    def test_send_bulk_returns_early_when_blocked(self):
-        cert, _ = make_cert(doc_id="LMT02", p_email="lmt02@test.com")
-        with patch(
-            "services.email_service.check_email_limit",
-            return_value={"blocked": True, "warning": True, "message": "Blocked"},
-        ):
-            result = EmailService.send_bulk_certificates([cert])
-        self.assertEqual(result["sent"], 0)
-        self.assertEqual(result["failed"], 0)
 
 
 # ─────────────────────────────────────────────
@@ -590,7 +552,7 @@ class CeleryTasksExceptionTest(TestCase):
             result.get()
 
     @patch(
-        "services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "SMTP error"}
+        "services.email_service.EmailService.send_certificate", return_value={"success": False, "message": "API error"}
     )
     def test_email_task_retries_on_send_failure(self, mock_send):
         from services.tasks import send_certificate_email_task
