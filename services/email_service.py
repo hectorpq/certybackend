@@ -1,22 +1,37 @@
 """
-Email Service - Send certificates via email using Resend API
+Email Service - Send certificates via email using SendGrid API
 """
 
+import base64
 import logging
 
-import resend
 from django.conf import settings
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import (
+    Attachment,
+    Disposition,
+    FileContent,
+    FileName,
+    FileType,
+    From,
+    Mail,
+    To,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Send certificate emails using Resend API"""
+    """Send certificate emails using SendGrid API"""
+
+    @staticmethod
+    def _get_client():
+        return SendGridAPIClient(settings.SENDGRID_API_KEY)
 
     @staticmethod
     def send_email(subject, text, recipient_email):
         """
-        Send a generic email via Resend API.
+        Send a generic email via SendGrid API.
 
         Args:
             subject: Email subject
@@ -30,16 +45,15 @@ class EmailService:
             if not recipient_email:
                 return {"success": False, "message": "No email address provided"}
 
-            resend.api_key = settings.RESEND_API_KEY
+            message = Mail(
+                from_email=From(settings.DEFAULT_FROM_EMAIL),
+                to_emails=To(recipient_email),
+                subject=subject,
+                plain_text_content=text,
+            )
 
-            params = {
-                "from": settings.DEFAULT_FROM_EMAIL,
-                "to": [recipient_email],
-                "subject": subject,
-                "text": text,
-            }
-
-            resend.Emails.send(params)
+            client = EmailService._get_client()
+            client.send(message)
 
             logger.info("Email sent to %s: %s", recipient_email, subject)
             return {"success": True, "message": f"Email sent to {recipient_email}"}
@@ -65,8 +79,6 @@ class EmailService:
             if not recipient_email:
                 return {"success": False, "message": "No email address provided"}
 
-            resend.api_key = settings.RESEND_API_KEY
-
             subject = f"🎓 Tu Certificado - {certificate.event.name}"
 
             text = f"""
@@ -88,12 +100,12 @@ Saludos,
 Sistema de Certificados
             """
 
-            params = {
-                "from": settings.DEFAULT_FROM_EMAIL,
-                "to": [recipient_email],
-                "subject": subject,
-                "text": text,
-            }
+            message = Mail(
+                from_email=From(settings.DEFAULT_FROM_EMAIL),
+                to_emails=To(recipient_email),
+                subject=subject,
+                plain_text_content=text,
+            )
 
             if certificate.pdf_url:
                 try:
@@ -103,26 +115,31 @@ Sistema de Certificados
                     logger.info("Attempting to attach PDF: %s", pdf_path)
 
                     if pdf_path.exists():
-                        params["attachments"] = [
-                            {
-                                "filename": filename,
-                                "path": str(pdf_path),
-                            }
-                        ]
+                        with open(pdf_path, "rb") as f:
+                            encoded = base64.b64encode(f.read()).decode()
+
+                        attachment = Attachment(
+                            FileContent(encoded),
+                            FileName(filename),
+                            FileType("application/pdf"),
+                            Disposition("attachment"),
+                        )
+                        message.attachment = attachment
                         logger.info("PDF attached successfully: %s", filename)
                     else:
                         logger.warning("PDF file not found at: %s", pdf_path)
 
-                except Exception as attach_err:
+                except Exception:
                     logger.exception("Error attaching PDF")
 
-            response = resend.Emails.send(params)
+            client = EmailService._get_client()
+            response = client.send(message)
 
             logger.info(
-                "Email sent to %s for certificate %s (id=%s)",
+                "Email sent to %s for certificate %s (status_code=%s)",
                 recipient_email,
                 certificate.id,
-                response.get("id"),
+                response.status_code,
             )
             return {
                 "success": True,
