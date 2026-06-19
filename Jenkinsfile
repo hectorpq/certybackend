@@ -6,7 +6,7 @@ pipeline {
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
 // prueba 7
-    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba1
+    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba12
 
     stages {
         stage('Limpieza y Entorno') {
