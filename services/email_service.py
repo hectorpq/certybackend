@@ -1,22 +1,22 @@
 """
-Email Service - Send certificates via email using Django's built-in email backend (SMTP)
+Email Service - Send certificates via email using Resend API
 """
 
+import base64
 import logging
 
 from django.conf import settings
-from django.core.mail import EmailMessage
 
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Send certificate emails using Django SMTP"""
+    """Send certificate emails using Resend API"""
 
     @staticmethod
     def send_email(subject, text, recipient_email):
         """
-        Send a generic email via Django SMTP backend.
+        Send a generic email via Resend API.
 
         Args:
             subject: Email subject
@@ -30,13 +30,18 @@ class EmailService:
             if not recipient_email:
                 return {"success": False, "message": "No email address provided"}
 
-            email = EmailMessage(
-                subject=subject,
-                body=text,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[recipient_email],
-            )
-            email.send()
+            import resend
+
+            resend.api_key = settings.RESEND_API_KEY
+
+            params = {
+                "from": settings.DEFAULT_FROM_EMAIL,
+                "to": [recipient_email],
+                "subject": subject,
+                "text": text,
+            }
+
+            response = resend.Emails.send(params)
 
             logger.info("Email sent to %s: %s", recipient_email, subject)
             return {"success": True, "message": f"Email sent to {recipient_email}"}
@@ -83,12 +88,16 @@ Saludos,
 Sistema de Certificados
             """
 
-            email = EmailMessage(
-                subject=subject,
-                body=text,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[recipient_email],
-            )
+            import resend
+
+            resend.api_key = settings.RESEND_API_KEY
+
+            params = {
+                "from": settings.DEFAULT_FROM_EMAIL,
+                "to": [recipient_email],
+                "subject": subject,
+                "text": text,
+            }
 
             if certificate.pdf_url:
                 try:
@@ -99,7 +108,14 @@ Sistema de Certificados
 
                     if pdf_path.exists():
                         with open(pdf_path, "rb") as f:
-                            email.attach(filename, f.read(), "application/pdf")
+                            encoded = base64.b64encode(f.read()).decode()
+
+                        params["attachments"] = [
+                            {
+                                "filename": filename,
+                                "content": encoded,
+                            }
+                        ]
                         logger.info("PDF attached successfully: %s", filename)
                     else:
                         logger.warning("PDF file not found at: %s", pdf_path)
@@ -107,7 +123,7 @@ Sistema de Certificados
                 except Exception:
                     logger.exception("Error attaching PDF")
 
-            email.send()
+            response = resend.Emails.send(params)
 
             logger.info(
                 "Email sent to %s for certificate %s",
