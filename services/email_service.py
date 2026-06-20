@@ -1,28 +1,22 @@
 """
-Email Service - Send certificates via email using SendGrid API
+Email Service - Send certificates via email using Django's built-in email backend (SMTP)
 """
 
-import base64
 import logging
 
 from django.conf import settings
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, From, Mail, To
+from django.core.mail import EmailMessage
 
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Send certificate emails using SendGrid API"""
-
-    @staticmethod
-    def _get_client():
-        return SendGridAPIClient(settings.SENDGRID_API_KEY)
+    """Send certificate emails using Django SMTP"""
 
     @staticmethod
     def send_email(subject, text, recipient_email):
         """
-        Send a generic email via SendGrid API.
+        Send a generic email via Django SMTP backend.
 
         Args:
             subject: Email subject
@@ -36,15 +30,13 @@ class EmailService:
             if not recipient_email:
                 return {"success": False, "message": "No email address provided"}
 
-            message = Mail(
-                from_email=From(settings.DEFAULT_FROM_EMAIL),
-                to_emails=To(recipient_email),
+            email = EmailMessage(
                 subject=subject,
-                plain_text_content=text,
+                body=text,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient_email],
             )
-
-            client = EmailService._get_client()
-            client.send(message)
+            email.send()
 
             logger.info("Email sent to %s: %s", recipient_email, subject)
             return {"success": True, "message": f"Email sent to {recipient_email}"}
@@ -91,11 +83,11 @@ Saludos,
 Sistema de Certificados
             """
 
-            message = Mail(
-                from_email=From(settings.DEFAULT_FROM_EMAIL),
-                to_emails=To(recipient_email),
+            email = EmailMessage(
                 subject=subject,
-                plain_text_content=text,
+                body=text,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient_email],
             )
 
             if certificate.pdf_url:
@@ -107,15 +99,7 @@ Sistema de Certificados
 
                     if pdf_path.exists():
                         with open(pdf_path, "rb") as f:
-                            encoded = base64.b64encode(f.read()).decode()
-
-                        attachment = Attachment(
-                            FileContent(encoded),
-                            FileName(filename),
-                            FileType("application/pdf"),
-                            Disposition("attachment"),
-                        )
-                        message.attachment = attachment
+                            email.attach(filename, f.read(), "application/pdf")
                         logger.info("PDF attached successfully: %s", filename)
                     else:
                         logger.warning("PDF file not found at: %s", pdf_path)
@@ -123,14 +107,12 @@ Sistema de Certificados
                 except Exception:
                     logger.exception("Error attaching PDF")
 
-            client = EmailService._get_client()
-            response = client.send(message)
+            email.send()
 
             logger.info(
-                "Email sent to %s for certificate %s (status_code=%s)",
+                "Email sent to %s for certificate %s",
                 recipient_email,
                 certificate.id,
-                response.status_code,
             )
             return {
                 "success": True,
