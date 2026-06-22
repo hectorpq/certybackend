@@ -67,41 +67,41 @@ class EmailServiceTest(TestCase):
         self.assertFalse(result["success"])
         self.assertIn("No email", result["message"])
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_certificate_success(self, mock_send):
         mock_response = Mock(status_code=202)
         mock_send.return_value = mock_response
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_certificate_exception_returns_failure(self, mock_send):
         mock_send.side_effect = Exception("Resend API error")
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertFalse(result["success"])
         self.assertIn("Resend API error", result["message"])
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_bulk_all_success(self, mock_send):
         mock_send.return_value = Mock(status_code=202)
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["sent"], 1)
         self.assertEqual(result["failed"], 0)
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_bulk_with_recipient_map(self, mock_send):
         mock_send.return_value = Mock(status_code=202)
         result = EmailService.send_bulk_certificates([self.cert], recipient_map={self.cert.id: "custom@test.com"})
         self.assertEqual(result["sent"], 1)
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_bulk_failure_logged(self, mock_send):
         mock_send.side_effect = Exception("API error")
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["failed"], 1)
         self.assertEqual(len(result["errors"]), 1)
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_certificate_attaches_pdf_when_present(self, mock_send):
         mock_send.return_value = Mock(status_code=202)
         self.cert.pdf_url = "/media/certificates/cert.pdf"
@@ -110,7 +110,7 @@ class EmailServiceTest(TestCase):
             result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_send):
         mock_send.return_value = Mock(status_code=202)
         self.cert.pdf_url = "/media/certificates/missing.pdf"
@@ -119,7 +119,7 @@ class EmailServiceTest(TestCase):
             result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("django.core.mail.EmailMessage.send")
+    @patch("resend.Emails.send")
     def test_send_certificate_pdf_attach_exception_continues(self, mock_send):
         mock_send.return_value = Mock(status_code=202)
         self.cert.pdf_url = "/media/certificates/cert.pdf"
