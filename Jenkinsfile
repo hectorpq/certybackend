@@ -66,7 +66,8 @@ pipeline {
     post {
         always {
             // 🛠️ Forzamos el apagado del proyecto compartido al finalizar
-            sh 'docker-compose -p certybackend down --remove-orphans || true'
+            sh 'docker-compose -p certybackend stop || true'
+            sh 'docker rm -f test_runner || true'
         }
     }
 }
