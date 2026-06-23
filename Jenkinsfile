@@ -5,6 +5,8 @@ pipeline {
         DOCKER_BUILDKIT = '1'
         SONAR_QUBE_SERVER = 'SonarQubeServer'
     }
+// prueba 7
+    // 🛠️ Eliminamos el bloque 'tools' conflictivo de aquí arriba1
 
     stages {
         stage('Limpieza y Entorno') {
@@ -18,25 +20,24 @@ pipeline {
                     sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
-                    // 🛠️ Forzamos el nombre del proyecto local para apagarlo con éxito
-                    sh 'docker-compose -p certybackend down --remove-orphans || true'
+                    sh 'docker-compose down --remove-orphans || true'
                 }
             }
         }
 
         stage('Build Infrastructure') {
             steps {
-                // 🛠️ Forzamos el nombre del proyecto aquí también
-                sh 'docker-compose -p certybackend build --no-cache web'
-                sh 'docker-compose -p certybackend build db redis'
+                sh 'docker-compose build --no-cache web'
+                sh 'docker-compose build db redis'
             }
         }
 
         stage('Test & Coverage') {
             steps {
-                // 🛠️ Forzamos el nombre del proyecto para que corra usando la red unificada
-                sh 'docker-compose -p certybackend run --name test_runner web pytest --cov=. --cov-report=xml'
+                // 1. Ejecutamos las pruebas de forma normal usando el código interno de la imagen compilada
+                sh 'docker-compose run --name test_runner web pytest --cov=. --cov-report=xml'
                 
+                // 2. Extraemos el archivo coverage.xml directamente leyendo el flujo del contenedor de test
                 script {
                     sh 'docker cp test_runner:/app/coverage.xml ./coverage.xml'
                     sh 'docker rm -f test_runner'
@@ -51,6 +52,7 @@ pipeline {
                     
                     withSonarQubeEnv("${SONAR_QUBE_SERVER}") {
                         withCredentials([string(credentialsId: 'sonar-server-token', variable: 'SONAR_TOKEN')]) {
+                            // Añadimos el relizamiento de rutas para que SonarQube asocie /app con la raíz del proyecto
                             sh "${scannerHome}/bin/sonar-scanner " +
                                "-Dsonar.login=${SONAR_TOKEN} " +
                                "-Dsonar.projectBaseDir=$WORKSPACE " +
@@ -65,9 +67,7 @@ pipeline {
 
     post {
         always {
-            // 🛠️ Forzamos el apagado del proyecto compartido al finalizar
-            sh 'docker-compose -p certybackend stop || true'
-            sh 'docker rm -f test_runner || true'
+            sh 'docker-compose down --remove-orphans || true'
         }
     }
 }
