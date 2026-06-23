@@ -168,8 +168,9 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Sistema de Certificados <noreply@certypro.app>")
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Sistema de Certificados <pacompiahectorrobert@gmail.com>")
+FRONTEND_URL = config("FRONTEND_URL", default="https://certyfront.vercel.app")
 
 # ========== META WHATSAPP CLOUD API ==========
 META_WHATSAPP_TOKEN = config("META_WHATSAPP_TOKEN", default="")
@@ -187,7 +188,7 @@ CERTIFICATE_VERIFY_BASE_URL = config("CERTIFICATE_VERIFY_BASE_URL", default="htt
 # SECURITY WARNING: Update these URLs in production!
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://localhost:5173",
+    default="http://localhost:3000,http://localhost:5173,https://certyfront.vercel.app",
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 CORS_ALLOW_CREDENTIALS = True
