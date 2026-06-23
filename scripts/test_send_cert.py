@@ -1,11 +1,13 @@
-from django.utils import timezone
 from datetime import timedelta
-from users.models import User
-from participants.models import Participant
-from events.models import Event, Enrollment
-from instructors.models import Instructor
+
+from django.utils import timezone
+
 from certificados.models import Certificate, Template
+from events.models import Enrollment, Event
+from instructors.models import Instructor
+from participants.models import Participant
 from services.email_service import EmailService
+from users.models import User
 
 admin_user = User.objects.get(email="admin@certypro.com")
 instructor = Instructor.objects.first()
