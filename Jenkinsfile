@@ -34,7 +34,7 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
-                // 1. Ejecutamos las pruebas usando el comando moderno
+                // 1. Ejecutamos las pruebas usando el comando moderno 1
                 // 🛠️ Cambiado a docker compose
                 sh 'docker compose run --name test_runner web pytest --cov=. --cov-report=xml'
                 
