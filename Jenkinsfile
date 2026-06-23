@@ -19,7 +19,7 @@ pipeline {
                     sh 'echo DEBUG=True >> .env'
                     
                     // 🛠️ Cambiado a docker compose
-                    sh 'docker compose down --remove-orphans || true'
+                    sh 'docker-compose down --remove-orphans || true'   
                 }
             }
         }
@@ -36,7 +36,7 @@ pipeline {
             steps {
                 // 1. Ejecutamos las pruebas usando el comando moderno 1
                 // 🛠️ Cambiado a docker compose
-                sh 'docker compose run --name test_runner web pytest --cov=. --cov-report=xml'
+                sh 'docker-compose run --name test_runner web pytest --cov=. --cov-report=xml'
                 
                 // 2. Extraemos el archivo coverage.xml directamente
                 script {
