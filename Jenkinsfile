@@ -10,15 +10,24 @@ pipeline {
         stage('Limpieza y Entorno') {
             steps {
                 script {
-                    sh 'echo DB_NAME=postgres > .env'
+                    // 🛠️ Sincronizado al 100% con tu .env real para que coincida con la BD local
+                    sh 'echo DB_NAME=certificados_db > .env'
                     sh 'echo DB_USER=postgres >> .env'
-                    sh 'echo DB_PASSWORD=postgres >> .env'
-                    sh 'echo DB_HOST=db >> .env'
-                    sh 'echo DB_PORT=5432 >> .env'
-                    sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
+                    sh 'echo DB_PASSWORD=123456 >> .env'
+                    sh 'echo DB_HOST=db >> .env' // Se mantiene 'db' porque están dentro de la red de Docker
+                    sh 'echo DB_PORT=5432 >> .env' // Puerto interno del contenedor db
+                    sh 'echo SECRET_KEY=django-insecure-y+x$7x@@=@(svr3rkp&n3lhlw7&32vg661y3q(xqsi9v&is%w} >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
-                    // 🛠️ CORRECCIÓN: Eliminamos el 'down'. Solo borramos el contenedor de pruebas previo si existiera.
+                    // Configuración de Email para evitar errores si los tests los llaman
+                    sh 'echo EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend >> .env'
+                    sh 'echo EMAIL_HOST=smtp.gmail.com >> .env'
+                    sh 'echo EMAIL_PORT=587 >> .env'
+                    sh 'echo EMAIL_USE_TLS=True >> .env'
+                    sh 'echo EMAIL_HOST_USER=rrickquispe@gmail.com >> .env'
+                    sh 'echo EMAIL_HOST_PASSWORD=fogscnwqqxlgihly >> .env'
+                    sh 'echo DEFAULT_FROM_EMAIL=rrickquispe@gmail.com >> .env'
+
                     sh 'docker rm -f test_runner || true'
                 }
             }
@@ -26,7 +35,6 @@ pipeline {
 
         stage('Build Infrastructure') {
             steps {
-                // Compilamos usando el proyecto unificado
                 sh 'docker-compose -p certybackend build --no-cache web'
                 sh 'docker-compose -p certybackend build db redis'
             }
@@ -34,7 +42,6 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
-                // Corremos las pruebas asegurándonos de limpiar el contenedor al finalizar la etapa
                 sh 'docker-compose -p certybackend run --name test_runner web pytest --reuse-db --cov=. --cov-report=xml'
                 
                 script {
@@ -65,7 +72,6 @@ pipeline {
 
     post {
         always {
-            // 🛠️ CORRECCIÓN: Al final del pipeline solo detenemos el contenedor de pruebas, NUNCA apagamos todo el entorno con down
             sh 'docker rm -f test_runner || true'
         }
     }
