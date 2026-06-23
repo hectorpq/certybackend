@@ -69,6 +69,7 @@ class Event(SoftDeleteMixin):
     name_font_size = models.IntegerField(default=24)
     name_x = models.IntegerField(default=100)
     name_y = models.IntegerField(default=150)
+    font_color = models.CharField(max_length=20, default="#1e3a8a")
     template_image = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

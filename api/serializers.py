@@ -34,6 +34,8 @@ class EventSerializer(serializers.ModelSerializer):
     end_date = DateField(allow_null=True, required=False)
     template_name = serializers.SerializerMethodField()
     instructor_name = serializers.SerializerMethodField()
+    instructor_specialty = serializers.SerializerMethodField()
+    instructor_signature = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
     deleted_by_detail = serializers.SerializerMethodField()
 
@@ -45,6 +47,8 @@ class EventSerializer(serializers.ModelSerializer):
             "created_by",
             "instructor",
             "instructor_name",
+            "instructor_specialty",
+            "instructor_signature",
             "name",
             "description",
             "event_date",
@@ -63,6 +67,7 @@ class EventSerializer(serializers.ModelSerializer):
             "name_font_size",
             "name_x",
             "name_y",
+            "font_color",
             "template_image",
             "is_deleted",
             "deleted_at",
@@ -92,6 +97,19 @@ class EventSerializer(serializers.ModelSerializer):
     def get_instructor_name(self, obj):
         if obj.instructor:
             return obj.instructor.full_name
+        return None
+
+    def get_instructor_specialty(self, obj):
+        if obj.instructor:
+            return obj.instructor.specialty
+        return None
+
+    def get_instructor_signature(self, obj):
+        if obj.instructor and obj.instructor.signature_image:
+            try:
+                return obj.instructor.signature_image.url
+            except Exception:
+                return str(obj.instructor.signature_image)
         return None
 
     def get_deleted_by_detail(self, obj):
