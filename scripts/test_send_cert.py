@@ -38,8 +38,11 @@ enrollment = Enrollment.objects.create(event=event, participant=participant, att
 print(f"Enrollment #{enrollment.id} created")
 
 cert = Certificate.objects.create(
-    participant=participant, event=event, template=template,
-    status="pending", generated_by=admin_user,
+    participant=participant,
+    event=event,
+    template=template,
+    status="pending",
+    generated_by=admin_user,
 )
 cert.generate(generated_by=admin_user, skip_attendance_check=True)
 print(f"Certificate #{cert.id} status={cert.status}")
