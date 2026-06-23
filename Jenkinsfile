@@ -27,8 +27,8 @@ pipeline {
         stage('Build Infrastructure') {
             steps {
                 // 🛠️ Cambiado a docker compose
-                sh 'docker-compose build --network=host --no-cache web'
-                sh 'docker-compose build --network=host db redis'
+                sh 'docker-compose build --no-cache web'
+                sh 'docker-compose build db redis'
             }
         }
 
