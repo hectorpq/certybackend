@@ -16,7 +16,9 @@ pipeline {
                     sh 'echo DB_PASSWORD=123456 >> .env'
                     sh 'echo DB_HOST=db >> .env' // Se mantiene 'db' porque están dentro de la red de Docker
                     sh 'echo DB_PORT=5432 >> .env' // Puerto interno del contenedor db
-                    sh 'echo SECRET_KEY=django-insecure-y+x$7x@@=@(svr3rkp&n3lhlw7&32vg661y3q(xqsi9v&is%w} >> .env'
+
+
+                    sh 'echo SECRET_KEY=django-insecure-clave-de-prueba-para-jenkins-717-tests >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
                     // Configuración de Email para evitar errores si los tests los llaman
