@@ -1303,8 +1303,6 @@ class EventsViewSet(viewsets.ModelViewSet):
         """Create or update a Template from event's template_image and settings"""
         from certificados.models import Template
         from django.core.files.storage import default_storage
-        from django.utils import timezone
-        import math
 
         x_inch = name_x / 100 * 841.89 / 72 if name_x else 1.39
         y_inch = (1 - name_y / 100) * 595.28 / 72 if name_y else 2.08
