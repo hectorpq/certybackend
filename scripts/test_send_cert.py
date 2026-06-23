@@ -20,7 +20,8 @@ participant, created = Participant.objects.get_or_create(
         "created_by": admin_user,
     },
 )
-print(f"Participant #{participant.id} {'created' if created else 'exists'}: {participant.first_name} {participant.last_name}")
+status = "created" if created else "exists"
+print(f"Participant #{participant.id} {status}: {participant.first_name} {participant.last_name}")
 
 event = Event.objects.create(
     name="Evento Test - Rick Quispe",
