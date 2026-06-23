@@ -1,6 +1,6 @@
 import io
 from datetime import date
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.test import TestCase
