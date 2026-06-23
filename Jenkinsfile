@@ -18,27 +18,25 @@ pipeline {
                     sh 'echo SECRET_KEY=django-insecure-test-key-123 >> .env'
                     sh 'echo DEBUG=True >> .env'
                     
-                    // 🛠️ Cambiado a docker compose
-                    sh 'docker-compose down --remove-orphans || true'   
+                    // 🛠️ Forzamos el nombre del proyecto local para apagarlo con éxito
+                    sh 'docker-compose -p certybackend down --remove-orphans || true'
                 }
             }
         }
 
         stage('Build Infrastructure') {
             steps {
-                // 🛠️ Cambiado a docker compose
-                sh 'docker-compose build --no-cache web'
-                sh 'docker-compose build db redis'
+                // 🛠️ Forzamos el nombre del proyecto aquí también
+                sh 'docker-compose -p certybackend build --no-cache web'
+                sh 'docker-compose -p certybackend build db redis'
             }
         }
 
         stage('Test & Coverage') {
             steps {
-                // 1. Ejecutamos las pruebas usando el comando moderno 1
-                // 🛠️ Cambiado a docker compose
-                sh 'docker-compose run --name test_runner web pytest --cov=. --cov-report=xml'
+                // 🛠️ Forzamos el nombre del proyecto para que corra usando la red unificada
+                sh 'docker-compose -p certybackend run --name test_runner web pytest --cov=. --cov-report=xml'
                 
-                // 2. Extraemos el archivo coverage.xml directamente
                 script {
                     sh 'docker cp test_runner:/app/coverage.xml ./coverage.xml'
                     sh 'docker rm -f test_runner'
@@ -67,8 +65,8 @@ pipeline {
 
     post {
         always {
-            // 🛠️ Cambiado a docker compose
-            sh 'docker compose down --remove-orphans || true'
+            // 🛠️ Forzamos el apagado del proyecto compartido al finalizar
+            sh 'docker-compose -p certybackend down --remove-orphans || true'
         }
     }
 }
