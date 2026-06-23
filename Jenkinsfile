@@ -35,7 +35,7 @@ pipeline {
         stage('Test & Coverage') {
             steps {
                 // Corremos las pruebas asegurándonos de limpiar el contenedor al finalizar la etapa
-                sh 'docker-compose -p certybackend run --name test_runner web pytest --cov=. --cov-report=xml'
+                sh 'docker-compose -p certybackend run --name test_runner web pytest --reuse-db --cov=. --cov-report=xml'
                 
                 script {
                     sh 'docker cp test_runner:/app/coverage.xml ./coverage.xml'
