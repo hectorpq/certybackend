@@ -1301,8 +1301,9 @@ class EventsViewSet(viewsets.ModelViewSet):
 
     def _create_event_template(self, event, template_image, name_x, name_y, name_font_size, font_color):
         """Create or update a Template from event's template_image and settings"""
-        from certificados.models import Template
         from django.core.files.storage import default_storage
+
+        from certificados.models import Template
 
         x_inch = name_x / 100 * 841.89 / 72 if name_x else 1.39
         y_inch = (1 - name_y / 100) * 595.28 / 72 if name_y else 2.08
@@ -1321,7 +1322,7 @@ class EventsViewSet(viewsets.ModelViewSet):
         if event.template:
             tpl = event.template
             if template_image:
-                path = default_storage.save(f'events/templates/{template_image.name}', template_image)
+                path = default_storage.save(f"events/templates/{template_image.name}", template_image)
                 tpl.background_image = path
             tpl.layout_config = layout_config
             tpl.name = f"Evento: {event.name}"
@@ -1343,25 +1344,25 @@ class EventsViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Auto-assign created_by and create Template from template_image"""
-        template_image = self.request.FILES.get('template_image')
+        template_image = self.request.FILES.get("template_image")
         instance = serializer.save(created_by=self.request.user)
         if template_image:
-            name_x = float(self.request.data.get('name_x', 50))
-            name_y = float(self.request.data.get('name_y', 40))
-            name_font_size = int(self.request.data.get('name_font_size', 24))
-            font_color = self.request.data.get('font_color', '#1e3a8a')
+            name_x = float(self.request.data.get("name_x", 50))
+            name_y = float(self.request.data.get("name_y", 40))
+            name_font_size = int(self.request.data.get("name_font_size", 24))
+            font_color = self.request.data.get("font_color", "#1e3a8a")
             tpl = self._create_event_template(instance, template_image, name_x, name_y, name_font_size, font_color)
             instance.template = tpl
             instance.template_image = str(tpl.background_image)
-            instance.save(update_fields=['template', 'template_image'])
+            instance.save(update_fields=["template", "template_image"])
 
     def perform_update(self, serializer):
         """Create/update Template from template_image and settings"""
-        template_image = self.request.FILES.get('template_image')
-        name_x = float(self.request.data.get('name_x', 50))
-        name_y = float(self.request.data.get('name_y', 40))
-        name_font_size = int(self.request.data.get('name_font_size', 24))
-        font_color = self.request.data.get('font_color', '#1e3a8a')
+        template_image = self.request.FILES.get("template_image")
+        name_x = float(self.request.data.get("name_x", 50))
+        name_y = float(self.request.data.get("name_y", 40))
+        name_font_size = int(self.request.data.get("name_font_size", 24))
+        font_color = self.request.data.get("font_color", "#1e3a8a")
 
         instance = serializer.save()
         if template_image or (instance.template and (name_x or name_y or name_font_size or font_color)):
@@ -1369,7 +1370,7 @@ class EventsViewSet(viewsets.ModelViewSet):
             instance.template = tpl
             if template_image:
                 instance.template_image = str(tpl.background_image)
-            instance.save(update_fields=['template', 'template_image'])
+            instance.save(update_fields=["template", "template_image"])
 
     @extend_schema(
         tags=["Eventos"],
