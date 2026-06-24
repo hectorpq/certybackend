@@ -499,7 +499,6 @@ class EventsViewSetTest(TestCase):
         from unittest.mock import patch
 
         from django.core.files.storage import default_storage
-
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         sig = SimpleUploadedFile("sig_exc.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, content_type="image/png")
