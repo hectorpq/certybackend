@@ -5588,6 +5588,10 @@ class CoverageEdgeCasesTest(TestCase):
         """Cubre 403 en EventsViewSet.participants"""
         admin_other = make_admin("other_parts@test.com")
         event = make_event(admin_other)
+        participante_user = make_user("non_op_parts@test.com")
+        participant_obj = make_participant(admin_other, doc="NOP01", email="non_op_parts@test.com")
+        Enrollment.objects.create(participant=participant_obj, event=event, created_by=admin_other)
+        self.client.force_authenticate(user=participante_user)
         res = self.client.get(f"/api/events/{event.id}/participants/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
