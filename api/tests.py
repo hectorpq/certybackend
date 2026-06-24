@@ -324,6 +324,77 @@ class EventsViewSetTest(TestCase):
         res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_email": "x@x.com"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_create_event_with_template_and_font_color(self):
+        """Cubre perform_create con template_image, font_color y _create_event_template"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile("cert.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.post(
+            "/api/events/",
+            {
+                "name": "Template Event",
+                "event_date": "2026-09-01",
+                "status": "active",
+                "template_image": png,
+                "name_x": "60",
+                "name_y": "50",
+                "name_font_size": "30",
+                "font_color": "#ff0000",
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["font_color"], "#ff0000")
+        self.assertIsNotNone(res.data.get("template"))
+
+    def test_create_event_with_instructor(self):
+        """Cubre get_instructor_specialty y get_instructor_signature en EventSerializer"""
+        inst = Instructor.objects.create(full_name="Prof. Test", email="prof_test@test.com", created_by=self.admin)
+        res = self.client.post(
+            "/api/events/",
+            {"name": "Instructor Event", "event_date": "2026-10-01", "status": "active", "instructor": inst.id},
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["instructor_name"], "Prof. Test")
+        self.assertIsNone(res.data.get("instructor_specialty"))
+        self.assertIsNone(res.data.get("instructor_signature"))
+
+    def test_retrieve_event_includes_font_color(self):
+        """Cubre font_color en el serializador al recuperar evento"""
+        e = make_event(self.admin)
+        res = self.client.get(f"/api/events/{e.id}/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("font_color", res.data)
+        self.assertEqual(res.data["font_color"], "#1e3a8a")
+
+    def test_update_event_with_font_color(self):
+        """Cubre perform_update sin template_image pero con font_color"""
+        e = make_event(self.admin)
+        res = self.client.patch(
+            f"/api/events/{e.id}/",
+            {"font_color": "#00ff00"},
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#00ff00")
+
+    def test_update_event_with_template_image(self):
+        """Cubre perform_update con template_image y _create_event_template rama existente"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        e = make_event(self.admin)
+        png = SimpleUploadedFile("update.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.patch(
+            f"/api/events/{e.id}/",
+            {
+                "template_image": png,
+                "name_x": "70",
+                "font_color": "#0000ff",
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#0000ff")
+
 
 # ─────────────────────────────────────────────
 # Certificates

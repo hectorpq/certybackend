@@ -84,6 +84,7 @@ class EventSerializer(serializers.ModelSerializer):
             "deleted_at",
             "deleted_by",
             "deleted_by_detail",
+            "template_image",
         ]
 
     def get_status_display(self, obj):
@@ -100,7 +101,7 @@ class EventSerializer(serializers.ModelSerializer):
         return None
 
     def get_instructor_specialty(self, obj):
-        if obj.instructor:
+        if obj.instructor and obj.instructor.specialty:
             return obj.instructor.specialty
         return None
 
