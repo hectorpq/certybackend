@@ -93,4 +93,10 @@ local_settings.py
 .env
 db.sqlite3
 media/
-certificates/pdfs/
+
+*.exe
+*.jar
+
+RECURSOS/
+k6/results/
+*.json
