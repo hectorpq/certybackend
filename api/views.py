@@ -2048,7 +2048,10 @@ Equipo CertyPro
                 created_by=request.user,
             )
 
-            send_error = self._send_invitation_email(invitation, event, frontend_url, expires_days, settings)
+            try:
+                send_error = self._send_invitation_email(invitation, event, frontend_url, expires_days, settings)
+            except Exception as e:
+                send_error = f"Error enviando a {invitation.email}: {str(e)}"
             if send_error:
                 errors.append(send_error)
             else:
@@ -2116,7 +2119,10 @@ Equipo CertyPro
             if not invitation.token:
                 invitation.token = uuid.uuid4()
 
-            send_error = self._send_invitation_email(invitation, event, frontend_url, 7, settings)
+            try:
+                send_error = self._send_invitation_email(invitation, event, frontend_url, 7, settings)
+            except Exception as e:
+                send_error = f"Error enviando a {invitation.email}: {str(e)}"
             if send_error:
                 errors.append(send_error)
             else:
