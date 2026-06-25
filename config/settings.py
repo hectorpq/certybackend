@@ -354,6 +354,10 @@ SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
 # SSL Redirect (enable in production)
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
 
+# Trust X-Forwarded-Proto from Railway/nginx (required for SECURE_SSL_REDIRECT
+# to work behind proxy without breaking CORS preflight OPTIONS requests)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # Referrer Policy
 REFERRER_POLICY = "strict-origin-when-cross-origin"
 
