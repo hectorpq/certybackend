@@ -2,6 +2,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -3721,8 +3722,6 @@ class AttendanceAPIBlockTest(TestCase):
 # ═══════════════════════════════════════════════════════════════
 # PASO 3 — TC-025 a TC-035
 # ═══════════════════════════════════════════════════════════════
-from django.core.cache import cache
-
 # ─────────────────────────────────────────────
 # TC-025: Rate limiting
 # ─────────────────────────────────────────────
