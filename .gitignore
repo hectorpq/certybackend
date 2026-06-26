@@ -100,3 +100,4 @@ media/
 RECURSOS/
 k6/results/
 *.json
+.aider*

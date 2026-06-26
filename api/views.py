@@ -6,6 +6,7 @@ import json
 import logging
 from io import BytesIO
 
+from django.contrib.auth import login
 from django.db import models, transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
@@ -140,15 +141,36 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
 
-            return Response(
-                {
+            # Si el usuario llegó desde un enlace de invitación y todavía
+            # tiene el token guardado en la sesión, lo autenticamos y
+            # asociamos automáticamente al evento correspondiente.
+            login(request, user)
+            redirect_url = _consume_pending_invitation(request)
+
+            refresh = RefreshToken.for_user(user)
+            payload = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
                     "id": user.id,
                     "email": user.email,
                     "full_name": user.full_name,
-                    "message": "Cuenta creada exitosamente. Por favor inicia sesión.",
+                    "role": user.role,
+                    "is_staff": user.is_staff,
                 },
-                status=status.HTTP_201_CREATED,
-            )
+                "message": (
+                    "¡Registro exitoso! Ya estás inscrito en el evento."
+                    if redirect_url
+                    else "Cuenta creada exitosamente."
+                ),
+            }
+            if redirect_url:
+                payload["redirect_url"] = redirect_url
+
+            return Response(payload, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -210,20 +232,27 @@ class LoginView(APIView):
             refresh = RefreshToken.for_user(user)
             logger.info("LOGIN_SUCCESS email=%s ip=%s", user.email, self._get_client_ip(request))
             log_action("user_login", user=user, ip_address=get_client_ip(request))
-            return Response(
-                {
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user": {
-                        "id": user.id,
-                        "email": user.email,
-                        "full_name": user.full_name,
-                        "role": user.role,
-                        "is_staff": user.is_staff,
-                    },
+
+            # Si el usuario llegó desde un enlace de invitación y todavía
+            # tiene el token guardado en la sesión, lo asociamos ahora.
+            login(request, user)
+            redirect_url = _consume_pending_invitation(request)
+
+            payload = {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "role": user.role,
+                    "is_staff": user.is_staff,
                 },
-                status=status.HTTP_200_OK,
-            )
+            }
+            if redirect_url:
+                payload["redirect_url"] = redirect_url
+
+            return Response(payload, status=status.HTTP_200_OK)
 
         attempted_email = request.data.get("email", "")
         logger.warning(
@@ -3709,6 +3738,106 @@ _ERR_INVITATION_NOT_FOUND = "Invitación no encontrada"
 _ERR_INVITATION_EXPIRED = "La invitación ha expirado"
 
 
+def _accept_invitation_for_user(user, invitation):
+    """
+    Asocia un usuario autenticado a una invitación pendiente.
+
+    - Crea o recupera el ``Participant`` (por email).
+    - Crea o recupera el ``Enrollment`` con ``attendance=True``.
+    - Crea un ``Certificate`` en estado ``pending`` si no existe.
+    - Marca la invitación como ``accepted`` y guarda ``responded_at``.
+
+    Retorna ``True`` si la asociación se completó con éxito, ``False`` si la
+    invitación ya no es válida (estado distinto a ``pending``/``sent`` o
+    expirada).
+    """
+    from django.utils import timezone
+
+    from certificados.models import Certificate
+    from events.models import Enrollment
+
+    if invitation.status not in ("pending", "sent"):
+        return False
+    if invitation.expires_at and invitation.expires_at < timezone.now():
+        invitation.status = "expired"
+        invitation.save()
+        return False
+
+    email = invitation.email.lower()
+
+    participant, _ = Participant.objects.get_or_create(
+        email=email,
+        defaults={
+            "first_name": user.full_name.split(" ", 1)[0] if user.full_name else "",
+            "last_name": user.full_name.split(" ", 1)[1] if (user.full_name and " " in user.full_name) else "",
+            "phone": "",
+            "document_id": f"USR-{user.id}",
+        },
+    )
+
+    invitation.participant = participant
+    invitation.status = "accepted"
+    invitation.responded_at = timezone.now()
+    invitation.save()
+
+    enrollment, created = Enrollment.objects.get_or_create(
+        participant=participant,
+        event=invitation.event,
+        defaults={
+            "created_by": invitation.created_by,
+            "invitation_sent": True,
+            "attendance": True,
+        },
+    )
+    if not created:
+        enrollment.attendance = True
+        enrollment.save()
+
+    Certificate.objects.get_or_create(
+        participant=participant,
+        event=invitation.event,
+        defaults={
+            "template": invitation.event.template,
+            "status": "pending",
+        },
+    )
+
+    return True
+
+
+def _consume_pending_invitation(request):
+    """
+    Lee ``token_invitacion`` de la sesión, busca la invitación y la asocia
+    al usuario autenticado en ``request.user``. Retorna la URL a la que el
+    frontend debe redirigir (``/events/<id>``) o ``None`` si no había token.
+    """
+    from events.models import EventInvitation
+
+    token = request.session.get("token_invitacion")
+    if not token:
+        return None
+
+    try:
+        invitation = EventInvitation.objects.select_related("event").get(token=token)
+    except EventInvitation.DoesNotExist:
+        request.session.pop("token_invitacion", None)
+        request.session.pop("invitacion_email", None)
+        return None
+
+    if not request.user or not request.user.is_authenticated:
+        return None
+
+    accepted = _accept_invitation_for_user(request.user, invitation)
+
+    # Limpiar la sesión siempre que el token se haya consumido
+    request.session.pop("token_invitacion", None)
+    request.session.pop("invitacion_email", None)
+
+    if accepted:
+        return f"/events/{invitation.event.id}"
+    return None
+
+
 class InvitationPublicView(APIView):
     """
     Public endpoints for invitation response (no auth required)
@@ -3758,8 +3887,25 @@ class InvitationPublicView(APIView):
             invitation.save()
             return Response({"error": _ERR_INVITATION_EXPIRED}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Guardar el token en la sesión para que el flujo de login/registro
+        # general pueda encontrarlo y asociar la invitación al usuario.
+        request.session["token_invitacion"] = str(token)
+        request.session["invitacion_email"] = invitation.email
+        # Forzar la emisión de la cookie csrftoken para que el frontend
+        # pueda enviar X-CSRFToken en los POST cross-site posteriores
+        # (login, register).
+        from django.middleware.csrf import get_token
+
+        get_token(request)
+
         serializer = InvitationDetailSerializer(invitation)
-        return Response(serializer.data)
+        data = dict(serializer.data)
+        # URLs a las que el frontend debe redirigir para aceptar la invitación
+        email_qs = invitation.email
+        data["login_url"] = f"/login?email={email_qs}"
+        data["register_url"] = f"/register?email={email_qs}"
+        data["event_id"] = invitation.event_id
+        return Response(data)
 
     @extend_schema(
         tags=["Invitaciones"],
@@ -3784,12 +3930,19 @@ class InvitationPublicView(APIView):
     )
     def post(self, request, token):
         """
-        Accept invitation (if student already exists)
+        Accept invitation.
         POST /api/invitations/<token>/accept/
+
+        - Si el usuario está autenticado: crea el Participant a partir del User
+          y asocia la invitación.
+        - Si NO está autenticado pero el Participant ya existe (por un
+          registro previo): lo asocia directamente.
+        - Si no hay Participant ni User: devuelve 400 indicando que debe
+          registrarse primero.
         """
         from django.utils import timezone
 
-        from events.models import Enrollment, EventInvitation
+        from events.models import EventInvitation
 
         try:
             invitation = EventInvitation.objects.select_related("event").get(token=token)
@@ -3809,6 +3962,28 @@ class InvitationPublicView(APIView):
             invitation.save()
             return Response({"error": _ERR_INVITATION_EXPIRED}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Si hay un usuario autenticado, usar el helper reutilizable que crea
+        # el Participant a partir del User y asocia el evento automáticamente.
+        if request.user and request.user.is_authenticated:
+            accepted = _accept_invitation_for_user(request.user, invitation)
+            if accepted:
+                # Limpiar cualquier token pendiente en sesión
+                request.session.pop("token_invitacion", None)
+                request.session.pop("invitacion_email", None)
+                return Response(
+                    {
+                        "message": "¡Inscripción exitosa!",
+                        "event": invitation.event.name,
+                        "participant": invitation.participant.full_name if invitation.participant else "",
+                        "redirect_url": f"/events/{invitation.event.id}",
+                    }
+                )
+            return Response(
+                {"error": "La invitación ya no es válida"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Sin auth: requiere que el Participant ya exista (registro previo).
         if not invitation.participant:
             from participants.models import Participant
 
@@ -3820,7 +3995,11 @@ class InvitationPublicView(APIView):
                 )
             invitation.save()
 
-        # Create enrollment (without invitation FK to avoid DB error)
+        # Sin auth + Participant ya vinculado por registro previo: hacemos
+        # la asociación inline porque el helper requiere un User.
+        from certificados.models import Certificate
+        from events.models import Enrollment
+
         enrollment, created = Enrollment.objects.get_or_create(
             participant=invitation.participant,
             event=invitation.event,
@@ -3833,9 +4012,6 @@ class InvitationPublicView(APIView):
         if not created:
             enrollment.attendance = True
             enrollment.save()
-
-        # Auto-create certificate in pending status so it appears in the list
-        from certificados.models import Certificate
 
         Certificate.objects.get_or_create(
             participant=invitation.participant,
@@ -3993,12 +4169,19 @@ class InvitationRegisterView(APIView):
             },
         )
 
+        # Limpiar cualquier token pendiente en la sesión (porque este flujo
+        # ya consumió la invitación explícitamente).
+        request.session.pop("token_invitacion", None)
+        request.session.pop("invitacion_email", None)
+
         return Response(
             {
                 "message": "¡Registro exitoso! Ya estás inscrito en el evento.",
                 "event": invitation.event.name,
+                "event_id": invitation.event.id,
                 "participant": participant.full_name,
                 "email": email,
+                "redirect_url": f"/events/{invitation.event.id}",
             }
         )
 
