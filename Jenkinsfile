@@ -10,7 +10,7 @@ pipeline {
         stage('Limpieza y Entorno') {
             steps {
                 script {
-                    // 🛠️ Sincronizado al 100% con tu .env real para que coincida con la BD local 1
+                    // 🛠️ Sincronizado al 100% con tu .env real para que coincida con la BD local 2
                     sh 'echo DB_NAME=certificados_db > .env'
                     sh 'echo DB_USER=postgres >> .env'
                     sh 'echo DB_PASSWORD=123456 >> .env'
