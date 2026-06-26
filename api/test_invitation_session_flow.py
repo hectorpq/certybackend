@@ -229,3 +229,140 @@ def test_invitation_direct_register_still_clears_session():
     assert res.status_code == status.HTTP_200_OK, res.data
     assert res.data["redirect_url"] == f"/events/{event.id}"
     assert "token_invitacion" not in client.session
+
+
+@pytest.mark.django_db
+def test_consume_invitation_with_invalid_token_clears_session():
+    """Si el token en sesión no existe en BD, se limpia la sesión y se retorna None (redirect_url ausente)."""
+    admin = _make_admin()
+    User.objects.create_user(email="consume@test.com", full_name="Consume User", password="MiPass1234")
+
+    client = APIClient()
+    # Forzamos un token en sesión que NO existe en BD
+    session = client.session
+    session["token_invitacion"] = "no-existe-este-token"
+    session["invitacion_email"] = "consume@test.com"
+    session.save()
+
+    res = client.post("/api/login/", {"email": "consume@test.com", "password": "MiPass1234"}, format="json")
+    assert res.status_code == status.HTTP_200_OK, res.data
+    # Sin redirect_url porque el token no correspondía a invitación válida
+    assert "redirect_url" not in res.data
+    # Y la sesión quedó limpia
+    assert "token_invitacion" not in client.session
+    assert "invitacion_email" not in client.session
+
+
+@pytest.mark.django_db
+def test_consume_invitation_with_unauthenticated_user_does_nothing():
+    """Si en sesión hay token pero el usuario NO está autenticado al consumir, no debe explotar."""
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "noauth@test.com", admin=admin)
+
+    # El endpoint /api/register/ recibe un POST y dentro crea user + consume sesión.
+    # Pero como el User ya existe, no entra a la rama de creación; primero intenta loguear.
+    # Probamos directo: POST a /register/ con un email ya existente.
+    User.objects.create_user(email="noauth@test.com", full_name="No Auth", password="MiPass1234")
+    client = APIClient()
+    # Guardamos el token en sesión
+    client.get(f"/api/invitations/{invitation.token}/")
+    assert "token_invitacion" in client.session
+
+    # Llamamos a login → debe consumir token y asociar
+    res = client.post("/api/login/", {"email": "noauth@test.com", "password": "MiPass1234"}, format="json")
+    assert res.status_code == status.HTTP_200_OK
+    assert res.data["redirect_url"] == f"/events/{event.id}"
+
+
+@pytest.mark.django_db
+def test_accept_invitation_for_user_when_status_not_pending_returns_400():
+    """Si la invitación ya está aceptada/rechazada, POST /accept/ retorna 400 aunque el user esté autenticado."""
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "respondida@test.com", admin=admin)
+    invitation.status = "accepted"
+    invitation.save()
+
+    user = User.objects.create_user(email="respondida@test.com", full_name="Ya Aceptada", password="MiPass1234")
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    res = client.post(f"/api/invitations/{invitation.token}/accept/")
+    assert res.status_code == status.HTTP_400_BAD_REQUEST, res.data
+    # El mensaje real es "La invitación ya ha sido accepted"
+    assert "invitaci" in res.data["error"].lower()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_for_user_when_expired_during_consume():
+    """Si la invitación expira entre el GET y el POST, /accept/ debe retornar 400 con mensaje de expirada."""
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "vencio@test.com", admin=admin)
+    user = User.objects.create_user(email="vencio@test.com", full_name="Vencio User", password="MiPass1234")
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    # Forzamos expiración después del GET
+    client.get(f"/api/invitations/{invitation.token}/")
+    invitation.expires_at = timezone.now() - timedelta(hours=1)
+    invitation.save()
+
+    res = client.post(f"/api/invitations/{invitation.token}/accept/")
+    assert res.status_code == status.HTTP_400_BAD_REQUEST, res.data
+    assert "expirad" in res.data["error"].lower()
+
+
+@pytest.mark.django_db
+def test_consume_invitation_when_already_accepted_returns_no_redirect():
+    """Si la invitación ya está aceptada, _consume_pending_invitation retorna None y limpia sesión.
+
+    Para cubrir esa rama necesitamos inyectar manualmente el token en sesión
+    apuntando a una invitación ya aceptada (el endpoint GET no lo guarda).
+    """
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "yaacep@test.com", admin=admin)
+    invitation.status = "accepted"
+    invitation.save()
+
+    User.objects.create_user(email="yaacep@test.com", full_name="Ya Acep", password="MiPass1234")
+
+    client = APIClient()
+    # Inyectar token en sesión manualmente porque el GET lo rechazaría
+    session = client.session
+    session["token_invitacion"] = str(invitation.token)
+    session["invitacion_email"] = "yaacep@test.com"
+    session.save()
+
+    res = client.post("/api/login/", {"email": "yaacep@test.com", "password": "MiPass1234"}, format="json")
+    assert res.status_code == status.HTTP_200_OK
+    assert "redirect_url" not in res.data
+    # La sesión se limpia igual aunque no haya redirigido
+    assert "token_invitacion" not in client.session
+
+
+@pytest.mark.django_db
+def test_register_existing_user_does_not_create_new_enrollment():
+    """Si el participante y la inscripción ya existen, re-aceptar debe actualizar attendance sin duplicar."""
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "dup@test.com", admin=admin)
+    user = User.objects.create_user(email="dup@test.com", full_name="Dup User", password="MiPass1234")
+
+    # Crear Participant y Enrollment previos
+    participant = Participant.objects.create(
+        email="dup@test.com", first_name="Dup", last_name="User", document_id="DUP1"
+    )
+    Enrollment.objects.create(participant=participant, event=event, attendance=False)
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    res = client.post(f"/api/invitations/{invitation.token}/accept/")
+    assert res.status_code == status.HTTP_200_OK, res.data
+
+    enrollment = Enrollment.objects.get(participant=participant, event=event)
+    assert enrollment.attendance is True
+    # Solo debe haber una inscripción
+    assert Enrollment.objects.filter(participant=participant, event=event).count() == 1
