@@ -3,15 +3,18 @@ Test end-to-end del nuevo flujo de invitaciones con sesión Django.
 
 Simula:
 1. Admin crea evento y envía invitación a un email.
-2. Invitado SIN cuenta llega al link → GET /api/invitations/<token>/ → backend guarda sesión.
-3. Invitado se registra en /api/register/ → backend consume sesión, crea usuario + Participant + Enrollment + Certificate, marca invitación aceptada.
-4. Verificar todo: usuario creado, participante, inscripción, certificado, invitación aceptada.
+2. Invitado SIN cuenta llega al link → GET /api/invitations/<token>/ →
+   backend guarda sesión.
+3. Invitado se registra en /api/register/ → backend consume sesión, crea
+   usuario + Participant + Enrollment + Certificate, marca invitación aceptada.
+4. Verificar todo: usuario creado, participante, inscripción, certificado,
+   invitación aceptada.
 5. Limpiar sesión: re-intentar registro con misma sesión no debe re-crear nada.
 
-Caso adicional: usuario EXISTENTE llega al link → sesión guarda token → login → consume sesión.
+Caso adicional: usuario EXISTENTE llega al link → sesión guarda token →
+login → consume sesión.
 """
 from datetime import timedelta
-from io import BytesIO
 
 import pytest
 from django.utils import timezone
@@ -53,8 +56,8 @@ def test_new_user_invitation_flow_via_session():
     res = client.get(f"/api/invitations/{invitation.token}/")
     assert res.status_code == status.HTTP_200_OK, res.data
     data = res.data
-    assert data["login_url"] == f"/login?email=nuevo@test.com"
-    assert data["register_url"] == f"/register?email=nuevo@test.com"
+    assert data["login_url"] == "/login?email=nuevo@test.com"
+    assert data["register_url"] == "/register?email=nuevo@test.com"
     assert data["event_id"] == event.id
     # Backend debió haber guardado token en sesión
     assert "token_invitacion" in client.session
