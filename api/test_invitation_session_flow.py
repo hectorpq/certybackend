@@ -14,6 +14,7 @@ Simula:
 Caso adicional: usuario EXISTENTE llega al link → sesión guarda token →
 login → consume sesión.
 """
+
 from datetime import timedelta
 
 import pytest
@@ -24,6 +25,14 @@ from rest_framework.test import APIClient
 from events.models import Enrollment, Event, EventInvitation
 from participants.models import Participant
 from users.models import User
+
+ADMIN_EMAIL = "admin@certypro.app"
+ADMIN_NAME = "Admin"
+ADMIN_PASS = "admin123"
+
+
+def _make_admin():
+    return User.objects.create_user(email=ADMIN_EMAIL, full_name=ADMIN_NAME, password=ADMIN_PASS, role="admin")
 
 
 def _make_event(admin):
@@ -36,38 +45,35 @@ def _make_event(admin):
     )
 
 
-@pytest.mark.django_db
-def test_new_user_invitation_flow_via_session():
-    """Caso 1: usuario nuevo, llega por link, registra por /api/register/, queda asociado al evento."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
-    event = _make_event(admin)
-    invitation = EventInvitation.objects.create(
+def _make_invitation(event, email, expires_at=None, admin=None):
+    return EventInvitation.objects.create(
         event=event,
-        email="nuevo@test.com",
+        email=email,
         status="pending",
-        expires_at=timezone.now() + timedelta(days=7),
+        expires_at=expires_at if expires_at is not None else timezone.now() + timedelta(days=7),
         created_by=admin,
     )
 
+
+@pytest.mark.django_db
+def test_new_user_invitation_flow_via_session():
+    """Caso 1: usuario nuevo, llega por link, registra por /api/register/, queda asociado al evento."""
+    admin = _make_admin()
+    event = _make_event(admin)
+    invitation = _make_invitation(event, "nuevo@test.com", admin=admin)
+
     client = APIClient()
-    # 1. Invitado llega al link → GET /api/invitations/<token>/
     res = client.get(f"/api/invitations/{invitation.token}/")
     assert res.status_code == status.HTTP_200_OK, res.data
     data = res.data
     assert data["login_url"] == "/login?email=nuevo@test.com"
     assert data["register_url"] == "/register?email=nuevo@test.com"
     assert data["event_id"] == event.id
-    # Backend debió haber guardado token en sesión
     assert "token_invitacion" in client.session
     assert client.session["token_invitacion"] == str(invitation.token)
     assert client.session["invitacion_email"] == "nuevo@test.com"
-    # Y emitió cookie csrftoken
-    csrf_cookie = client.cookies.get("csrftoken")
-    assert csrf_cookie is not None
+    assert client.cookies.get("csrftoken") is not None
 
-    # 2. Invitado registra → POST /api/register/
     res = client.post(
         "/api/register/",
         {
@@ -80,25 +86,18 @@ def test_new_user_invitation_flow_via_session():
     )
     assert res.status_code == status.HTTP_201_CREATED, res.data
     payload = res.data
-    # Tokens JWT presentes
     assert "access" in payload and "refresh" in payload
-    # redirect_url apunta al evento
     assert payload["redirect_url"] == f"/events/{event.id}"
-    # Mensaje de inscripción exitosa
     assert "inscrito" in payload["message"].lower()
 
-    # 3. Verificar efectos en BD
     user = User.objects.get(email="nuevo@test.com")
     assert user.role == "participante"
     assert user.check_password("MiPassword123")
 
     participant = Participant.objects.get(email="nuevo@test.com")
-    assert participant is not None
-
     enrollment = Enrollment.objects.get(participant=participant, event=event)
     assert enrollment.attendance is True
 
-    # 4. La invitación quedó aceptada y la sesión limpia
     invitation.refresh_from_db()
     assert invitation.status == "accepted"
     assert invitation.participant == participant
@@ -110,38 +109,22 @@ def test_new_user_invitation_flow_via_session():
 @pytest.mark.django_db
 def test_existing_user_invitation_flow_via_session():
     """Caso 2: usuario existente, llega por link, hace login, queda asociado al evento."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
+    admin = _make_admin()
     event = _make_event(admin)
-    invitation = EventInvitation.objects.create(
-        event=event,
-        email="existente@test.com",
-        status="pending",
-        expires_at=timezone.now() + timedelta(days=7),
-        created_by=admin,
-    )
-    # Usuario ya existe
-    User.objects.create_user(
-        email="existente@test.com", full_name="Ana López", password="MiPass1234"
-    )
+    invitation = _make_invitation(event, "existente@test.com", admin=admin)
+    User.objects.create_user(email="existente@test.com", full_name="Ana López", password="MiPass1234")
 
     client = APIClient()
-    # 1. Llega al link → GET /api/invitations/<token>/
     res = client.get(f"/api/invitations/{invitation.token}/")
     assert res.status_code == status.HTTP_200_OK
     assert "token_invitacion" in client.session
 
-    # 2. Inicia sesión → POST /api/login/
-    res = client.post(
-        "/api/login/", {"email": "existente@test.com", "password": "MiPass1234"}, format="json"
-    )
+    res = client.post("/api/login/", {"email": "existente@test.com", "password": "MiPass1234"}, format="json")
     assert res.status_code == status.HTTP_200_OK, res.data
     payload = res.data
     assert "access" in payload
     assert payload["redirect_url"] == f"/events/{event.id}"
 
-    # 3. Verificar asociación
     participant = Participant.objects.get(email="existente@test.com")
     assert participant.full_name == "Ana López"
     enrollment = Enrollment.objects.get(participant=participant, event=event)
@@ -154,15 +137,11 @@ def test_existing_user_invitation_flow_via_session():
 @pytest.mark.django_db
 def test_login_without_invitation_token_works_normally():
     """Caso 3: login sin token en sesión no debe romper nada."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
+    admin = _make_admin()
     _make_event(admin)
 
     client = APIClient()
-    res = client.post(
-        "/api/login/", {"email": "admin@certypro.app", "password": "admin123"}, format="json"
-    )
+    res = client.post("/api/login/", {"email": ADMIN_EMAIL, "password": ADMIN_PASS}, format="json")
     assert res.status_code == status.HTTP_200_OK
     assert "redirect_url" not in res.data
 
@@ -183,24 +162,18 @@ def test_register_without_invitation_token_works_normally():
     )
     assert res.status_code == status.HTTP_201_CREATED
     assert "redirect_url" not in res.data
-    # Mensaje neutro (no "inscrito")
     assert "inscrito" not in res.data["message"].lower()
 
 
 @pytest.mark.django_db
 def test_get_invitation_expired_does_not_save_session():
     """Si la invitación está expirada, no se debe guardar token en sesión."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
+    admin = _make_admin()
     event = _make_event(admin)
-    invitation = EventInvitation.objects.create(
-        event=event,
-        email="expirado@test.com",
-        status="pending",
-        expires_at=timezone.now() - timedelta(hours=1),
-        created_by=admin,
+    invitation = _make_invitation(
+        event, "expirado@test.com", expires_at=timezone.now() - timedelta(hours=1), admin=admin
     )
+
     client = APIClient()
     res = client.get(f"/api/invitations/{invitation.token}/")
     assert res.status_code == status.HTTP_400_BAD_REQUEST
@@ -211,24 +184,13 @@ def test_get_invitation_expired_does_not_save_session():
 def test_authenticated_user_accepts_without_participant_creates_it():
     """Caso extra: usuario ya autenticado, llega por link, hace POST /accept/
     sin tener Participant → el backend debe crear el Participant automáticamente."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
+    admin = _make_admin()
     event = _make_event(admin)
-    invitation = EventInvitation.objects.create(
-        event=event,
-        email="logueado@test.com",
-        status="pending",
-        expires_at=timezone.now() + timedelta(days=7),
-        created_by=admin,
-    )
-    user = User.objects.create_user(
-        email="logueado@test.com", full_name="Logueado User", password="MiPass1234"
-    )
+    invitation = _make_invitation(event, "logueado@test.com", admin=admin)
+    user = User.objects.create_user(email="logueado@test.com", full_name="Logueado User", password="MiPass1234")
 
     client = APIClient()
     client.force_authenticate(user=user)
-    # Garantizar cookie csrftoken
     client.get(f"/api/invitations/{invitation.token}/")
 
     res = client.post(f"/api/invitations/{invitation.token}/accept/")
@@ -246,19 +208,11 @@ def test_authenticated_user_accepts_without_participant_creates_it():
 @pytest.mark.django_db
 def test_invitation_direct_register_still_clears_session():
     """El flujo directo /api/invitations/<token>/register/ limpia la sesión."""
-    admin = User.objects.create_user(
-        email="admin@certypro.app", full_name="Admin", password="admin123", role="admin"
-    )
+    admin = _make_admin()
     event = _make_event(admin)
-    invitation = EventInvitation.objects.create(
-        event=event,
-        email="directo@test.com",
-        status="pending",
-        expires_at=timezone.now() + timedelta(days=7),
-        created_by=admin,
-    )
+    invitation = _make_invitation(event, "directo@test.com", admin=admin)
+
     client = APIClient()
-    # Simular que el frontend hizo GET antes (guarda token en sesión)
     client.get(f"/api/invitations/{invitation.token}/")
     assert "token_invitacion" in client.session
 
@@ -274,5 +228,4 @@ def test_invitation_direct_register_still_clears_session():
     )
     assert res.status_code == status.HTTP_200_OK, res.data
     assert res.data["redirect_url"] == f"/events/{event.id}"
-    # Sesión limpia
     assert "token_invitacion" not in client.session
