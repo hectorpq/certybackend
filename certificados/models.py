@@ -137,7 +137,7 @@ class Certificate(SoftDeleteMixin):
     def generate_verification_code(participant_id, event_id):
         """Generate unique verification code from participant and event"""
         code_source = f"{participant_id}{event_id}{timezone.now().isoformat()}".encode()
-        return hashlib.md5(code_source, usedforsecurity=False).hexdigest()[:20].upper()  # noqa: S324
+        return hashlib.sha256(code_source).hexdigest()[:20].upper()
 
     def save(self, *args, **kwargs):
         """Auto-generate verification code if not set"""
