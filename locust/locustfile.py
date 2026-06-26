@@ -18,7 +18,7 @@ from locust import HttpUser, between, tag, task
 
 
 def random_email():
-    suffix = "".join(random.choices(string.ascii_lowercase, k=6))
+    suffix = "".join(random.choices(string.ascii_lowercase, k=6))  # NOSONAR
     return f"perf_{suffix}@test.local"
 
 
@@ -34,7 +34,7 @@ class PublicUser(HttpUser):
     @task(10)
     @tag("public", "verify")
     def verify_certificate(self):
-        code = random.choice(self.verification_codes)
+        code = random.choice(self.verification_codes)  # NOSONAR
         with self.client.get(
             f"/api/certificates/verify/?code={code}",
             catch_response=True,
