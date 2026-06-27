@@ -100,3 +100,7 @@ media/
 RECURSOS/
 k6/results/
 *.json
+.aider*
+
+# PDFs generados por certificados — no se versionan, se regeneran al vuelo
+certificates/pdfs/

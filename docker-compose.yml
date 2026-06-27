@@ -26,11 +26,9 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    # --- CAMBIO CRÍTICO AQUÍ ---
-    volumes:
-      
-      - /var/run/docker.sock:/var/run/docker.sock
-    # ---------------------------
+    # Nota: el servicio web NO monta /var/run/docker.sock.
+    # Solo Jenkins (CI/CD) lo necesita; el backend no debe poder
+    # hablar con el daemon de Docker del host.
     environment:
       DB_HOST: db
       DB_PORT: "5432"

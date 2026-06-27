@@ -135,15 +135,17 @@ class ViewPermissionClassesTest(SimpleTestCase):
 class DebugURLPatternTest(SimpleTestCase):
     def test_debug_mode_adds_static_media_url(self):
         import sys
+        import tempfile
 
         from django.test import override_settings
 
         original = sys.modules.pop("config.urls", None)
         try:
-            with override_settings(DEBUG=True, MEDIA_URL="/media/", MEDIA_ROOT="/tmp/media"):
-                import config.urls as debug_urls
+            with tempfile.TemporaryDirectory() as media_root:
+                with override_settings(DEBUG=True, MEDIA_URL="/media/", MEDIA_ROOT=media_root):
+                    import config.urls as debug_urls
 
-                self.assertGreater(len(debug_urls.urlpatterns), 0)
+                    self.assertGreater(len(debug_urls.urlpatterns), 0)
         finally:
             if original is not None:
                 sys.modules["config.urls"] = original
