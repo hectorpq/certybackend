@@ -59,3 +59,5 @@ pytest==8.1.1
 pytest-django==4.8.0
 pytest-cov==4.1.0
 zipp==3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+
+django-anymail[resend]==12.0
