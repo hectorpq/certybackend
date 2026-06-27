@@ -11,11 +11,25 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _bool(value, default):
+    """Cast a decouple value to bool tolerating 'true'/'1'/'yes' (case-insensitive).
+
+    Returns ``default`` for empty values so that ``EMAIL_USE_TLS`` falls back to
+    True when the env var is not set, while ``EMAIL_USE_SSL`` falls back to
+    False. This replaces inline lambdas that made the settings file harder
+    to read and to test.
+    """
+    if value is None or value == "":
+        return default
+    return str(value).strip().lower() in ("true", "1", "yes")
 
 
 # Quick-start development settings - unsuitable for production
@@ -165,16 +179,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = config("EMAIL_HOST", default="smtp-relay.brevo.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-EMAIL_USE_TLS = config(
-    "EMAIL_USE_TLS",
-    default=True,
-    cast=lambda v: str(v).lower() in ("true", "1", "yes", "") if v else True,
-)
-EMAIL_USE_SSL = config(
-    "EMAIL_USE_SSL",
-    default=False,
-    cast=lambda v: str(v).lower() in ("true", "1", "yes") if v else False,
-)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=lambda v: _bool(v, True))
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=lambda v: _bool(v, False))
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
@@ -315,8 +321,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ========== JWT CONFIGURATION ==========
-from datetime import timedelta
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),

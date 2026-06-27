@@ -1,13 +1,16 @@
-﻿"""
+"""
 ViewSets (views) for Certificate and Delivery APIs
 """
 
 import json
 import logging
+import uuid
 from io import BytesIO
 
 from django.contrib.auth import login
 from django.db import models, transaction
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
@@ -392,10 +395,10 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        except ValueError as e:
+        except ValueError:
             logger.exception("Google token validation failed")
             return Response({"error": "Invalid Google token"}, status=status.HTTP_401_UNAUTHORIZED)
-        except Exception as e:
+        except Exception:
             logger.exception("Google auth error")
             return Response(
                 {"error": "Authentication failed"},
@@ -676,6 +679,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK,
             )
         except Exception as e:
+            logger.exception("Failed to generate certificate %s", getattr(certificate, "id", None))
             return Response(
                 {
                     "status": "error",
@@ -748,6 +752,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK,
                 )
         except Exception as e:
+            logger.exception("Failed to deliver certificate %s", getattr(certificate, "id", None))
             return Response(
                 {
                     "status": "error",
@@ -878,6 +883,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK,
                 )
         except Exception as e:
+            logger.exception("Failed to retry certificate %s", getattr(certificate, "id", None))
             return Response(
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1544,8 +1550,6 @@ class EventsViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
         elif participant_email:
-            import uuid
-
             doc_id = f"PART-{uuid.uuid4().hex[:8].upper()}"
             participant, created = Participant.objects.get_or_create(
                 email=participant_email,
@@ -1858,19 +1862,32 @@ class EventsViewSet(viewsets.ModelViewSet):
         Get event statistics
         GET /events/{id}/stats/
         """
+        from django.db.models import Count, Q
+
         from events.models import Enrollment
 
         event = self.get_object()
-        enrollments = Enrollment.objects.filter(event=event)
-        certificates = Certificate.objects.filter(event=event)
 
-        attendees = enrollments.filter(attendance=True).count()
-        total_enrollments = enrollments.count()
-        total_certificates = certificates.count()
-        generated_certificates = certificates.filter(status="generated").count()
-        sent_certificates = certificates.filter(status="sent").count()
-        pending_certificates = certificates.filter(status="pending").count()
-        failed_certificates = certificates.filter(status="failed").count()
+        # Una sola query agrega todas las métricas (evita N+1 de .count() repetidos).
+        enrollment_stats = Enrollment.objects.filter(event=event).aggregate(
+            total_enrollments=Count("id"),
+            attendees=Count("id", filter=Q(attendance=True)),
+        )
+        certificate_stats = Certificate.objects.filter(event=event).aggregate(
+            total_certificates=Count("id"),
+            generated_certificates=Count("id", filter=Q(status="generated")),
+            sent_certificates=Count("id", filter=Q(status="sent")),
+            pending_certificates=Count("id", filter=Q(status="pending")),
+            failed_certificates=Count("id", filter=Q(status="failed")),
+        )
+
+        total_enrollments = enrollment_stats["total_enrollments"]
+        attendees = enrollment_stats["attendees"]
+        total_certificates = certificate_stats["total_certificates"]
+        generated_certificates = certificate_stats["generated_certificates"]
+        sent_certificates = certificate_stats["sent_certificates"]
+        pending_certificates = certificate_stats["pending_certificates"]
+        failed_certificates = certificate_stats["failed_certificates"]
 
         return Response(
             {
@@ -2113,7 +2130,6 @@ Equipo CertyPro
         POST /events/{id}/invitations/send-all/
         Only the event creator can send invitations
         """
-        import uuid
         from datetime import timedelta
 
         from django.conf import settings
@@ -2136,6 +2152,10 @@ Equipo CertyPro
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Precargamos los participantes por email para evitar N+1 en el loop.
+        pending_emails = list(pending.values_list("email", flat=True))
+        participant_by_email = {p.email.lower(): p for p in Participant.objects.filter(email__in=pending_emails)}
+
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
         expires_at = timezone.now() + timedelta(days=7)
         sent = 0
@@ -2144,7 +2164,7 @@ Equipo CertyPro
         for invitation in pending:
             invitation.expires_at = expires_at
             if not invitation.participant:
-                invitation.participant = Participant.objects.filter(email__iexact=invitation.email).first()
+                invitation.participant = participant_by_email.get((invitation.email or "").lower())
             if not invitation.token:
                 invitation.token = uuid.uuid4()
 
@@ -2229,7 +2249,7 @@ Equipo CertyPro
 
         # Send certificates if requested
         if send_certificates:
-            enrollments = Enrollment.objects.filter(event=event, attendance=True)
+            enrollments = Enrollment.objects.filter(event=event, attendance=True).select_related("participant")
 
             for enrollment in enrollments:
                 # Get or create certificate for this student
@@ -2262,7 +2282,7 @@ Equipo CertyPro
                             certificate.id,
                             delivery_log.error_message,
                         )
-                except Exception as e:
+                except Exception:
                     logger.exception("Error processing certificate %s", certificate.id)
 
         return Response(result)
@@ -2402,7 +2422,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
     - is_active: Filter by active status (true/false)
     """
 
-    queryset = Participant.objects.all().order_by("first_name", "last_name")
+    queryset = Participant.objects.all().select_related("created_by").order_by("first_name", "last_name")
     serializer_class = ParticipantSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["is_active", "is_deleted"]
@@ -2412,17 +2432,17 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Admin sees all (including deleted if show_deleted=true); coordinator sees only their own."""
+        qs = Participant.objects.all().select_related("created_by")
         if is_admin(self.request):
             if self.request.query_params.get("show_deleted") == "true":
-                return Participant.all_objects.all().order_by("first_name", "last_name")
-            return super().get_queryset()
+                return Participant.all_objects.all().select_related("created_by").order_by("first_name", "last_name")
+            return qs.order_by("first_name", "last_name")
 
         user_events = Event.objects.filter(created_by=self.request.user).values_list("id", flat=True)
         return (
-            super()
-            .get_queryset()
-            .filter(models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events))
+            qs.filter(models.Q(created_by=self.request.user) | models.Q(enrollments__event_id__in=user_events))
             .distinct()
+            .order_by("first_name", "last_name")
         )
 
     def get_permissions(self):
@@ -2546,6 +2566,7 @@ class ParticipantsViewSet(viewsets.ModelViewSet):
             )
 
         except Exception as e:
+            logger.exception("Failed to process Excel import")
             return Response(
                 {"error": f"Failed to process file: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -3735,107 +3756,15 @@ class EnrollmentViewSet(viewsets.ViewSet):
 
 
 _ERR_INVITATION_NOT_FOUND = "Invitación no encontrada"
-_ERR_INVITATION_EXPIRED = "La invitación ha expirado"
+_ERR_INVITATION_EXPIRED = "La invitación ha expirada"
 
 
-def _accept_invitation_for_user(user, invitation):
-    """
-    Asocia un usuario autenticado a una invitación pendiente.
-
-    - Crea o recupera el ``Participant`` (por email).
-    - Crea o recupera el ``Enrollment`` con ``attendance=True``.
-    - Crea un ``Certificate`` en estado ``pending`` si no existe.
-    - Marca la invitación como ``accepted`` y guarda ``responded_at``.
-
-    Retorna ``True`` si la asociación se completó con éxito, ``False`` si la
-    invitación ya no es válida (estado distinto a ``pending``/``sent`` o
-    expirada).
-    """
-    from django.utils import timezone
-
-    from certificados.models import Certificate
-    from events.models import Enrollment
-
-    if invitation.status not in ("pending", "sent"):
-        return False
-    if invitation.expires_at and invitation.expires_at < timezone.now():  # pragma: no cover
-        invitation.status = "expired"  # pragma: no cover
-        invitation.save()  # pragma: no cover
-        return False  # pragma: no cover
-
-    email = invitation.email.lower()
-
-    participant, _ = Participant.objects.get_or_create(
-        email=email,
-        defaults={
-            "first_name": user.full_name.split(" ", 1)[0] if user.full_name else "",
-            "last_name": user.full_name.split(" ", 1)[1] if (user.full_name and " " in user.full_name) else "",
-            "phone": "",
-            "document_id": f"USR-{user.id}",
-        },
-    )
-
-    invitation.participant = participant
-    invitation.status = "accepted"
-    invitation.responded_at = timezone.now()
-    invitation.save()
-
-    enrollment, created = Enrollment.objects.get_or_create(
-        participant=participant,
-        event=invitation.event,
-        defaults={
-            "created_by": invitation.created_by,
-            "invitation_sent": True,
-            "attendance": True,
-        },
-    )
-    if not created:
-        enrollment.attendance = True
-        enrollment.save()
-
-    Certificate.objects.get_or_create(
-        participant=participant,
-        event=invitation.event,
-        defaults={
-            "template": invitation.event.template,
-            "status": "pending",
-        },
-    )
-
-    return True
-
-
-def _consume_pending_invitation(request):
-    """
-    Lee ``token_invitacion`` de la sesión, busca la invitación y la asocia
-    al usuario autenticado en ``request.user``. Retorna la URL a la que el
-    frontend debe redirigir (``/events/<id>``) o ``None`` si no había token.
-    """
-    from events.models import EventInvitation
-
-    token = request.session.get("token_invitacion")
-    if not token:
-        return None
-
-    try:
-        invitation = EventInvitation.objects.select_related("event").get(token=token)
-    except EventInvitation.DoesNotExist:
-        request.session.pop("token_invitacion", None)
-        request.session.pop("invitacion_email", None)
-        return None
-
-    if not request.user or not request.user.is_authenticated:  # pragma: no cover
-        return None
-
-    accepted = _accept_invitation_for_user(request.user, invitation)
-
-    # Limpiar la sesión siempre que el token se haya consumido
-    request.session.pop("token_invitacion", None)
-    request.session.pop("invitacion_email", None)
-
-    if accepted:
-        return f"/events/{invitation.event.id}"
-    return None  # pragma: no cover
+# Helpers de invitación movidos a ``api/invitation_helpers.py`` para reducir
+# el tamaño de ``views.py``. Ver invitación_helpers.py para el detalle.
+from api.invitation_helpers import (  # noqa: E402,F401
+    _accept_invitation_for_user,
+    _consume_pending_invitation,
+)
 
 
 class InvitationPublicView(APIView):
@@ -3861,10 +3790,15 @@ class InvitationPublicView(APIView):
             404: OpenApiResponse(description="No existe ninguna invitación con ese token."),
         },
     )
+    @method_decorator(ensure_csrf_cookie)
     def get(self, request, token):
         """
         Get invitation details - check if student exists
         GET /api/invitations/<token>/
+
+        El decorador ``ensure_csrf_cookie`` fuerza la emisión de la cookie
+        ``csrftoken`` para que el frontend pueda enviar ``X-CSRFToken`` en los
+        POST cross-site posteriores (login, register).
         """
         from django.utils import timezone
 
@@ -3891,17 +3825,17 @@ class InvitationPublicView(APIView):
         # general pueda encontrarlo y asociar la invitación al usuario.
         request.session["token_invitacion"] = str(token)
         request.session["invitacion_email"] = invitation.email
-        # Forzar la emisión de la cookie csrftoken para que el frontend
-        # pueda enviar X-CSRFToken en los POST cross-site posteriores
-        # (login, register).
-        from django.middleware.csrf import get_token
-
-        get_token(request)
+        # Nota: no hace falta llamar explícitamente a get_token(request).
+        # El middleware CSRF emite la cookie csrftoken automáticamente
+        # cuando la respuesta lleva un Set-Cookie de sesión, que es nuestro caso.
 
         serializer = InvitationDetailSerializer(invitation)
         data = dict(serializer.data)
-        # URLs a las que el frontend debe redirigir para aceptar la invitación
-        email_qs = invitation.email
+        # URLs a las que el frontend debe redirigir para aceptar la invitación.
+        # URL-encodeamos el email para que caracteres como "+" o "&" no rompan el query string.
+        from urllib.parse import quote
+
+        email_qs = quote(invitation.email or "", safe="")
         data["login_url"] = f"/login?email={email_qs}"
         data["register_url"] = f"/register?email={email_qs}"
         data["event_id"] = invitation.event_id
@@ -4117,12 +4051,12 @@ class InvitationRegisterView(APIView):
                     "first_name": data["first_name"],
                     "last_name": data["last_name"],
                     "phone": data.get("phone", ""),
-                    "document_id": f"USR-{existing_user.id}",
+                    "document_id": f"USR-{uuid.uuid4().hex[:8].upper()}",
                 },
             )
         else:
             with transaction.atomic():
-                user = user_model.objects.create_user(
+                user_model.objects.create_user(
                     email=email,
                     full_name=f"{data['first_name']} {data['last_name']}",
                     password=data["password"],
@@ -4133,7 +4067,7 @@ class InvitationRegisterView(APIView):
                     first_name=data["first_name"],
                     last_name=data["last_name"],
                     phone=data.get("phone", ""),
-                    document_id=f"PART-{user.id}",
+                    document_id=f"PART-{uuid.uuid4().hex[:8].upper()}",
                     created_by=invitation.created_by,
                 )
 

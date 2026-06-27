@@ -66,8 +66,8 @@ def test_new_user_invitation_flow_via_session():
     res = client.get(f"/api/invitations/{invitation.token}/")
     assert res.status_code == status.HTTP_200_OK, res.data
     data = res.data
-    assert data["login_url"] == "/login?email=nuevo@test.com"
-    assert data["register_url"] == "/register?email=nuevo@test.com"
+    assert data["login_url"] == "/login?email=nuevo%40test.com"
+    assert data["register_url"] == "/register?email=nuevo%40test.com"
     assert data["event_id"] == event.id
     assert "token_invitacion" in client.session
     assert client.session["token_invitacion"] == str(invitation.token)
@@ -234,7 +234,7 @@ def test_invitation_direct_register_still_clears_session():
 @pytest.mark.django_db
 def test_consume_invitation_with_invalid_token_clears_session():
     """Si el token en sesión no existe en BD, se limpia la sesión y se retorna None (redirect_url ausente)."""
-    admin = _make_admin()
+    _make_admin()
     User.objects.create_user(email="consume@test.com", full_name="Consume User", password="MiPass1234")
 
     client = APIClient()
