@@ -3761,10 +3761,7 @@ _ERR_INVITATION_EXPIRED = "La invitación ha expirada"
 
 # Helpers de invitación movidos a ``api/invitation_helpers.py`` para reducir
 # el tamaño de ``views.py``. Ver invitación_helpers.py para el detalle.
-from api.invitation_helpers import (  # noqa: E402,F401
-    _accept_invitation_for_user,
-    _consume_pending_invitation,
-)
+from api.invitation_helpers import _accept_invitation_for_user, _consume_pending_invitation  # noqa: E402,F401
 
 
 class InvitationPublicView(APIView):
