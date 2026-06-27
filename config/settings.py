@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "simple_history",
     "django_celery_results",
+    "anymail",
     "certificados",
     "users",
     "participants",
@@ -175,16 +176,18 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ========== EMAIL CONFIGURATION (SMTP) ==========
-EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
-EMAIL_HOST = config("EMAIL_HOST", default="smtp-relay.brevo.com")
-EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=lambda v: _bool(v, True))
-EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=lambda v: _bool(v, False))
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Sistema de Certificados <noreply@certypro.app>")
+# ========== EMAIL CONFIGURATION ==========
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+
+if RESEND_API_KEY:
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    ANYMAIL = {
+        "RESEND_API_KEY": RESEND_API_KEY,
+    }
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Sistema de Certificados <noreply@certypro.uk>")
 FRONTEND_URL = config("FRONTEND_URL", default="https://certyfront.vercel.app")
 
 # ========== META WHATSAPP CLOUD API ==========
