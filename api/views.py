@@ -3234,6 +3234,7 @@ class BulkCertificateGenerationView(APIView):
             # Creamos la plantilla ad-hoc
             template = ExcelProcessingService.create_bulk_template(event, request.user, template_image, request.data)
 
+            excel_file.seek(0)
             file_bytes = BytesIO(excel_file.read())
             service = ExcelProcessingService(
                 file_object=file_bytes,
