@@ -2,6 +2,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -323,6 +324,202 @@ class EventsViewSetTest(TestCase):
         e = make_event(self.admin)
         res = self.client.post(f"/api/events/{e.id}/enroll/", {"participant_email": "x@x.com"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_event_with_template_and_font_color(self):
+        """Cubre perform_create con template_image, font_color y _create_event_template"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile("cert.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.post(
+            "/api/events/",
+            {
+                "name": "Template Event",
+                "event_date": "2026-09-01",
+                "status": "active",
+                "template_image": png,
+                "name_x": "60",
+                "name_y": "50",
+                "name_font_size": "30",
+                "font_color": "#ff0000",
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["font_color"], "#ff0000")
+        self.assertIsNotNone(res.data.get("template"))
+
+    def test_create_event_with_instructor(self):
+        """Cubre get_instructor_specialty y get_instructor_signature en EventSerializer"""
+        inst = Instructor.objects.create(full_name="Prof. Test", email="prof_test@test.com", created_by=self.admin)
+        res = self.client.post(
+            "/api/events/",
+            {"name": "Instructor Event", "event_date": "2026-10-01", "status": "active", "instructor": inst.id},
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["instructor_name"], "Prof. Test")
+        self.assertIsNone(res.data.get("instructor_specialty"))
+        self.assertIsNone(res.data.get("instructor_signature"))
+
+    def test_retrieve_event_includes_font_color(self):
+        """Cubre font_color en el serializador al recuperar evento"""
+        e = make_event(self.admin)
+        res = self.client.get(f"/api/events/{e.id}/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("font_color", res.data)
+        self.assertEqual(res.data["font_color"], "#1e3a8a")
+
+    def test_update_event_with_font_color(self):
+        """Cubre perform_update sin template_image pero con font_color"""
+        e = make_event(self.admin)
+        res = self.client.patch(
+            f"/api/events/{e.id}/",
+            {"font_color": "#00ff00"},
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#00ff00")
+
+    def test_update_event_with_template_image(self):
+        """Cubre perform_update con template_image y _create_event_template rama existente"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        e = make_event(self.admin)
+        png = SimpleUploadedFile("update.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.patch(
+            f"/api/events/{e.id}/",
+            {
+                "template_image": png,
+                "name_x": "70",
+                "font_color": "#0000ff",
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#0000ff")
+
+    def test_create_event_with_instructor_full_details(self):
+        """Cubre get_instructor_specialty y get_instructor_signature con valores no-None"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        sig = SimpleUploadedFile("sig.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, content_type="image/png")
+        inst = Instructor.objects.create(
+            full_name="Dr. Expert",
+            email="dr_expert@test.com",
+            specialty="Cardiología",
+            signature_image=sig,
+            created_by=self.admin,
+        )
+        res = self.client.post(
+            "/api/events/",
+            {"name": "Specialty Event", "event_date": "2026-12-01", "status": "active", "instructor": inst.id},
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["instructor_specialty"], "Cardiología")
+        self.assertIn("instructor_signature", res.data)
+        self.assertIsNotNone(res.data["instructor_signature"])
+
+    def test_update_event_existing_template_layout_only(self):
+        """Cubre _create_event_template cuando event.template existe (solo layout, sin imagen)"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile("layout.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        create_res = self.client.post(
+            "/api/events/",
+            {
+                "name": "Layout Event",
+                "event_date": "2026-09-01",
+                "status": "active",
+                "template_image": png,
+                "name_x": "60",
+                "name_y": "50",
+                "name_font_size": "30",
+                "font_color": "#ff0000",
+            },
+            format="multipart",
+        )
+        self.assertEqual(create_res.status_code, status.HTTP_201_CREATED)
+        event_id = create_res.data["id"]
+
+        res = self.client.patch(
+            f"/api/events/{event_id}/",
+            {"font_color": "#00ff00", "name_x": "80", "name_y": "30", "name_font_size": "36"},
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#00ff00")
+
+    def test_update_event_existing_template_with_new_image(self):
+        """Cubre _create_event_template cuando event.template existe con nueva template_image"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png1 = SimpleUploadedFile("first.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        create_res = self.client.post(
+            "/api/events/",
+            {
+                "name": "Image Event",
+                "event_date": "2026-10-01",
+                "status": "active",
+                "template_image": png1,
+                "font_color": "#ff0000",
+            },
+            format="multipart",
+        )
+        self.assertEqual(create_res.status_code, status.HTTP_201_CREATED)
+        event_id = create_res.data["id"]
+
+        png2 = SimpleUploadedFile("second.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.patch(
+            f"/api/events/{event_id}/",
+            {"template_image": png2, "font_color": "#0000ff"},
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["font_color"], "#0000ff")
+
+    def test_create_event_with_default_fallback_values(self):
+        """Cubre valores por defecto en _create_event_template (name_x=0, name_y=0, font_size=0, font_color='')"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile("fallback.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, content_type="image/png")
+        res = self.client.post(
+            "/api/events/",
+            {
+                "name": "Fallback Event",
+                "event_date": "2026-11-01",
+                "status": "active",
+                "template_image": png,
+                "name_x": "0",
+                "name_y": "0",
+                "name_font_size": "0",
+                "font_color": "",
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_get_instructor_signature_exception_path(self):
+        """Cubre el bloque except en get_instructor_signature cuando url() lanza excepción"""
+        from unittest.mock import patch
+
+        from django.core.files.storage import default_storage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        sig = SimpleUploadedFile("sig_exc.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, content_type="image/png")
+        inst = Instructor.objects.create(
+            full_name="Dr. Exp",
+            email="dr_exp_sig@test.com",
+            specialty="Test",
+            signature_image=sig,
+            created_by=self.admin,
+        )
+        res_create = self.client.post(
+            "/api/events/",
+            {"name": "Sig Event", "event_date": "2026-12-01", "status": "active", "instructor": inst.id},
+        )
+        event_id = res_create.data["id"]
+
+        with patch.object(default_storage, "url", side_effect=Exception("Storage error")):
+            res = self.client.get(f"/api/events/{event_id}/")
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            self.assertIn("instructor_signature", res.data)
 
 
 # ─────────────────────────────────────────────
@@ -3525,8 +3722,6 @@ class AttendanceAPIBlockTest(TestCase):
 # ═══════════════════════════════════════════════════════════════
 # PASO 3 — TC-025 a TC-035
 # ═══════════════════════════════════════════════════════════════
-from django.core.cache import cache
-
 # ─────────────────────────────────────────────
 # TC-025: Rate limiting
 # ─────────────────────────────────────────────
@@ -5588,8 +5783,35 @@ class CoverageEdgeCasesTest(TestCase):
         """Cubre 403 en EventsViewSet.participants"""
         admin_other = make_admin("other_parts@test.com")
         event = make_event(admin_other)
+        participante_user = make_user("non_op_parts@test.com")
+        participant_obj = make_participant(admin_other, doc="NOP01", email="non_op_parts@test.com")
+        Enrollment.objects.create(participant=participant_obj, event=event, created_by=admin_other)
+        self.client.force_authenticate(user=participante_user)
         res = self.client.get(f"/api/events/{event.id}/participants/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_participants_operational_user_can_access_others_event(self):
+        """Cubre la rama is_operational_user=True en EventsViewSet.participants"""
+        admin_other = make_admin("other_parts_op@test.com")
+        event = make_event(admin_other)
+        participant_obj = make_participant(admin_other, doc="OPP01", email="other_parts_op_p@test.com")
+        Enrollment.objects.create(participant=participant_obj, event=event, created_by=admin_other)
+        coord = make_coordinator("coord_parts@test.com")
+        self.client.force_authenticate(user=coord)
+        res = self.client.get(f"/api/events/{event.id}/participants/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+
+    def test_generate_certificates_operational_user_can_generate_others_event(self):
+        """Cubre la rama is_operational_user=True en EventsViewSet.generate_certificates"""
+        admin_other = make_admin("other_gen_op@test.com")
+        event = make_event(admin_other)
+        participant_obj = make_participant(admin_other, doc="OGP01", email="other_gen_op_p@test.com")
+        Enrollment.objects.create(participant=participant_obj, event=event, attendance=True, created_by=admin_other)
+        coord = make_coordinator("coord_gen@test.com")
+        self.client.force_authenticate(user=coord)
+        res = self.client.post(f"/api/events/{event.id}/certificates/generate/", {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_event_deliveries_non_owner_forbidden(self):
         """Cubre 403 en EventsViewSet.event_deliveries"""

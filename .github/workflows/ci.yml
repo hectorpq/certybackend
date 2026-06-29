@@ -2,7 +2,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [main, develop, coverage-snyck]
+    branches: [main, develop, coverage-snyck, final]
   pull_request:
     branches: [main, develop]
 

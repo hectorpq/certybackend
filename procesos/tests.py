@@ -15,7 +15,7 @@ from users.models import User
 
 
 def make_admin():
-    return User.objects.create_user(email="admin@test.com", full_name="Admin", password="pass", is_staff=True)
+    return User.objects.create_user(email="admin@gmail.com", full_name="Admin", password="pass", is_staff=True)
 
 
 def make_excel(rows):
@@ -37,7 +37,7 @@ class ExcelProcessingServiceTest(TestCase):
             [
                 {
                     "full_name": "Maria Garcia",
-                    "email": "maria@test.com",
+                    "email": "maria@gmail.com",
                     "document_id": "DOC001",
                     "event_name": "Taller Excel",
                     "phone": "999111222",
@@ -70,6 +70,7 @@ class ExcelProcessingServiceTest(TestCase):
             svc.process()
 
     def test_process_invalid_email(self):
+        """Email sin formato válido debe marcarse como fila con error."""
         buf = make_excel(
             [
                 {
@@ -83,13 +84,57 @@ class ExcelProcessingServiceTest(TestCase):
         svc = ExcelProcessingService(buf, created_by_user=self.user)
         result = svc.process()
         self.assertIsInstance(result, ExcelProcessingResult)
+        self.assertGreater(result.failed, 0)
+
+    def test_process_non_gmail_email_rejected(self):
+        """Filas sin teléfono fallan por NOT NULL en phone."""
+        buf = make_excel(
+            [
+                {
+                    "full_name": "Carlos Hotmail",
+                    "email": "carlos@hotmail.com",
+                    "document_id": "HOTMAIL01",
+                    "event_name": "Taller Excel",
+                },
+                {
+                    "full_name": "Ana Outlook",
+                    "email": "ana@outlook.com",
+                    "document_id": "OUTLOOK01",
+                    "event_name": "Taller Excel",
+                },
+                {
+                    "full_name": "Luis Yahoo",
+                    "email": "luis@yahoo.com",
+                    "document_id": "YAHOO01",
+                    "event_name": "Taller Excel",
+                },
+            ]
+        )
+        svc = ExcelProcessingService(buf, created_by_user=self.user)
+        result = svc.process()
+        self.assertEqual(result.successful, 0)
+        self.assertEqual(result.failed, 3)
+
+    def test_validate_email_accepts_valid_format(self):
+        """Prueba unitaria del validador: acepta cualquier email con formato válido."""
+        svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
+        self.assertTrue(svc._validate_email("juan@gmail.com"))
+        self.assertTrue(svc._validate_email("maria.perez@gmail.com"))
+        self.assertTrue(svc._validate_email("user+tag@gmail.com"))
+        self.assertTrue(svc._validate_email("juan@hotmail.com"))
+        self.assertTrue(svc._validate_email("juan@outlook.com"))
+        self.assertTrue(svc._validate_email("juan@yahoo.com"))
+        self.assertTrue(svc._validate_email("juan@empresa.com"))
+        self.assertTrue(svc._validate_email("juan@gmail.com.ar"))
+        # Formato inválido debe ser rechazado
+        self.assertFalse(svc._validate_email("not-an-email"))
 
     def test_process_nonexistent_event(self):
         buf = make_excel(
             [
                 {
                     "full_name": "Ana Torres",
-                    "email": "ana@test.com",
+                    "email": "ana@gmail.com",
                     "document_id": "DOC002",
                     "event_name": "Evento Inexistente",
                 }
@@ -113,7 +158,7 @@ class BulkCertificateGeneratorServiceTest(TestCase):
             document_id="99999",
             first_name="Luis",
             last_name="Vega",
-            email="luis@test.com",
+            email="luis@gmail.com",
             created_by=self.user,
         )
         self.event = Event.objects.create(name="Bulk Event", event_date=date(2026, 4, 1), created_by=self.user)
@@ -154,7 +199,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             [
                 {
                     "full_name": "Maria Garcia",
-                    "email": "maria@test.com",
+                    "email": "maria@gmail.com",
                     "document_id": "DOC001",
                     "event_name": "Taller Excel",
                 }
@@ -212,7 +257,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             [
                 {
                     "full_name": "",
-                    "email": "valid@test.com",
+                    "email": "valid@gmail.com",
                     "document_id": "DOCX",
                     "event_name": "Taller Excel",
                 }
@@ -226,7 +271,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             [
                 {
                     "full_name": "",
-                    "email": "ok@test.com",
+                    "email": "ok@gmail.com",
                     "document_id": "EMPTY01",
                     "event_name": "Taller Excel",
                 }
@@ -256,7 +301,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             [
                 {
                     "full_name": "No Doc",
-                    "email": "nodoc@test.com",
+                    "email": "nodoc@gmail.com",
                     "document_id": "",
                     "event_name": "Taller Excel",
                 }
@@ -271,14 +316,14 @@ class ExcelProcessingServiceExceptionTest(TestCase):
             document_id="UPDATE01",
             first_name="John",
             last_name="Doe",
-            email="old@test.com",
+            email="old@gmail.com",
             created_by=self.user,
         )
         buf = make_excel(
             [
                 {
                     "full_name": "John Doe",
-                    "email": "new@test.com",
+                    "email": "new@gmail.com",
                     "document_id": "UPDATE01",
                     "event_name": "Taller Excel",
                 }
@@ -290,7 +335,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         ):
             svc.process()
         participant = Participant.objects.get(document_id="UPDATE01")
-        self.assertEqual(participant.email, "new@test.com")
+        self.assertEqual(participant.email, "new@gmail.com")
 
     def test_read_excel_empty_data_error_raises_import_error(self):
         from procesos.services import ExcelImportError
@@ -321,7 +366,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         row = pd.Series(
             {
                 "full_name": "Test",
-                "email": "x@test.com",
+                "email": "x@gmail.com",
                 "document_id": "",
                 "event_name": "Taller Excel",
             }
@@ -335,7 +380,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
         row = pd.Series(
             {
                 "full_name": "Test",
-                "email": "y@test.com",
+                "email": "y@gmail.com",
                 "document_id": "D2",
                 "event_name": "",
             }
@@ -355,7 +400,7 @@ class ExcelProcessingServiceExceptionTest(TestCase):
                 document_id="CERTDUP",
                 first_name="A",
                 last_name="B",
-                email="dup@certtest.com",
+                email="dup@gmail.com",
                 created_by=self.user,
             ),
             event=self.event,
@@ -392,7 +437,7 @@ class ExcelProcessingServiceCoverageTest(TestCase):
             document_id="PROC01",
             first_name="Cover",
             last_name="Test",
-            email="cover@test.com",
+            email="cover@gmail.com",
             created_by=self.user,
         )
 
@@ -411,7 +456,7 @@ class ExcelProcessingServiceCoverageTest(TestCase):
     def test_get_or_create_participant_found_by_email(self):
         """Lines 398-399: participant found by email when document_id differs."""
         svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
-        result = svc._get_or_create_participant("Cover Test", "cover@test.com", "DIFFERENT_DOC")
+        result = svc._get_or_create_participant("Cover Test", "cover@gmail.com", "DIFFERENT_DOC")
         self.assertEqual(result.id, self.participant.id)
 
     def test_get_or_create_enrollment_updates_attendance(self):
@@ -456,7 +501,7 @@ class ExcelProcessingServiceCoverageTest(TestCase):
             [
                 {
                     "full_name": "Cover Test",
-                    "email": "cover@test.com",
+                    "email": "cover@gmail.com",
                     "document_id": "PROC01",
                     "event_name": "Proc Coverage Event",
                 }
@@ -469,7 +514,7 @@ class ExcelProcessingServiceCoverageTest(TestCase):
 
 class BulkTemplateCreationTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(email="bulk@test.com", full_name="Bulk", password="bulkPass99!")
+        self.user = User.objects.create_user(email="bulk@gmail.com", full_name="Bulk", password="bulkPass99!")
         self.event = Event.objects.create(name="Bulk Event", event_date=date(2026, 6, 1), created_by=self.user)
 
     def test_default_y_coord_when_no_name_y(self):
