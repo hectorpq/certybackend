@@ -1,65 +1,96 @@
-# Módulo: Certificados
+# Certificados (App `certificados`)
 
-El módulo de `certificados` es el núcleo del sistema. Gestiona la creación, el ciclo de vida, la generación de PDF y la entrega de los certificados.
+## Modelos
 
-## Modelo de Datos: `Certificate`
+### `Certificate`
 
-El modelo `Certificate` almacena toda la información de un certificado.
+Modelo principal que representa un certificado emitido a un participante por un evento.
 
-- **`participant`**: Relación con el participante que recibe el certificado.
-- **`event`**: Relación con el evento al que pertenece el certificado.
-- **`template`**: Plantilla de diseño utilizada.
-- **`status`**: Estado del ciclo de vida del certificado.
-  - `pending`: Creado, pero el PDF no ha sido generado.
-  - `generated`: El PDF ha sido generado y está listo para ser enviado.
-  - `sent`: Entregado exitosamente al menos una vez.
-  - `failed`: El último intento de entrega falló.
-- **`verification_code`**: Código único para la verificación pública.
-- **`pdf_url`**: Ruta al archivo PDF generado.
-- **`expires_at`**: Fecha de vencimiento del certificado.
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `participant` | FK `Participant` | Participante al que pertenece el certificado |
+| `event` | FK `Event` | Evento asociado |
+| `template` | FK `Template` (nullable) | Plantilla usada para el PDF |
+| `generated_by` | FK `User` (nullable) | Usuario que generó el certificado |
+| `verification_code` | `CharField(50, unique)` | Código único de verificación (formato SHA-256 truncado) |
+| `pdf_url` | `TextField` | Ruta al archivo PDF generado |
+| `status` | `CharField(20)` | Estado: `pending`, `generated`, `sent`, `failed` |
+| `expires_at` | `DateTimeField` (nullable) | Fecha de expiración (1 año desde emisión) |
+| `issued_at` | `DateTimeField` (auto) | Fecha de emisión |
+| `updated_at` | `DateTimeField` (auto) | Última actualización |
 
-## Endpoints de la API
+**Restricción:** `unique_together = (participant, event)` — un participante no puede tener dos certificados para el mismo evento.
 
-La gestión de certificados se realiza a través de `CertificateViewSet`.
+**Herencia:** `SoftDeleteMixin` — soporta borrado lógico con `is_deleted`, `deleted_at` y `deleted_by`.
 
-### `GET /api/certificates/`
-- **Descripción**: Lista todos los certificados. Los administradores ven todos; los participantes solo ven los suyos.
-- **Permisos**: Autenticado.
+**Historial:** `HistoricalRecords` — cada cambio queda registrado con quién, cuándo y qué cambió (accesible via `certificate.history.all()`).
 
-### `POST /api/certificates/`
-- **Descripción**: Crea un nuevo certificado manualmente. Requiere `participant_id`, `event_id` y `template_id`.
-- **Permisos**: Administrador/Coordinador.
+### `Template`
 
-### `GET /api/certificates/{id}/`
-- **Descripción**: Obtiene los detalles completos de un certificado, incluyendo su historial de entregas.
-- **Permisos**: Autenticado (propietario) o Administrador.
+Modelo para las plantillas visuales de los certificados.
 
-### `POST /api/certificates/{id}/generate/`
-- **Descripción**: Genera el archivo PDF del certificado. El estado cambia de `pending` a `generated`.
-- **Permisos**: Administrador/Coordinador.
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `name` | `CharField(100)` | Nombre de la plantilla |
+| `category` | `CharField(100)` | Categoría (opcional) |
+| `background_image` | `ImageField` | Imagen de fondo (PNG/JPG) |
+| `layout_config` | `JSONField` | Configuración JSON de posiciones: `participant_name`, `event_name`, `event_date`, `verification_code`, `qr_code`, `signature` |
+| `is_active` | `BooleanField` | Plantilla activa/inactiva |
+| `font_color`, `font_family`, `font_size` | Campos planos | Configuración tipográfica del nombre |
+| `x_coord`, `y_coord` | `FloatField` | Coordenadas de posición del nombre (en pulgadas) |
 
-### `POST /api/certificates/{id}/deliver/`
-- **Descripción**: Envía el certificado a través de un método específico (`email`, `whatsapp`, `link`).
-- **Permisos**: Administrador/Coordinador.
+## Endpoints REST
 
-### `GET /api/certificates/verify/?code={code}`
-- **Descripción**: Endpoint público para verificar la autenticidad de un certificado usando su código.
-- **Permisos**: Público (sin autenticación).
+### Certificados (`/api/certificates/`)
 
-### `POST /api/certificates/generate-bulk/`
-- **Descripción**: Endpoint para la carga masiva de certificados desde un archivo Excel.
-- **Funcionamiento**:
-  1. Recibe un archivo `excel_file`, una `template_image` y un `event_id`.
-  2. Crea una plantilla temporal (`ad-hoc`) para este proceso.
-  3. Utiliza `ExcelProcessingService` para leer el archivo, validar datos, crear/actualizar participantes, inscribirlos y generar los certificados.
-  4. Cada certificado se genera y se intenta enviar por email en una transacción atómica por fila.
-- **Permisos**: Administrador/Coordinador.
+- `GET /api/certificates/` — Lista paginada de certificados (admin/coordinador ve todos, participante solo los suyos)
+- `POST /api/certificates/` — Crear certificado manualmente
+- `GET /api/certificates/{id}/` — Detalle del certificado con historial de entregas
+- `PATCH /api/certificates/{id}/` — Actualizar certificado
+- `DELETE /api/certificates/{id}/` — Eliminar certificado (borrado lógico)
 
-### `POST /api/certificates/preview/`
-- **Descripción**: Permite previsualizar los datos de un archivo Excel sin procesarlos.
-- **Funcionamiento**:
-  1. Recibe un `excel_file`.
-  2. `ExcelProcessingService` lee el archivo, valida las columnas y retorna los datos en formato JSON.
-  3. El frontend puede usar estos datos para que el usuario los edite antes de enviarlos al endpoint de procesamiento final.
-- **Permisos**: Administrador/Coordinador.
+### Acciones de Certificado
 
+- `POST /api/certificates/{id}/generate/` — Generar PDF del certificado
+    - Body opcional: `{"template_id": "uuid"}`
+    - Cambia estado de `pending` a `generated`
+- `POST /api/certificates/{id}/deliver/` — Entregar certificado
+    - Body requerido: `{"method": "email|whatsapp|link"}`
+    - Body opcional: `{"recipient": "email o teléfono"}`
+- `GET /api/certificates/{id}/history/` — Historial de entregas del certificado
+- `POST /api/certificates/{id}/retry/` — Reintentar entrega fallida
+- `GET /api/certificates/{id}/changelog/` — Historial de cambios del certificado
+- `POST /api/certificates/{id}/restore/` — Restaurar certificado eliminado (solo admin)
+- `GET /api/certificates/export/` — Exportar certificados a CSV/Excel (solo admin)
+- `GET /api/certificates/verify/?code=XXXX` — Verificar autenticidad (público, no requiere auth)
+
+### Entregas (`/api/deliveries/`)
+
+- `GET /api/deliveries/` — Listar registros de entrega (solo admin, filtrable por `certificate_id`)
+- `GET /api/deliveries/{id}/` — Detalle de registro de entrega
+
+### Certificados - Masivo
+
+- `POST /api/certificates/preview/` — Previsualizar datos del Excel (no crea nada)
+- `POST /api/certificates/process/` — Procesar registros editados y crear certificados
+- `POST /api/certificates/generate-bulk/` — Generar certificados masivamente desde Excel (multipart: `excel_file`, `template_image`, `event_id`)
+
+### Plantillas (`/api/templates/`)
+
+- `GET /api/templates/` — Listar plantillas
+- `POST /api/templates/` — Crear plantilla
+- `GET /api/templates/{id}/` — Detalle de plantilla
+- `PUT /api/templates/{id}/` — Actualizar plantilla
+- `DELETE /api/templates/{id}/` — Eliminar plantilla
+- `POST /api/templates/{id}/upload-image/` — Subir imagen de fondo
+- `POST /api/templates/{id}/upload-signature/` — Subir firma del instructor
+- `GET /api/templates/{id}/preview/` — Previsualizar plantilla
+- `GET /api/templates/{id}/changelog/` — Historial de cambios
+- `POST /api/templates/{id}/restore/` — Restaurar plantilla eliminada
+
+## Flujo de Emisión de un Certificado
+
+- **Creación:** Se crea el registro `Certificate` con estado `pending` y se genera automáticamente un `verification_code` único basado en SHA-256 del participante + evento + timestamp.
+- **Generación de PDF:** Se invoca `POST /certificates/{id}/generate/`. El servicio `PDFService` toma la plantilla asociada, renderiza el nombre del participante, evento, fecha, código QR de verificación y firma del instructor sobre la imagen de fondo. El PDF se guarda en `certificates/pdfs/`.
+- **Distribución:** Se invoca `POST /certificates/{id}/deliver/` con el método deseado. Se crea un `DeliveryLog` que registra el intento. Si el envío es exitoso, el certificado pasa a estado `sent`; si falla, queda en `failed` y se puede reintentar.
+- **Verificación Pública:** Cualquier persona puede verificar la autenticidad del certificado mediante `GET /api/certificates/verify/?code=XXXX`. El endpoint es público y retorna los datos del certificado si es válido.

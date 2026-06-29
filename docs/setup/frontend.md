@@ -1,43 +1,76 @@
-# Instalación del Frontend (React + Vite)
+# Instalación del Frontend
 
-Esta guía cubre la instalación y configuración del frontend de CertySys, desarrollado con React y Vite.
+## Requisitos del Entorno
 
-## 🔧 Stack Tecnológico
+- Node.js 18+ (recomendado 20 LTS)
+- npm 9+
 
-| Componente          | Detalle           |
-| ------------------- | ----------------- |
-| **Framework**       | React 18.2        |
-| **Bundler**         | Vite              |
-| **Lenguaje**        | TypeScript        |
-| **Estilos**         | TailwindCSS       |
-| **Routing**         | React Router DOM  |
-| **Peticiones API**  | Axios             |
-| **Gestión de Estado** | TanStack Query  |
-| **Tests**           | Vitest, RTL, Playwright |
+## Instalación de Dependencias
 
----
-
-## 🚀 Instalación
-
-### 1. Navegar al Directorio
 ```bash
-cd certysys/certyfront
-```
-
-### 2. Instalar Dependencias
-```bash
+cd certyfront
 npm install
 ```
 
-### 3. Configurar Variables de Entorno
-Crea un archivo `.env` en la raíz de `certyfront/` para apuntar al backend.
+## Variables de Entorno
+
+El frontend utiliza `VITE_API_URL` como variable de entorno para apuntar a la API de Django.
+
+### Desarrollo (`.env`)
+
 ```env
-# certyfront/.env
 VITE_API_URL=http://localhost:8000
 ```
 
-### 4. Ejecutar Servidor de Desarrollo
+### Producción (`.env.production`)
+
+```env
+VITE_API_URL=https://api.certypro.app
+```
+
+!!! hint "Proxy de Desarrollo"
+    En `vite.config.ts` está configurado un proxy que redirige `/api` y `/media` a `http://localhost:8000`, por lo que en desarrollo no es necesario definir `VITE_API_URL` explícitamente a menos que la API esté en otro puerto.
+
+## Ejecutar en Desarrollo
+
 ```bash
 npm run dev
 ```
-La aplicación estará disponible en `http://localhost:5173` (o el puerto que indique Vite).
+
+El servidor de desarrollo estará disponible en `http://localhost:5173`.
+
+## Compilar para Producción
+
+```bash
+npm run build
+```
+
+Los archivos compilados se generan en el directorio `dist/`.
+
+## Preview de Producción
+
+```bash
+npm run preview
+```
+
+## Ejecutar Pruebas
+
+```bash
+# Pruebas unitarias con Vitest
+npm test
+
+# Pruebas con cobertura
+npm run test:coverage
+
+# Pruebas E2E con Playwright (requiere servidor backend corriendo)
+npx playwright test
+```
+
+!!! warning "Pruebas E2E"
+    Las pruebas de Playwright requieren que el backend de Django esté corriendo en `http://localhost:8000` y que exista un usuario administrador con las credenciales `admin@certypro.com` / `admin123`.
+
+## Abrir Interfaz Gráfica de Playwright
+
+```bash
+npx playwright test --ui
+```

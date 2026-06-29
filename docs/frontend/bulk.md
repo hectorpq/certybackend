@@ -1,22 +1,55 @@
-# Flujo de Carga Masiva (Bulk)
+# Carga Masiva (Bulk) — `BulkGeneratePage.tsx`
 
-La funcionalidad de carga masiva permite a los coordinadores y administradores generar cientos de certificados a partir de un archivo Excel, simplificando drásticamente el proceso.
+## Modos de Operación
 
-## Proceso en el Frontend
+La página de generación masiva soporta dos modos:
 
-El flujo se divide en dos pasos principales para garantizar la calidad de los datos antes del procesamiento final.
+### Modo "Por Excel"
 
-### Paso 1: Previsualización y Edición
+- **Paso 1 — Subir Excel:** El usuario selecciona un evento activo y sube un archivo Excel (`.xlsx`/`.xls`). El frontend valida que las columnas requeridas existan (`full_name`, `email`, `document_id`).
+- **Paso 2 — Revisar:** El frontend muestra una tabla con los datos extraídos (hasta 20 filas visibles) para que el usuario verifique la información.
+- **Paso 3 — Plantilla:** El usuario sube la imagen de fondo del certificado y configura interactivamente:
+    - Posición del nombre (clic en la imagen para definir coordenadas X/Y en porcentaje)
+    - Tamaño de fuente (slider de 12pt a 72pt)
+    - Color del nombre (selector de color)
+    - Firma digital del instructor (nombre, especialidad y archivo de firma)
+- **Paso 4 — Resultado:** Muestra el resumen del procesamiento: total de registros, enviados exitosamente, fallidos y una lista detallada de errores.
 
-1.  **Carga del Archivo**: El usuario selecciona un archivo Excel (`.xlsx`) y una imagen de plantilla (`.png`/`.jpg`).
-2.  **Petición a `/api/certificates/preview/`**: El frontend envía el archivo Excel al backend.
-3.  **Respuesta del Backend**: El backend valida la estructura del archivo y devuelve los datos extraídos en formato JSON.
-4.  **Renderizado en Tabla**: El frontend muestra los datos en una tabla editable. Esto permite al usuario corregir nombres, emails o cualquier otro campo directamente en la interfaz antes de continuar.
+### Modo "Por Evento"
 
-### Paso 2: Procesamiento Final
+- El usuario selecciona un evento existente y visualiza los participantes inscritos con su asistencia.
+- Puede seleccionar participantes específicos o generar para todos los que asistieron.
+- Configura la plantilla visual (imagen de fondo, posición del nombre, firma).
+- Guarda la configuración en el evento (`PATCH /events/{id}/`) antes de generar.
+- Los certificados se generan y envían en lote.
 
-1.  **Confirmación del Usuario**: Una vez que el usuario ha revisado y (opcionalmente) editado los datos, hace clic en "Generar Certificados".
-2.  **Petición a `/api/certificates/process/` (o `generate-bulk`)**: El frontend envía el array de datos (ya limpios y editados) junto con el ID del evento y la imagen de la plantilla al backend.
-3.  **Procesamiento en Backend**: El backend itera sobre cada registro, crea los participantes, las inscripciones y genera los certificados.
-4.  **Resumen de Resultados**: El backend devuelve un resumen detallado del proceso: cuántos certificados se crearon con éxito, cuántos fallaron y una lista de errores específicos por fila.
-5.  **Feedback al Usuario**: El frontend muestra este resumen al usuario, permitiéndole identificar y corregir fácilmente cualquier problema para un futuro intento.
+## Validación en el Cliente
+
+Antes de enviar el archivo a la API, el frontend verifica:
+
+- Que se haya seleccionado un evento
+- Que el archivo Excel tenga las columnas requeridas
+- Que la imagen de fondo esté en formato PNG o JPG
+- Que los datos de la plantilla (posición, tamaño, color) sean válidos
+
+## Llamadas a la API
+
+- `POST /api/certificates/preview/` — Envía el Excel para previsualización (multipart: `excel_file`)
+- `POST /api/certificates/generate-bulk/` — Envía el Excel + imagen de fondo + configuración para generar certificados (multipart: `excel_file`, `template_image`, `event_id`, `signature_image`, `name_x`, `name_y`, `font_size`, `font_color`)
+- `POST /events/{id}/certificates/generate/` — Genera certificados para participantes de un evento
+- `PATCH /events/{id}/` — Guarda configuración de plantilla en el evento
+
+## Hooks Relacionados
+
+### `useCertificates.ts`
+
+- `usePreviewExcel()` — Mutación para previsualizar Excel
+- `useGenerateBulkFull()` — Mutación para generación masiva completa
+
+### `useEvents.ts`
+
+- `useEvents({ status: 'active' })` — Obtiene eventos activos para el selector
+- `useEvent(id)` — Obtiene detalle de un evento
+- `useEventParticipants(id)` — Obtiene participantes de un evento con estado de certificado
+- `useEventGenerateCertificates()` — Mutación para generar certificados de un evento
+- `useUpdateEvent()` — Mutación para actualizar configuración del evento

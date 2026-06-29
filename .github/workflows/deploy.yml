@@ -26,4 +26,4 @@ jobs:
 
       - name: Compilar y Desplegar
         run: |
-          mkdocs gh-deploy --force
+          mkdocs gh-deploy --force  
