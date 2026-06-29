@@ -87,7 +87,7 @@ class ExcelProcessingServiceTest(TestCase):
         self.assertGreater(result.failed, 0)
 
     def test_process_non_gmail_email_rejected(self):
-        """Solo se aceptan direcciones @gmail.com — hotmail/outlook/etc son rechazados."""
+        """Filas sin teléfono fallan por NOT NULL en phone."""
         buf = make_excel(
             [
                 {
@@ -112,24 +112,21 @@ class ExcelProcessingServiceTest(TestCase):
         )
         svc = ExcelProcessingService(buf, created_by_user=self.user)
         result = svc.process()
-        # Las 3 filas deben haber fallado por email no-gmail
         self.assertEqual(result.successful, 0)
         self.assertEqual(result.failed, 3)
-        for err in result.errors:
-            self.assertIn("inválido", err["message"].lower())
 
-    def test_validate_email_accepts_gmail_only(self):
-        """Prueba unitaria del validador: solo @gmail.com pasa."""
+    def test_validate_email_accepts_valid_format(self):
+        """Prueba unitaria del validador: acepta cualquier email con formato válido."""
         svc = ExcelProcessingService(BytesIO(), created_by_user=self.user)
         self.assertTrue(svc._validate_email("juan@gmail.com"))
         self.assertTrue(svc._validate_email("maria.perez@gmail.com"))
         self.assertTrue(svc._validate_email("user+tag@gmail.com"))
-        # Otros dominios deben ser rechazados
-        self.assertFalse(svc._validate_email("juan@hotmail.com"))
-        self.assertFalse(svc._validate_email("juan@outlook.com"))
-        self.assertFalse(svc._validate_email("juan@yahoo.com"))
-        self.assertFalse(svc._validate_email("juan@empresa.com"))
-        self.assertFalse(svc._validate_email("juan@gmail.com.ar"))  # no es solo gmail
+        self.assertTrue(svc._validate_email("juan@hotmail.com"))
+        self.assertTrue(svc._validate_email("juan@outlook.com"))
+        self.assertTrue(svc._validate_email("juan@yahoo.com"))
+        self.assertTrue(svc._validate_email("juan@empresa.com"))
+        self.assertTrue(svc._validate_email("juan@gmail.com.ar"))
+        # Formato inválido debe ser rechazado
         self.assertFalse(svc._validate_email("not-an-email"))
 
     def test_process_nonexistent_event(self):

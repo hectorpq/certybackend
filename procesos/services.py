@@ -407,12 +407,8 @@ class ExcelProcessingService:
             )
 
     def _validate_email(self, email: str) -> bool:
-        """Valida formato de email — solo se aceptan direcciones @gmail.com.
-
-        El sistema de certificados exige Gmail porque es la única vía de
-        entrega automática configurada. Cualquier otro dominio se rechaza.
-        """
-        pattern = r"^[a-zA-Z0-9._%+-]+@gmail\.com$"
+        """Valida formato de email — acepta cualquier dominio válido."""
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return re.match(pattern, email) is not None
 
     def _get_or_create_participant(
