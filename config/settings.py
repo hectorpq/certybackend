@@ -194,6 +194,9 @@ FRONTEND_URL = config("FRONTEND_URL", default="https://certyfront.vercel.app")
 META_WHATSAPP_TOKEN = config("META_WHATSAPP_TOKEN", default="")
 META_WHATSAPP_PHONE_ID = config("META_WHATSAPP_PHONE_ID", default="")
 
+# ========== FILE UPLOAD SIZE LIMIT ==========
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+
 # ========== PDF GENERATION PATH ==========
 CERTIFICATES_PDF_PATH = BASE_DIR / "certificates" / "pdfs"
 CERTIFICATES_PDF_PATH.mkdir(parents=True, exist_ok=True)

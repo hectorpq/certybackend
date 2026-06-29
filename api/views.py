@@ -3400,6 +3400,7 @@ class BulkCertificatePreviewView(APIView):
 
         try:
             # Convertir UploadedFile a BytesIO
+            excel_file.seek(0)
             file_bytes = BytesIO(excel_file.read())
 
             # Crear servicio y extraer datos
