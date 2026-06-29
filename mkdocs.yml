@@ -1,0 +1,48 @@
+site_name: Certy Docs
+site_description: Documentación oficial del Sistema de Gestión de Certificados
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Cambiar a modo oscuro
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Cambiar a modo claro
+  features:
+    - navigation.tabs        # Menú superior horizontal
+    - navigation.sections    # Secciones colapsables a la izquierda
+    - search.suggest         # Sugerencias dinámicas en la barra de búsqueda
+    - content.code.copy      # Botón para copiar código al portapapeles
+
+nav:
+  - Inicio: index.md
+  - Arquitectura y Setup:
+    - Instalación Backend: setup/backend.md
+    - Instalación Frontend: setup/frontend.md
+  - Backend (Django API):
+    - Módulos Core:
+      - Certificados: backend/certificados.md
+      - Eventos: backend/events.md
+      - Participantes: backend/participants.md
+      - Usuarios y Roles: backend/users.md
+    - Servicios de Comunicación:
+      - Envío de Correos: backend/servicios_email.md
+      - Envío de WhatsApp: backend/servicios_whatsapp.md
+      - Generación de PDFs: backend/servicios_pdf.md
+  - Frontend (React + Vite):
+    - Estructura General: frontend/estructura.md
+    - Flujos Principales:
+      - Autenticación: frontend/auth.md
+      - Carga Masiva (Bulk): frontend/bulk.md
+      - Dashboard: frontend/dashboard.md
+  - Calidad y CI/CD:
+    - Pruebas e2e (Playwright): calidad/playwright.md
+    - Análisis de Código (SonarQube): calidad/sonarqube.md

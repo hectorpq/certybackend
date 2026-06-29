@@ -1,0 +1,29 @@
+name: Desplegar MkDocs en GitHub Pages
+
+on:
+  push:
+    branches:
+      - feature-cicd  # Se activará automáticamente al subir cambios a tu rama actual
+
+permissions:
+  contents: write  # Permiso necesario para crear la rama gh-pages de la web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Instalar MkDocs y el tema Material
+        run: |
+          pip install mkdocs-material
+
+      - name: Compilar y Desplegar
+        run: |
+          mkdocs gh-deploy --force
