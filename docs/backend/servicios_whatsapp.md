@@ -1,25 +1,45 @@
-# Servicio: Envío de WhatsApp
+# Envío de WhatsApp (`services/whatsapp_service.py`)
 
-El sistema se integra con la **API de WhatsApp Cloud de Meta (Facebook)** para permitir el envío de notificaciones y enlaces de certificados.
+## Servicio de WhatsApp (`WhatsAppService`)
 
-!!! warning "Proveedor de Servicio"
-    La implementación actual utiliza la API de Meta, no Twilio. La documentación anterior que mencionaba Twilio está desactualizada.
+Servicio que utiliza la **Meta WhatsApp Cloud API** (v19.0) para enviar notificaciones con certificados a través de WhatsApp. El tier gratuito permite hasta 1,000 mensajes por mes.
 
-## Configuración
+### Configuración
 
-La integración requiere credenciales de una aplicación de Meta para desarrolladores, que se configuran en el archivo `.env` del backend.
+Requiere dos variables de entorno:
 
-```env
-# certybackend/.env
+- `META_WHATSAPP_TOKEN` — Token de acceso generado en Facebook Developers.
+- `META_WHATSAPP_PHONE_ID` — ID del número de teléfono empresarial configurado en Meta.
 
-META_WHATSAPP_TOKEN=your-meta-api-token
-META_WHATSAPP_PHONE_ID=your-whatsapp-phone-number-id
+### Métodos Principales
+
+- `send_certificate(certificate, phone_number)` — Envía un mensaje de texto con los detalles del certificado: nombre del evento, código de verificación y URL del PDF. Limpia automáticamente el número de teléfono (elimina `+`, espacios y guiones).
+- `send_bulk_certificates(certificates, phone_map)` — Envía certificados en lote. Usa `phone_map` si se proporciona, o el número de teléfono del participante (`certificate.participant.phone`).
+
+### Formato del Mensaje
+
+```
+Hola {nombre}!
+
+Tu certificado del evento "{evento}" está listo.
+
+Detalles:
+- Código de verificación: XXXX-XXXX
+- PDF: {url_del_pdf}
+
+Sistema de Certificados
 ```
 
-## Funcionamiento
+### Tolerancia a Fallos
 
-El método `certificate.deliver(method='whatsapp')` invoca al `WhatsAppService`. Este servicio se comunica con la API de Meta para enviar un mensaje de plantilla al número de teléfono del participante.
+- Si el servicio no está configurado (token o phone_id vacíos), retorna un error descriptivo sin lanzar excepción.
+- Si el participante no tiene número de teléfono registrado, retorna error indicando que no se proporcionó número.
+- Los errores de la API de Meta se capturan y registran en los logs.
 
-- El mensaje contiene un enlace para ver y descargar el certificado.
-- Es requisito que el `Participant` tenga un número de teléfono válido registrado.
-- Cada intento de envío queda registrado en el modelo `DeliveryLog`.
+## Tareas Asíncronas
+
+Actualmente el envío por WhatsApp se realiza de forma síncrona en el contexto de la petición. Para envíos masivos, se recomienda envolverlo en una tarea Celery similar a `send_certificate_email_task` cuando se requiera escalar.
+
+### Singleton
+
+El servicio utiliza un patrón singleton mediante la función `get_whatsapp_service()` que retorna una instancia única reutilizable.

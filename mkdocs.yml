@@ -33,12 +33,28 @@ nav:
       - Eventos: backend/events.md
       - Participantes: backend/participants.md
       - Usuarios y Roles: backend/users.md
+      - Entregas (DeliveryLog): backend/deliveries.md
+      - Modelos y Relaciones: backend/modelos.md
     - Servicios de Comunicación:
       - Envío de Correos: backend/servicios_email.md
       - Envío de WhatsApp: backend/servicios_whatsapp.md
       - Generación de PDFs: backend/servicios_pdf.md
+    - API y Permisos:
+      - Referencia Completa de Endpoints: backend/api_referencia.md
+      - Serializadores: backend/serializadores.md
+      - Permisos y Control de Acceso: backend/permisos.md
+      - Auditoría (AuditLog): backend/auditoria.md
+    - Procesos Asíncronos:
+      - Tareas Celery: backend/tareas_celery.md
+      - Importación y Bulk: backend/procesos.md
+      - Comandos de Gestión: backend/comandos.md
   - Frontend (React + Vite):
     - Estructura General: frontend/estructura.md
+    - Interfaces y Tipos: frontend/types.md
+    - Hooks (React Query): frontend/hooks.md
+    - Componentes UI: frontend/componentes_ui.md
+    - Páginas: frontend/paginas.md
+    - Servicios API: frontend/servicios_api.md
     - Flujos Principales:
       - Autenticación: frontend/auth.md
       - Carga Masiva (Bulk): frontend/bulk.md
@@ -46,3 +62,8 @@ nav:
   - Calidad y CI/CD:
     - Pruebas e2e (Playwright): calidad/playwright.md
     - Análisis de Código (SonarQube): calidad/sonarqube.md
+  - Infraestructura:
+    - Docker: infraestructura/docker.md
+    - CI/CD (Jenkins): infraestructura/ci_cd.md
+    - Pruebas de Carga (Locust): infraestructura/load_testing.md
+    - Guía de Despliegue: infraestructura/despliegue.md

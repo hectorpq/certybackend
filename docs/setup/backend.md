@@ -1,90 +1,116 @@
-# Instalación del Backend (Django API)
+# Instalación del Backend
 
-Esta guía detalla los pasos para instalar, configurar y ejecutar el backend del sistema CertySys.
+## Requisitos del Entorno
 
-## 🔧 Stack Tecnológico
+- Python 3.11 o superior
+- PostgreSQL 14+
+- Redis (para Celery)
+- pip (gestor de paquetes de Python)
 
-| Componente      | Detalle                               |
-| --------------- | ------------------------------------- |
-| **Framework**   | Django 5.2.12                         |
-| **API**         | Django REST Framework                 |
-| **Base de Datos** | PostgreSQL 15+                        |
-| **PDF**         | ReportLab                             |
-| **Email**       | SendGrid                              |
-| **WhatsApp**    | Meta Cloud API                        |
-| **Auth**        | Custom User Model + Simple JWT        |
-| **Tareas Asíncronas** | Celery + Redis                  |
+## Configuración del Entorno Virtual
 
----
-
-## 📦 Requisitos Previos
-
-- Python 3.10+
-- PostgreSQL 15+ en ejecución
-- Git
-- Redis en ejecución (para Celery)
-
-### Cuentas Externas
-- **SendGrid**: Para envío de emails (API Key).
-- **Meta (Facebook)**: Para la API de WhatsApp Cloud (Token y Phone ID).
-- **Google Cloud**: Para autenticación con Google (Client ID).
-
----
-
-## 🚀 Instalación
-
-### 1. Clonar Repositorio
 ```bash
-git clone https://github.com/Erick-Franco/CertySys.git
-cd certysys/certybackend
-```
+# Clonar el repositorio y acceder al directorio del backend
+cd certybackend
 
-### 2. Crear y Activar Entorno Virtual
-```bash
-# Windows (PowerShell)
+# Crear entorno virtual
 python -m venv .venv
-.venv\Scripts\Activate.ps1
 
-# macOS/Linux (Bash)
-python3 -m venv .venv
+# Activar el entorno virtual (Windows)
+.venv\Scripts\activate
+
+# Activar el entorno virtual (Linux/Mac)
 source .venv/bin/activate
 ```
 
-### 3. Instalar Dependencias
+## Instalación de Dependencias
+
 ```bash
-pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Configurar Base de Datos PostgreSQL
-Crea la base de datos y el usuario según las instrucciones del `README.md` principal.
+## Variables de Entorno
 
-### 5. Configurar Variables de Entorno
-Crea un archivo `.env` en la raíz de `certybackend/` y configúralo con las credenciales de la base de datos, Django, Email (Gmail) y WhatsApp (Twilio).
+Copiar el archivo de ejemplo y editarlo:
 
-```env
-# certybackend/.env
-
-DB_NAME=certificados_db
-DB_USER=certificados_user
-DB_PASSWORD=secure_password
-DB_HOST=localhost
-DB_PORT=5432
-
-SECRET_KEY=tu-secret-key-de-django
-DEBUG=True
-
-# ... resto de variables (EMAIL, TWILIO, etc.)
-```
-
-### 6. Aplicar Migraciones y Crear Superusuario
 ```bash
-python manage.py migrate
-python manage.py createsuperuser
+cp .env.example .env
 ```
 
-### 7. Ejecutar Servidor
+### Diccionario Técnico de Variables
+
+| Variable | Descripción |
+|----------|-------------|
+| `DB_NAME` | Nombre de la base de datos PostgreSQL (`certificados_db` por defecto). |
+| `DB_USER` | Usuario de la base de datos PostgreSQL. |
+| `DB_PASSWORD` | Contraseña del usuario de PostgreSQL. |
+| `DB_HOST` | Host de PostgreSQL (`localhost` en desarrollo). |
+| `DB_PORT` | Puerto de PostgreSQL (`5432` por defecto). |
+| `SECRET_KEY` | Clave secreta de Django. Generar con: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
+| `DEBUG` | `True` para desarrollo, `False` para producción. |
+| `SENDGRID_API_KEY` | API Key de SendGrid para envío de correos transaccionales. |
+| `DEFAULT_FROM_EMAIL` | Dirección remitente para los correos (`noreply@certypro.app` por defecto). |
+| `META_WHATSAPP_TOKEN` | Token de acceso a Meta WhatsApp Cloud API. |
+| `META_WHATSAPP_PHONE_ID` | ID del número de teléfono en Meta WhatsApp Cloud API. |
+| `GOOGLE_CLIENT_ID` | Client ID de Google OAuth2 (Google Cloud Console). |
+| `CERTIFICATE_EXPIRY_DAYS` | Días de validez de los certificados (`365` por defecto). |
+| `CERTIFICATE_VERIFICATION_ENABLED` | Habilita la verificación pública de certificados. |
+| `REDIS_URL` | URL de conexión a Redis (`redis://localhost:6379/0` por defecto). Usado por Celery como broker. |
+| `ALLOWED_HOSTS` | Hosts permitidos separados por coma (producción). |
+| `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF (producción). |
+| `CORS_ALLOWED_ORIGINS` | Orígenes permitidos para CORS (`http://localhost:3000,http://localhost:5173`). |
+| `FRONTEND_URL` | URL del frontend para enlaces en correos (`http://localhost:5173`). |
+| `CERTIFICATE_VERIFY_BASE_URL` | URL base para códigos QR de verificación (`http://localhost:8000`). |
+
+## Migraciones y Base de Datos
+
+```bash
+# Crear la base de datos en PostgreSQL
+psql -U postgres -c "CREATE DATABASE certificados_db;"
+psql -U postgres -c "CREATE USER certificados_user WITH PASSWORD 'secure_password_here';"
+psql -U postgres -c "ALTER ROLE certificados_user SET client_encoding TO 'utf8';"
+psql -U postgres -c "ALTER ROLE certificados_user SET default_transaction_isolation TO 'read committed';"
+psql -U postgres -c "ALTER ROLE certificados_user SET timezone TO 'UTC';"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE certificados_db TO certificados_user;"
+
+# Ejecutar migraciones
+python manage.py migrate
+
+# Crear superusuario
+python manage.py createsuperuser
+
+# (Opcional) Cargar datos de ejemplo
+python manage.py loaddata fixtures/seed.json
+```
+
+## Ejecutar el Servidor Local
+
 ```bash
 python manage.py runserver
 ```
-El backend estará disponible en `http://localhost:8000`.
+
+El servidor estará disponible en `http://localhost:8000`.
+
+## Workers de Celery
+
+Para el procesamiento asíncrono de certificados y envío de notificaciones, iniciar Redis y Celery:
+
+```bash
+# Terminal 1: Iniciar Redis (Windows con WSL o Redis oficial para Windows)
+redis-server
+
+# Terminal 2: Iniciar Celery Worker
+celery -A config worker -l info
+
+# Terminal 3: (Opcional) Monitoreo de tareas con Flower
+celery -A config flower --port=5555
+```
+
+!!! note "Importante"
+    Asegúrate de que Redis esté corriendo antes de iniciar Celery. Sin Redis, las tareas asíncronas no se podrán encolar.
+
+## Documentación de la API
+
+- **Swagger UI:** `http://localhost:8000/api/docs/`
+- **ReDoc:** `http://localhost:8000/api/redoc/`
+- **OpenAPI Schema:** `http://localhost:8000/api/schema/`
