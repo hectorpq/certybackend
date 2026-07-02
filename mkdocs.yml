@@ -17,53 +17,133 @@ theme:
         icon: material/brightness-4
         name: Cambiar a modo claro
   features:
-    - navigation.tabs        # Menú superior horizontal
-    - navigation.sections    # Secciones colapsables a la izquierda
-    - search.suggest         # Sugerencias dinámicas en la barra de búsqueda
-    - content.code.copy      # Botón para copiar código al portapapeles
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - search.suggest
+    - content.code.copy
 
 nav:
   - Inicio: index.md
-  - Arquitectura y Setup:
-    - Instalación Backend: setup/backend.md
-    - Instalación Frontend: setup/frontend.md
-  - Backend (Django API):
-    - Módulos Core:
+  - Introducción: introduccion.md
+
+  - Arquitectura:
+    - Overview: arquitectura/overview.md
+    - Diagrama C4 - Contexto: arquitectura/c4-context.md
+    - Diagrama C4 - Contenedores: arquitectura/c4-container.md
+    - Diagrama C4 - Componentes: arquitectura/c4-component.md
+    - Diagrama de Base de Datos: arquitectura/diagrama-bd.md
+    - Decisiones de Arquitectura (ADR): arquitectura/decisiones-arquitectura.md
+
+  - Requisitos:
+    - Requisitos Funcionales: requisitos/requisitos-funcionales.md
+    - Requisitos No Funcionales: requisitos/requisitos-no-funcionales.md
+    - Historias de Usuario: requisitos/historias-usuario.md
+    - Trazabilidad: requisitos/trazabilidad.md
+
+  - API REST:
+    - Autenticación: api/autenticacion.md
+    - Usuarios: api/usuarios.md
+    - Certificados: api/certificados.md
+    - Eventos: api/eventos.md
+    - Participantes: api/participantes.md
+    - Swagger / OpenAPI: api/swagger.md
+
+  - Desarrollo:
+    - Estructura del Proyecto: desarrollo/estructura-proyecto.md
+    - Convenciones de Código: desarrollo/convenciones-codigo.md
+    - GitFlow: desarrollo/gitflow.md
+    - Ramas: desarrollo/ramas.md
+    - Code Review: desarrollo/code-review.md
+    - Dependencias: desarrollo/dependencias.md
+    - Documentación Técnica - Backend:
+      - Modelos y Relaciones: backend/modelos.md
+      - Usuarios y Roles: backend/users.md
       - Certificados: backend/certificados.md
       - Eventos: backend/events.md
       - Participantes: backend/participants.md
-      - Usuarios y Roles: backend/users.md
       - Entregas (DeliveryLog): backend/deliveries.md
-      - Modelos y Relaciones: backend/modelos.md
-    - Servicios de Comunicación:
-      - Envío de Correos: backend/servicios_email.md
-      - Envío de WhatsApp: backend/servicios_whatsapp.md
-      - Generación de PDFs: backend/servicios_pdf.md
-    - API y Permisos:
-      - Referencia Completa de Endpoints: backend/api_referencia.md
       - Serializadores: backend/serializadores.md
       - Permisos y Control de Acceso: backend/permisos.md
       - Auditoría (AuditLog): backend/auditoria.md
-    - Procesos Asíncronos:
       - Tareas Celery: backend/tareas_celery.md
-      - Importación y Bulk: backend/procesos.md
+      - Servicio de Correos: backend/servicios_email.md
+      - Servicio de WhatsApp: backend/servicios_whatsapp.md
+      - Servicio de PDF: backend/servicios_pdf.md
+      - Procesos de Importación: backend/procesos.md
       - Comandos de Gestión: backend/comandos.md
-  - Frontend (React + Vite):
-    - Estructura General: frontend/estructura.md
-    - Interfaces y Tipos: frontend/types.md
-    - Hooks (React Query): frontend/hooks.md
-    - Componentes UI: frontend/componentes_ui.md
-    - Páginas: frontend/paginas.md
-    - Servicios API: frontend/servicios_api.md
-    - Flujos Principales:
+      - Referencia Completa de Endpoints: backend/api_referencia.md
+    - Documentación Técnica - Frontend:
+      - Estructura General: frontend/estructura.md
+      - Interfaces y Tipos: frontend/types.md
+      - Hooks (React Query): frontend/hooks.md
+      - Componentes UI: frontend/componentes_ui.md
+      - Páginas: frontend/paginas.md
+      - Servicios API: frontend/servicios_api.md
       - Autenticación: frontend/auth.md
       - Carga Masiva (Bulk): frontend/bulk.md
       - Dashboard: frontend/dashboard.md
-  - Calidad y CI/CD:
-    - Pruebas e2e (Playwright): calidad/playwright.md
-    - Análisis de Código (SonarQube): calidad/sonarqube.md
-  - Infraestructura:
-    - Docker: infraestructura/docker.md
-    - CI/CD (Jenkins): infraestructura/ci_cd.md
-    - Pruebas de Carga (Locust): infraestructura/load_testing.md
-    - Guía de Despliegue: infraestructura/despliegue.md
+
+  - Despliegue:
+    - Instalación: despliegue/instalacion.md
+    - Setup Backend: setup/backend.md
+    - Setup Frontend: setup/frontend.md
+    - Docker: despliegue/docker.md
+    - Variables de Entorno: despliegue/variables-entorno.md
+    - GitHub Actions: despliegue/github-actions.md
+    - Pipeline CI/CD: despliegue/pipeline.md
+    - Producción: despliegue/produccion.md
+    - Infraestructura:
+      - Docker Compose: infraestructura/docker.md
+      - CI/CD (Jenkins): infraestructura/ci_cd.md
+      - Pruebas de Carga con Locust: infraestructura/load_testing.md
+      - Guía de Despliegue: infraestructura/despliegue.md
+
+  - Pruebas:
+    - Estrategia de Pruebas: pruebas/estrategia.md
+    - Pruebas Unitarias: pruebas/unitarias.md
+    - Pruebas de Integración: pruebas/integracion.md
+    - Pruebas E2E: pruebas/e2e.md
+    - Pruebas de Carga (Locust): pruebas/locust.md
+    - Cobertura: pruebas/cobertura.md
+    - Resultados: pruebas/resultados.md
+    - Playwright (E2E): calidad/playwright.md
+    - SonarQube: calidad/sonarqube.md
+
+  - Seguridad:
+    - JWT: seguridad/jwt.md
+    - OAuth: seguridad/oauth.md
+    - Permisos: seguridad/permisos.md
+    - Amenazas: seguridad/amenazas.md
+    - Bandit: seguridad/bandit.md
+    - Buenas Prácticas: seguridad/buenas-practicas.md
+
+  - Mantenimiento:
+    - Versionado: mantenimiento/versionado.md
+    - Changelog: mantenimiento/changelog.md
+    - Respaldo: mantenimiento/respaldo.md
+    - Restauración: mantenimiento/restauracion.md
+    - Actualización: mantenimiento/actualizacion.md
+
+  - Manuales de Usuario:
+    - Administrador: usuario/administrador.md
+    - Coordinador: usuario/coordinador.md
+    - Participante: usuario/participante.md
+    - Instructor: usuario/instructor.md
+    - Verificador: usuario/verificador.md
+
+  - Auditoría SDLC:
+    - Checklist SDLC: auditoria/checklist-sdlc.md
+    - Cumplimiento ISO 12207: auditoria/cumplimiento-iso12207.md
+    - Cumplimiento ISO 25010: auditoria/cumplimiento-iso25010.md
+    - Cumplimiento CMMI: auditoria/cumplimiento-cmmi.md
+    - Riesgos: auditoria/riesgos.md
+    - Evidencias: auditoria/evidencias.md
+
+  - Anexos:
+    - Jira / Scrum: anexos/jira.md
+    - SonarQube: anexos/sonarqube.md
+    - Cobertura de Pruebas: anexos/cobertura.md
+    - Convenciones de Commits: anexos/commits.md
+    - Releases: anexos/releases.md
+    - FAQ: anexos/faq.md
