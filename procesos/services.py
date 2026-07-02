@@ -210,6 +210,9 @@ class ExcelProcessingService:
             self._validate_columns()
             logger.info("Columnas validadas correctamente")
 
+            # Reemplazar NaN por None/"" para que sea JSON-serializable
+            self.dataframe = self.dataframe.where(pd.notnull(self.dataframe), None)
+
             # Retornar datos extraídos como lista de dicts
             data = self.dataframe.to_dict("records")
             logger.info("Preview: %s registros extraídos para edición", len(data))
