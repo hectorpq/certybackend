@@ -10,12 +10,26 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _bool(value, default):
+    """Cast a decouple value to bool tolerating 'true'/'1'/'yes' (case-insensitive).
+
+    Returns ``default`` for empty values so that ``EMAIL_USE_TLS`` falls back to
+    True when the env var is not set, while ``EMAIL_USE_SSL`` falls back to
+    False. This replaces inline lambdas that made the settings file harder
+    to read and to test.
+    """
+    if value is None or value == "":
+        return default
+    return str(value).strip().lower() in ("true", "1", "yes")
 
 
 # Quick-start development settings - unsuitable for production
@@ -50,6 +64,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "simple_history",
     "django_celery_results",
+    "anymail",
     "certificados",
     "users",
     "participants",
@@ -161,14 +176,26 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ========== EMAIL CONFIGURATION (SendGrid) ==========
-SENDGRID_API_KEY = config("SENDGRID_API_KEY", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@certypro.app")
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+# ========== EMAIL CONFIGURATION ==========
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+
+if RESEND_API_KEY:
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    ANYMAIL = {
+        "RESEND_API_KEY": RESEND_API_KEY,
+    }
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Sistema de Certificados <noreply@certypro.uk>")
+FRONTEND_URL = config("FRONTEND_URL", default="https://certyfront.vercel.app")
 
 # ========== META WHATSAPP CLOUD API ==========
 META_WHATSAPP_TOKEN = config("META_WHATSAPP_TOKEN", default="")
 META_WHATSAPP_PHONE_ID = config("META_WHATSAPP_PHONE_ID", default="")
+
+# ========== FILE UPLOAD SIZE LIMIT ==========
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
 # ========== PDF GENERATION PATH ==========
 CERTIFICATES_PDF_PATH = BASE_DIR / "certificates" / "pdfs"
@@ -182,7 +209,7 @@ CERTIFICATE_VERIFY_BASE_URL = config("CERTIFICATE_VERIFY_BASE_URL", default="htt
 # SECURITY WARNING: Update these URLs in production!
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://localhost:5173",
+    default="http://localhost:3000,http://localhost:5173,https://certyfront.vercel.app",
     cast=lambda v: [s.strip() for s in v.split(",")],
 )
 CORS_ALLOW_CREDENTIALS = True
@@ -300,8 +327,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ========== JWT CONFIGURATION ==========
-from datetime import timedelta
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -347,6 +372,10 @@ SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
 
 # SSL Redirect (enable in production)
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+
+# Trust X-Forwarded-Proto from Railway/nginx (required for SECURE_SSL_REDIRECT
+# to work behind proxy without breaking CORS preflight OPTIONS requests)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Referrer Policy
 REFERRER_POLICY = "strict-origin-when-cross-origin"

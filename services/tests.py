@@ -1,6 +1,6 @@
 import io
 from datetime import date
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.test import TestCase
@@ -67,61 +67,70 @@ class EmailServiceTest(TestCase):
         self.assertFalse(result["success"])
         self.assertIn("No email", result["message"])
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_certificate_success(self, mock_send):
-        mock_response = Mock(status_code=202)
-        mock_send.return_value = mock_response
+    @patch("django.core.mail.EmailMessage")
+    def test_send_certificate_success(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_certificate_exception_returns_failure(self, mock_send):
-        mock_send.side_effect = Exception("Resend API error")
+    @patch("django.core.mail.EmailMessage")
+    def test_send_certificate_exception_returns_failure(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_msg.send.side_effect = Exception("SMTP error")
+        mock_email_cls.return_value = mock_msg
         result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertFalse(result["success"])
-        self.assertIn("Resend API error", result["message"])
+        self.assertIn("SMTP error", result["message"])
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_bulk_all_success(self, mock_send):
-        mock_send.return_value = Mock(status_code=202)
+    @patch("django.core.mail.EmailMessage")
+    def test_send_bulk_all_success(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["sent"], 1)
         self.assertEqual(result["failed"], 0)
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_bulk_with_recipient_map(self, mock_send):
-        mock_send.return_value = Mock(status_code=202)
+    @patch("django.core.mail.EmailMessage")
+    def test_send_bulk_with_recipient_map(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         result = EmailService.send_bulk_certificates([self.cert], recipient_map={self.cert.id: "custom@test.com"})
         self.assertEqual(result["sent"], 1)
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_bulk_failure_logged(self, mock_send):
-        mock_send.side_effect = Exception("API error")
+    @patch("django.core.mail.EmailMessage")
+    def test_send_bulk_failure_logged(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_msg.send.side_effect = Exception("SMTP error")
+        mock_email_cls.return_value = mock_msg
         result = EmailService.send_bulk_certificates([self.cert])
         self.assertEqual(result["failed"], 1)
         self.assertEqual(len(result["errors"]), 1)
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_certificate_attaches_pdf_when_present(self, mock_send):
-        mock_send.return_value = Mock(status_code=202)
+    @patch("django.core.mail.EmailMessage")
+    def test_send_certificate_attaches_pdf_when_present(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         self.cert.pdf_url = "/media/certificates/cert.pdf"
         self.cert.save()
         with patch("pathlib.Path.exists", return_value=True):
             result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_send):
-        mock_send.return_value = Mock(status_code=202)
+    @patch("django.core.mail.EmailMessage")
+    def test_send_certificate_pdf_not_on_disk_logs_warning(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         self.cert.pdf_url = "/media/certificates/missing.pdf"
         self.cert.save()
         with patch("pathlib.Path.exists", return_value=False):
             result = EmailService.send_certificate(self.cert, "test@test.com")
         self.assertTrue(result["success"])
 
-    @patch("services.email_service.SendGridAPIClient.send")
-    def test_send_certificate_pdf_attach_exception_continues(self, mock_send):
-        mock_send.return_value = Mock(status_code=202)
+    @patch("django.core.mail.EmailMessage")
+    def test_send_certificate_pdf_attach_exception_continues(self, mock_email_cls):
+        mock_msg = MagicMock()
+        mock_email_cls.return_value = mock_msg
         self.cert.pdf_url = "/media/certificates/cert.pdf"
         self.cert.save()
         with patch("pathlib.Path.exists", return_value=True):
