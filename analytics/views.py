@@ -21,7 +21,6 @@ from rest_framework.views import APIView
 
 from .crispdm.config import FEATURE_COLUMNS, METRICS_PATH, TARGET
 from .crispdm.data_source import load_raw
-from .crispdm.features import build_feature_matrix
 from .crispdm.model import load_model
 
 
