@@ -54,6 +54,7 @@ urlpatterns = [
         name="bulk_certificate_process",
     ),
     path("api/", include("api.urls")),
+    path("api/analytics/", include("analytics.urls")),
     # OpenAPI schema + UI
     path("api/schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path(

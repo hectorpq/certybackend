@@ -79,6 +79,9 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# MkDocs build output (generado por CI/CD, no versionar)
+site/
+
 # PyBuilder
 target/
 
