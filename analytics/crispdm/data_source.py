@@ -55,10 +55,7 @@ def from_orm() -> pd.DataFrame:
     from events.models import Enrollment  # import diferido: solo si se usa ORM
 
     rows = []
-    qs = (
-        Enrollment.objects.select_related("event", "event__category", "invitation")
-        .all()
-    )
+    qs = Enrollment.objects.select_related("event", "event__category", "invitation").all()
     for e in qs.iterator():
         ev = e.event
         if ev is None or ev.event_date is None:
@@ -140,12 +137,12 @@ def from_synthetic(n_participants: int = 450, n_events: int = 70, seed: int = RA
             # fiabilidad oculta aporta un componente irreducible menor.
             z = (
                 -0.3
-                + 1.0 * (reliability[pid] - 0.5)         # fiabilidad del participante (parcialmente oculta)
-                + 0.055 * lead                            # inscribirse con antelacion -> mas compromiso
-                - 0.05 * ev_duration[ev]                  # eventos muy largos -> menos asistencia
-                - 1.5 * is_holiday                        # cerca de feriado -> menos asistencia
-                + 1.1 * inv_accepted                      # acepto invitacion -> mas probable
-                + 0.6 * ev_public[ev]                     # eventos publicos
+                + 1.0 * (reliability[pid] - 0.5)  # fiabilidad del participante (parcialmente oculta)
+                + 0.055 * lead  # inscribirse con antelacion -> mas compromiso
+                - 0.05 * ev_duration[ev]  # eventos muy largos -> menos asistencia
+                - 1.5 * is_holiday  # cerca de feriado -> menos asistencia
+                + 1.1 * inv_accepted  # acepto invitacion -> mas probable
+                + 0.6 * ev_public[ev]  # eventos publicos
             )
             prob = 1.0 / (1.0 + np.exp(-z))
             attended = int(rng.random() < prob)

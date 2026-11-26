@@ -119,9 +119,9 @@ class PredictAttendanceView(APIView):
                 "attendance_probability": round(proba, 4),
                 "risk_level": "alto" if proba < 0.4 else ("medio" if proba < 0.7 else "bajo"),
                 "recommendation": (
-                    "Enviar recordatorio prioritario" if proba < 0.4
-                    else "Seguimiento normal" if proba < 0.7
-                    else "Sin accion requerida"
+                    "Enviar recordatorio prioritario"
+                    if proba < 0.4
+                    else "Seguimiento normal" if proba < 0.7 else "Sin accion requerida"
                 ),
                 "features_used": row,
             }
