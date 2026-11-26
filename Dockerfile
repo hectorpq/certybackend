@@ -21,4 +21,7 @@ COPY . .
 # Workers: 4 procesos + 2 threads cada uno = 8 workers concurrentes.
 # Se permite recargar workers tras 1000 requests para evitar memory leaks
 # (con jitter para que no recarguen todos a la vez).
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 120 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 50"]
+# PORT y WEB_CONCURRENCY los define la plataforma (Render usa PORT=10000 y
+# WEB_CONCURRENCY=1 en el plan free); en local se usan 8000 y 2 workers.
+# createsuperuser --noinput crea el admin desde DJANGO_SUPERUSER_* si existen.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 --timeout 120 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 50"]
