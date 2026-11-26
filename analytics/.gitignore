@@ -1,0 +1,11 @@
+# Entornos locales y cachés del módulo de analítica
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Caché del consumo de la API de feriados (se regenera)
+outputs/holidays_cache.json
+
+# NOTA: outputs/plots/*.png, outputs/metrics.json y models/*.joblib se
+# versionan a propósito como evidencia de la corrida de referencia.

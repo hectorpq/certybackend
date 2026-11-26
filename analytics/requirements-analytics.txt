@@ -1,0 +1,8 @@
+# Dependencias del modulo de analitica CRISP-DM.
+# Aisladas del backend para que el analisis sea replicable por si solo.
+pandas==2.1.3
+numpy==1.26.4
+scikit-learn==1.4.2
+matplotlib==3.8.4
+joblib==1.4.0
+requests==2.32.3

@@ -1,0 +1,91 @@
+################################################################################
+# render.yaml — Infraestructura de CertyPro en Render.com
+#
+# Despliegue GRATUITO:
+#   • web:    Web Service (plan free — 750 h/mes, se duerme tras 15 min inactivo)
+#   • db:     PostgreSQL (plan free — 1 GB, disponible 90 días)
+#
+# Para activar:
+#   1. Ir a https://dashboard.render.com → "New" → "Blueprint"
+#   2. Conectar el repositorio hectorpq/certybackend
+#   3. Render detecta este archivo y crea todos los recursos automáticamente
+#   4. Configurar las env vars marcadas con "sync: false" en el dashboard
+################################################################################
+
+services:
+  # ─────────────────────────── BACKEND DJANGO ───────────────────────────────
+  - type: web
+    name: certypro-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile    # usa el Dockerfile existente del proyecto
+    rootDir: .                      # relativo a la raíz del repo
+    plan: free
+    region: oregon                  # us-west (latencia razonable desde Perú)
+    healthCheckPath: /api/schema/   # Render verifica que el servicio responde
+    autoDeploy: true                # deploy automático al hacer push a main
+
+    envVars:
+      # ── Django ────────────────────────────────────────────────────────────
+      - key: SECRET_KEY
+        generateValue: true          # Render genera una clave secreta aleatoria
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "certypro-backend.onrender.com"
+
+      # ── Base de datos ──────────────────────────────────────────────────────
+      # Render inyecta DATABASE_URL automáticamente al ligar el servicio a la BD.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: certypro-db
+          property: connectionString
+
+      # ── RENDER_EXTERNAL_HOSTNAME (para ALLOWED_HOSTS dinámico) ────────────
+      - key: RENDER_EXTERNAL_HOSTNAME
+        fromService:
+          name: certypro-backend
+          type: web
+          property: host
+
+      # ── Redis / Celery ─────────────────────────────────────────────────────
+      # Usar Upstash Redis gratis: https://upstash.com → copiar la URL aquí
+      - key: REDIS_URL
+        sync: false                  # debes completarla en el dashboard
+
+      # ── CORS ──────────────────────────────────────────────────────────────
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://certyfront.vercel.app"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://certypro-backend.onrender.com,https://certyfront.vercel.app"
+
+      # ── Email (Brevo/Gmail — completar en dashboard) ──────────────────────
+      - key: EMAIL_BACKEND
+        value: "django.core.mail.backends.smtp.EmailBackend"
+      - key: EMAIL_HOST
+        value: "smtp-relay.brevo.com"
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        sync: false                  # tu usuario SMTP de Brevo
+      - key: EMAIL_HOST_PASSWORD
+        sync: false                  # tu contraseña / API key de Brevo
+
+      # ── Frontend URL (para links en invitaciones) ──────────────────────────
+      - key: FRONTEND_URL
+        value: "https://certyfront.vercel.app"
+
+      # ── WhatsApp (opcional) ────────────────────────────────────────────────
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+
+# ──────────────────────────── BASE DE DATOS ───────────────────────────────
+databases:
+  - name: certypro-db
+    plan: free
+    region: oregon
+    databaseName: certypro
+    user: certypro_user
