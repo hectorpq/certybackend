@@ -863,7 +863,7 @@
 </code></pre></div>
 <h2 id="docker-volumenes">Docker (volúmenes)<a class="headerlink" href="#docker-volumenes" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Restaurar volumen Docker</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span>db_data:/data<span class="w"> </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/backup<span class="w"> </span>alpine<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;tar xzf /backup/db_data_20250101.tar.gz -C /data&quot;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span>db_data:/data<span class="w"> </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/backup<span class="w"> </span>alpine<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"tar xzf /backup/db_data_20250101.tar.gz -C /data"</span>
 </code></pre></div>
 <h2 id="procedimiento-completo-de-recuperacion">Procedimiento Completo de Recuperación<a class="headerlink" href="#procedimiento-completo-de-recuperacion" title="Permanent link">&para;</a></h2>
 <ol>

@@ -1269,13 +1269,13 @@ importantes del modelo.</p>
 <div class="tabbed-block">
 <p><div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">analytics.crispdm.data_source</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_raw</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">df</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="n">load_raw</span><span class="p">(</span><span class="n">prefer_orm</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># source = &quot;orm&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># source = "orm"</span>
 </code></pre></div>
 Lee directamente de la base de datos PostgreSQL de CertyPro. Requiere la BD poblada.</p>
 </div>
 <div class="tabbed-block">
 <p><div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">df</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="n">load_raw</span><span class="p">(</span><span class="n">prefer_orm</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># source = &quot;synthetic&quot;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># source = "synthetic"</span>
 </code></pre></div>
 Genera 1 836 inscripciones con una semilla fija (42). La asistencia se simula con
 un modelo logístico latente sobre variables observables:</p>
