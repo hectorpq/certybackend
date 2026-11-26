@@ -110,8 +110,14 @@ def _plot_confusion(cm: list[list[int]], model_name: str) -> None:
     plt.xlabel("Prediccion")
     for i in range(2):
         for j in range(2):
-            plt.text(j, i, str(cm_arr[i, j]), ha="center", va="center",
-                     color="white" if cm_arr[i, j] > cm_arr.max() / 2 else "black")
+            plt.text(
+                j,
+                i,
+                str(cm_arr[i, j]),
+                ha="center",
+                va="center",
+                color="white" if cm_arr[i, j] > cm_arr.max() / 2 else "black",
+            )
     plt.tight_layout()
     plt.savefig(PLOTS_DIR / "05_confusion_matrix.png", dpi=120)
     plt.close()
@@ -149,24 +155,28 @@ def run_pipeline(prefer_orm: bool = True, use_network: bool = True) -> dict:
     print(f"  Eventos cerca de feriado: {enriched['near_holiday'].mean():.1%}")
 
     _plot_target_distribution(enriched)
-    _plot_attendance_by(enriched, "category", "02_attendance_by_category.png",
-                        "Tasa de asistencia por categoria")
-    _plot_attendance_by(enriched, "near_holiday", "03_attendance_by_holiday.png",
-                        "Asistencia: evento cerca de feriado (0=no, 1=si)")
+    _plot_attendance_by(enriched, "category", "02_attendance_by_category.png", "Tasa de asistencia por categoria")
+    _plot_attendance_by(
+        enriched, "near_holiday", "03_attendance_by_holiday.png", "Asistencia: evento cerca de feriado (0=no, 1=si)"
+    )
 
     # Fase 4 + 5
     _print_header("Fase 4", "Modelado")
     report = train_and_evaluate(X, y)
     for name, m in report["results"].items():
-        print(f"  {name:22s} | AUC={m['roc_auc']:.3f} | F1={m['f1']:.3f} | "
-              f"Acc={m['accuracy']:.3f} | CV-AUC={m['cv_roc_auc_mean']:.3f}")
+        print(
+            f"  {name:22s} | AUC={m['roc_auc']:.3f} | F1={m['f1']:.3f} | "
+            f"Acc={m['accuracy']:.3f} | CV-AUC={m['cv_roc_auc_mean']:.3f}"
+        )
 
     _print_header("Fase 5", "Evaluacion")
     best = report["best_model_name"]
     best_metrics = report["results"][best]
     print(f"  Modelo ganador: {best}")
-    print(f"  ROC-AUC: {best_metrics['roc_auc']:.3f} | F1: {best_metrics['f1']:.3f} | "
-          f"Precision: {best_metrics['precision']:.3f} | Recall: {best_metrics['recall']:.3f}")
+    print(
+        f"  ROC-AUC: {best_metrics['roc_auc']:.3f} | F1: {best_metrics['f1']:.3f} | "
+        f"Precision: {best_metrics['precision']:.3f} | Recall: {best_metrics['recall']:.3f}"
+    )
     meta = "ALCANZADA" if best_metrics["cv_roc_auc_mean"] >= 0.75 else "NO alcanzada"
     print(f"  Meta de negocio (CV-AUC >= 0.75): {meta}")
 

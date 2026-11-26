@@ -80,7 +80,7 @@ def build_feature_matrix(
     df["enrolled_at"] = pd.to_datetime(df["enrolled_at"])
 
     # Variables temporales.
-    df["event_dow"] = df["event_date"].dt.dayofweek          # 0 = lunes
+    df["event_dow"] = df["event_date"].dt.dayofweek  # 0 = lunes
     df["event_month"] = df["event_date"].dt.month
     df["lead_time_days"] = (df["event_date"] - df["enrolled_at"]).dt.days.clip(lower=0)
 

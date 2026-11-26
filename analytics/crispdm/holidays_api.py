@@ -31,15 +31,15 @@ TIMEOUT = 8
 # Respaldo offline: feriados nacionales fijos de Peru (mismos cada anio).
 # Garantiza que la variable near_holiday exista aunque no haya red.
 _PERU_FIXED = [
-    (1, 1),    # Anio Nuevo
-    (5, 1),    # Dia del Trabajo
-    (6, 29),   # San Pedro y San Pablo
-    (7, 28),   # Fiestas Patrias
-    (7, 29),   # Fiestas Patrias
-    (8, 30),   # Santa Rosa de Lima
-    (10, 8),   # Combate de Angamos
-    (11, 1),   # Todos los Santos
-    (12, 8),   # Inmaculada Concepcion
+    (1, 1),  # Anio Nuevo
+    (5, 1),  # Dia del Trabajo
+    (6, 29),  # San Pedro y San Pablo
+    (7, 28),  # Fiestas Patrias
+    (7, 29),  # Fiestas Patrias
+    (8, 30),  # Santa Rosa de Lima
+    (10, 8),  # Combate de Angamos
+    (11, 1),  # Todos los Santos
+    (12, 8),  # Inmaculada Concepcion
     (12, 25),  # Navidad
 ]
 

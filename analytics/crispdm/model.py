@@ -32,13 +32,7 @@ from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from .config import (
-    CATEGORICAL_FEATURES,
-    MODEL_PATH,
-    NUMERIC_FEATURES,
-    RANDOM_SEED,
-    ensure_dirs,
-)
+from .config import CATEGORICAL_FEATURES, MODEL_PATH, NUMERIC_FEATURES, RANDOM_SEED, ensure_dirs
 
 
 def _build_preprocessor() -> ColumnTransformer:
@@ -95,9 +89,7 @@ def train_and_evaluate(X: pd.DataFrame, y: pd.Series) -> dict:
     Devuelve un diccionario con metricas, modelo ganador y datos para plots.
     """
     ensure_dirs()
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=RANDOM_SEED, stratify=y
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=RANDOM_SEED, stratify=y)
 
     results = {}
     fitted: dict[str, Pipeline] = {}
