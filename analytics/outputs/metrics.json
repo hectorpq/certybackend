@@ -1,0 +1,109 @@
+{
+  "source": "synthetic",
+  "n_rows": 1836,
+  "target_rate": 0.6318,
+  "best_model_name": "logistic_regression",
+  "results": {
+    "logistic_regression": {
+      "accuracy": 0.7669,
+      "precision": 0.7833,
+      "recall": 0.8724,
+      "f1": 0.8254,
+      "roc_auc": 0.8063,
+      "confusion_matrix": [
+        [
+          99,
+          70
+        ],
+        [
+          37,
+          253
+        ]
+      ],
+      "cv_roc_auc_mean": 0.764,
+      "cv_roc_auc_std": 0.034
+    },
+    "random_forest": {
+      "accuracy": 0.7451,
+      "precision": 0.7409,
+      "recall": 0.9172,
+      "f1": 0.8197,
+      "roc_auc": 0.7959,
+      "confusion_matrix": [
+        [
+          76,
+          93
+        ],
+        [
+          24,
+          266
+        ]
+      ],
+      "cv_roc_auc_mean": 0.7103,
+      "cv_roc_auc_std": 0.0596
+    }
+  },
+  "feature_importances": [
+    {
+      "feature": "remainder__invitation_accepted",
+      "importance": 1.2405
+    },
+    {
+      "feature": "remainder__near_holiday",
+      "importance": 0.7695
+    },
+    {
+      "feature": "remainder__is_public",
+      "importance": 0.7261
+    },
+    {
+      "feature": "num__lead_time_days",
+      "importance": 0.6737
+    },
+    {
+      "feature": "num__duration_hours",
+      "importance": 0.628
+    },
+    {
+      "feature": "cat__category_Tecnologia",
+      "importance": 0.2955
+    },
+    {
+      "feature": "cat__category_Educacion",
+      "importance": 0.2767
+    },
+    {
+      "feature": "remainder__was_invited",
+      "importance": 0.2703
+    },
+    {
+      "feature": "num__event_dow",
+      "importance": 0.2097
+    },
+    {
+      "feature": "cat__category_Idiomas",
+      "importance": 0.2012
+    },
+    {
+      "feature": "cat__category_Finanzas",
+      "importance": 0.1355
+    },
+    {
+      "feature": "num__participant_prior_events",
+      "importance": 0.1074
+    },
+    {
+      "feature": "cat__category_Salud",
+      "importance": 0.0942
+    },
+    {
+      "feature": "num__max_capacity",
+      "importance": 0.0639
+    },
+    {
+      "feature": "cat__category_Gestion",
+      "importance": 0.0356
+    }
+  ],
+  "model_path": "C:\\Users\\LENOVO\\Documents\\certypro\\SystemCertification\\analytics\\models\\attendance_model.joblib"
+}
