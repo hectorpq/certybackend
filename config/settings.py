@@ -282,9 +282,12 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "CONTACT": {"email": "pacompiahectorrobert@gmail.com"},
     "LICENSE": {"name": "Propietaria", "url": "https://certypro.app/license"},
+    # "/" = el mismo servidor que sirve la documentación (Render en producción,
+    # localhost en desarrollo), para que "Try it out" funcione en cualquier entorno.
     "SERVERS": [
+        {"url": "/", "description": "Este servidor"},
+        {"url": "https://certypro-backend.onrender.com", "description": "Producción (Render)"},
         {"url": "http://localhost:8000", "description": "Desarrollo local"},
-        {"url": "https://api.certypro.app", "description": "Producción"},
     ],
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
