@@ -24,4 +24,5 @@ COPY . .
 # PORT y WEB_CONCURRENCY los define la plataforma (Render usa PORT=10000 y
 # WEB_CONCURRENCY=1 en el plan free); en local se usan 8000 y 2 workers.
 # createsuperuser --noinput crea el admin desde DJANGO_SUPERUSER_* si existen.
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 --timeout 120 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 50"]
+# SEED_DEMO=1 carga datos de demostracion (idempotente: no duplica si ya existen).
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && (if [ \"$SEED_DEMO\" = \"1\" ]; then python manage.py seed_demo || true; fi) && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 --timeout 120 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 50"]
